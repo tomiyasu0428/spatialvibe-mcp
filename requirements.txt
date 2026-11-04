@@ -1,0 +1,5 @@
+build123d==0.13.0
+matplotlib==3.11.2
+mcp==2.3.0
+trimesh==5.2.0
+usd-core==26.11

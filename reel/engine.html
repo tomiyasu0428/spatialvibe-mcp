@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>spatialvibe reel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=JetBrains+Mono:wght@500&family=Zen+Kaku+Gothic+New:wght@500;700&display=block">
+<style>
+/* One 16:9 stage on field-container blue over a millimetre grid. Single committed look. */
+:root {
+  --blue: #1b4fd8; --paper: #f3f6ff; --paper-dim: rgba(243, 246, 255, 0.62);
+  --orange: #ff7a1a; --ink: #0a1a40;
+  --grid: rgba(243, 246, 255, 0.07); --grid-major: rgba(243, 246, 255, 0.13);
+  --display: "Dela Gothic One", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--ink); color: var(--paper); font-family: var(--body);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+  padding-block: 16px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  box-sizing: border-box;
+}
+body.capture { padding: 0; gap: 0; }
+.stage {
+  container-type: inline-size; position: relative; overflow: hidden; border-radius: 6px;
+  width: min(100%, 1100px, calc((100vh - 110px) * 16 / 9)); aspect-ratio: 16 / 9;
+  background-color: var(--blue);
+  background-image:
+    linear-gradient(var(--grid-major) 1px, transparent 1px), linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
+    linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+  background-size: 10cqw 10cqw, 10cqw 10cqw, 1cqw 1cqw, 1cqw 1cqw; background-position: -1px -1px;
+}
+body.capture .stage { width: 100vw; height: 100vh; aspect-ratio: auto; border-radius: 0; }
+.layer { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.2cqw; text-align: center; }
+.ch { display: inline-block; white-space: pre; }
+.d { font-family: var(--display); line-height: 1.05; letter-spacing: 0.01em; white-space: nowrap; }
+.s { font-weight: 700; font-size: 3.2cqw; color: var(--paper-dim); letter-spacing: 0.08em; }
+.m { font-family: var(--mono); font-size: 1.8cqw; color: var(--paper-dim); letter-spacing: 0.02em; }
+.xl { font-size: 15cqw; } .l { font-size: 10cqw; } .md { font-size: 6.4cqw; }
+.or { color: var(--orange); }
+.chip { position: absolute; font-weight: 700; font-size: 2.4cqw; padding: 0.7cqw 1.6cqw; border: 0.25cqw solid var(--paper); border-radius: 99px; white-space: nowrap; }
+.tbox { position: relative; border: 0.35cqw dashed var(--paper); padding: 1.4cqw 2cqw; }
+.tlabel { position: absolute; top: -1.4cqw; left: 1.2cqw; background: var(--blue); padding: 0 0.6cqw; font-family: var(--mono); font-size: 1.5cqw; color: var(--paper-dim); }
+.ruler { position: absolute; left: 6cqw; right: 6cqw; bottom: 9cqw; height: 3cqw; border-top: 0.25cqw solid var(--orange); transform-origin: left; }
+.ruler i { position: absolute; top: 0; width: 0.2cqw; background: var(--orange); }
+.strike { position: absolute; left: -4%; right: -4%; top: 52%; height: 1.6cqw; background: var(--orange); transform-origin: left; }
+.flash { position: absolute; inset: 0; background: var(--paper); pointer-events: none; }
+.split { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; }
+.split > div { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.4cqw; padding: 0 2cqw; }
+.split .right { background: var(--orange); color: var(--ink); }
+.split .right .s { color: rgba(10, 26, 64, 0.7); }
+.flow { display: flex; align-items: center; gap: 1.2cqw; }
+.step { display: flex; flex-direction: column; align-items: center; gap: 0.9cqw; }
+.step .d { font-size: 4.6cqw; }
+.step .m { font-size: 1.35cqw; white-space: nowrap; }
+.arrow { font-family: var(--display); font-size: 3.4cqw; color: var(--orange); }
+.under { height: 0.9cqw; width: 38cqw; background: var(--orange); transform-origin: left; }
+.sig { position: absolute; bottom: 4cqw; left: 0; right: 0; font-family: var(--mono); font-size: 1.5cqw; color: var(--paper-dim); letter-spacing: 0.1em; }
+.preload { position: absolute; left: 0; top: 0; opacity: 0.01; pointer-events: none; font-size: 12px; white-space: nowrap; }
+.bar { width: min(100%, 1100px); display: flex; align-items: center; gap: 14px; }
+.bar button { font: 700 14px/1 var(--body); color: var(--paper); background: transparent; border: 1.5px solid var(--paper-dim); border-radius: 99px; padding: 9px 16px; cursor: pointer; }
+.bar button:hover { border-color: var(--orange); color: var(--orange); }
+.bar button:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
+.track { flex: 1; height: 4px; background: rgba(243, 246, 255, 0.15); border-radius: 2px; overflow: hidden; }
+.fill { height: 100%; width: 0; background: var(--orange); }
+.time { font: 500 13px var(--mono); color: var(--paper-dim); font-variant-numeric: tabular-nums; min-width: 92px; text-align: right; }
+body.capture .bar { display: none; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage"></div>
+<div class="bar">
+  <button id="play" type="button">一時停止</button>
+  <button id="restart" type="button">最初から</button>
+  <div class="track"><div class="fill" id="fill"></div></div>
+  <div class="time" id="time"></div>
+</div>
+<script id="reel-data" type="application/json">/*__REEL__*/</script>
+<script>
+(() => {
+  const REEL = JSON.parse(document.getElementById("reel-data").textContent);
+  const capture = new URLSearchParams(location.search).has("capture");
+  if (capture) document.body.classList.add("capture");
+  const stage = document.getElementById("stage");
+  const E = { out: "cubic-bezier(.16,1,.3,1)", in: "cubic-bezier(.7,0,.84,0)", snap: "cubic-bezier(.34,1.56,.64,1)" };
+  const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+  const chars = (text, cls) => { const w = h("div", cls); [...text].forEach(c => w.appendChild(h("span", "ch", c))); return w; };
+  const anim = (el, kf, dur, delay = 0, easing = E.out) => el.animate(kf, { duration: dur, delay, easing, fill: "both" });
+  const each = (w, fn) => [...w.querySelectorAll(".ch")].forEach(fn);
+  const exit = (L, len, dur = 240) => anim(L, [{ opacity: 1, transform: "none", filter: "blur(0)" }, { opacity: 0, transform: "scale(1.04)", filter: "blur(6px)" }], dur, len - dur, E.in);
+  // shrink a line that would not fit the stage (long Japanese strings)
+  const fit = (el, maxFrac = 0.9) => {
+    const max = stage.clientWidth * maxFrac;
+    if (el.scrollWidth > max) el.style.fontSize = (parseFloat(getComputedStyle(el).fontSize) * max / el.scrollWidth) + "px";
+  };
+
+  const B = {
+    drop(L, s, len) {
+      const a = chars(s.line || "", "d md"), b = chars(s.big, "d xl or");
+      L.append(a, b); fit(a); fit(b);
+      each(a, (c, i) => anim(c, [{ opacity: 0, transform: "translateX(-40px)" }, { opacity: 1, transform: "none" }], 420, 120 + i * 70));
+      each(b, (c, i) => anim(c, [{ opacity: 0, transform: "translateY(-120%) rotate(-8deg)" }, { opacity: 1, transform: "none" }], 520, 650 + i * 85, E.snap));
+      if (s.meta) { const m = h("div", "m", s.meta); L.append(m); fit(m); anim(m, [{ opacity: 0 }, { opacity: 1 }], 500, 1400); }
+      exit(L, len);
+    },
+    stamp(L, s, len) {
+      const sm = h("div", "s", s.small || ""), a = chars(s.big, "d xl");
+      L.append(sm, a); fit(a);
+      anim(sm, [{ opacity: 0, letterSpacing: "0.5em" }, { opacity: 1, letterSpacing: "0.08em" }], 500);
+      each(a, (c, i) => anim(c, [{ opacity: 0, transform: "scale(2.4)" }, { opacity: 1, transform: "none" }], 360, 380 + i * 110));
+      const pos = [["18%", "22%"], ["78%", "26%"], ["50%", "82%"], ["20%", "78%"]];
+      (s.chips || []).slice(0, 4).forEach((t, i) => {
+        const c = h("div", "chip", t); c.style.left = pos[i][0]; c.style.top = pos[i][1]; L.appendChild(c);
+        anim(c, [{ opacity: 0, transform: "translate(-50%,-50%) scale(.4)" }, { opacity: 1, transform: "translate(-50%,-50%) scale(1)" }], 380, 1050 + i * 180, E.snap);
+      });
+      exit(L, len, 220);
+    },
+    overflow(L, s, len) {
+      const sm = h("div", "s", s.small || ""), box = h("div", "tbox");
+      box.appendChild(h("span", "tlabel", s.label || "v1"));
+      const a = chars(s.boxed, "d md"); box.appendChild(a);
+      const b = chars(s.burst, "d l or");
+      L.append(sm, box, b); fit(b);
+      anim(sm, [{ opacity: 0 }, { opacity: 1 }], 300);
+      anim(box, [{ opacity: 0, transform: "scaleX(.2)" }, { opacity: 1, transform: "none" }], 420, 200);
+      each(a, (c, i) => anim(c, [{ opacity: 0, transform: "translateY(30px)" }, { opacity: 1, transform: "none" }], 300, 420 + i * 45));
+      anim(box, [{ transform: "none" }, { transform: "translateX(-8px) rotate(-1deg)" }, { transform: "translateX(8px) rotate(1deg)" }, { transform: "translateX(-5px)" }, { transform: "none" }], 360, 1150, "linear");
+      anim(box, [{ borderColor: "#f3f6ff" }, { borderColor: "#ff7a1a" }], 200, 1150);
+      const n = [...s.burst].length;
+      each(b, (c, i) => anim(c, [{ opacity: 0, transform: `translate(${(i - n / 2) * 18}px, 60px) rotate(${(i - n / 2) * 9}deg)` }, { opacity: 1, transform: "none" }], 460, 1250 + i * 55, E.snap));
+      exit(L, len);
+    },
+    stretch(L, s, len) {
+      const sm = h("div", "s", s.small || ""), a = chars(s.big, "d l");
+      L.append(sm, a); fit(a, 0.8);
+      anim(sm, [{ opacity: 0, transform: "translateY(20px)" }, { opacity: 1, transform: "none" }], 400);
+      anim(a, [{ letterSpacing: "0.6em", opacity: 0 }, { letterSpacing: "0.01em", opacity: 1 }], 1100, 250);
+      const r = h("div", "ruler");
+      for (let i = 0; i <= 88; i++) { const t = h("i"); t.style.left = (i / 88 * 100) + "%"; t.style.height = (i % 10 === 0 ? 2.6 : i % 5 === 0 ? 1.8 : 1.1) + "cqw"; r.appendChild(t); }
+      L.appendChild(r); anim(r, [{ transform: "scaleX(0)" }, { transform: "scaleX(1)" }], 1200, 500);
+      if (s.meta) { const m = h("div", "m", s.meta); L.appendChild(m); fit(m); anim(m, [{ opacity: 0 }, { opacity: 1 }], 400, 1300); }
+      exit(L, len, 200);
+    },
+    swap(L, s, len) {
+      const wrap = h("div"); wrap.style.position = "relative";
+      const a = chars(s.from, "d xl"), st = h("div", "strike");
+      wrap.append(a, st); L.appendChild(wrap); fit(a);
+      anim(a, [{ opacity: 0 }, { opacity: 1 }], 150);
+      anim(st, [{ transform: "scaleX(0)" }, { transform: "scaleX(1)" }], 320, 350, E.in);
+      each(a, (c, i) => anim(c, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: `translateY(${70 + i * 25}%) rotate(${(i - 1) * 24}deg)` }], 420, 780 + i * 60, E.in));
+      anim(st, [{ opacity: 1 }, { opacity: 0 }], 200, 900);
+      const fl = h("div", "flash"); L.appendChild(fl);
+      anim(fl, [{ opacity: 0 }, { opacity: 0.9 }, { opacity: 0 }], 360, 1180, "linear");
+      const to = chars(s.to, "d xl or"); to.style.position = "absolute"; to.style.fontSize = "24cqw";
+      L.appendChild(to); fit(to);
+      anim(to, [{ opacity: 0, transform: "scale(3)", filter: "blur(10px)" }, { opacity: 1, transform: "scale(1)", filter: "blur(0)" }], 420, 1200);
+      if (s.meta) { const m = h("div", "m", s.meta); m.style.position = "absolute"; m.style.bottom = "12cqw"; L.appendChild(m); anim(m, [{ opacity: 0 }, { opacity: 1 }], 400, 1650); }
+      exit(L, len, 220);
+    },
+    split(L, s, len) {
+      const sp = h("div", "split"), left = h("div"), right = h("div", "right");
+      const ls = h("div", "s", s.left.label || ""), ld = chars(s.left.title, "d l");
+      const rs = h("div", "s", s.right.label || ""), rd = chars(s.right.title, "d l");
+      left.append(ls, ld); right.append(rs, rd); sp.append(left, right); L.appendChild(sp);
+      fit(ld, 0.42); fit(rd, 0.42); fit(ls, 0.45); fit(rs, 0.45);
+      anim(right, [{ clipPath: "inset(0 0 0 100%)" }, { clipPath: "inset(0 0 0 0)" }], 520, 700);
+      anim(ls, [{ opacity: 0 }, { opacity: 1 }], 300, 100);
+      each(ld, (c, i) => anim(c, [{ opacity: 0, transform: "translateY(60%)" }, { opacity: 1, transform: "none" }], 380, 220 + i * 55));
+      anim(rs, [{ opacity: 0 }, { opacity: 1 }], 300, 1000);
+      each(rd, (c, i) => anim(c, [{ opacity: 0, transform: "translateY(-60%)" }, { opacity: 1, transform: "none" }], 380, 1050 + i * 80, E.snap));
+      exit(L, len);
+    },
+    flow(L, s, len) {
+      const steps = s.steps.slice(0, 4), gap = Math.min(560, (len - 1200) / steps.length);
+      const flow = h("div", "flow");
+      steps.forEach(([t, d], i) => {
+        const at = 260 + i * gap;
+        if (i) { const ar = h("div", "arrow", "→"); flow.appendChild(ar); anim(ar, [{ opacity: 0, transform: "translateX(-20px)" }, { opacity: 1, transform: "none" }], 240, at - 140); }
+        const st = h("div", "step"), dt = h("div", "d", t), dd = h("div", "m", d || "");
+        st.append(dt, dd); flow.appendChild(st);
+        anim(st, [{ opacity: 0, transform: "translateY(40px) scale(.9)" }, { opacity: 1, transform: "none" }], 380, at, E.snap);
+        anim(dt, [{ color: "#ff7a1a" }, { color: "#f3f6ff" }], 500, at + 380, "linear");
+      });
+      const head = h("div", "s", s.head || "");
+      L.append(head, flow); fit(flow, 0.94); fit(head);
+      if (flow.scrollWidth > stage.clientWidth * 0.94) flow.style.transform = `scale(${stage.clientWidth * 0.94 / flow.scrollWidth})`;
+      anim(head, [{ opacity: 0 }, { opacity: 1 }], 300);
+      if (s.meta) { const m = h("div", "m", s.meta); L.appendChild(m); fit(m); anim(m, [{ opacity: 0 }, { opacity: 1 }], 400, Math.max(len - 700, 1200)); }
+      exit(L, len, 220);
+    },
+    final(L, s) {
+      const a = chars(s.line || "", "d l"), b = chars(s.big, "d xl or"), u = h("div", "under");
+      L.append(a, b, u); fit(a); fit(b);
+      each(a, (c, i) => anim(c, [{ opacity: 0, transform: "translateX(-30px)" }, { opacity: 1, transform: "none" }], 300, i * 45));
+      each(b, (c, i) => anim(c, [{ opacity: 0, transform: "scale(1.8)" }, { opacity: 1, transform: "none" }], 340, 330 + i * 70));
+      anim(u, [{ transform: "scaleX(0)" }, { transform: "scaleX(1)" }], 500, 800);
+      const sig = h("div", "sig", s.sig || REEL.sig || ""); L.appendChild(sig);
+      anim(sig, [{ opacity: 0 }, { opacity: 1 }], 400, 1000);
+    },
+  };
+
+  // timeline
+  let t0 = 0;
+  const scenes = REEL.scenes.map(s => { const r = { s, start: t0, len: s.dur }; t0 += s.dur; return r; });
+  const DUR = t0;
+  document.getElementById("time").textContent = `0.0 / ${(DUR / 1000).toFixed(1)}s`;
+
+  function show(i, offset, run) {
+    stage.getAnimations({ subtree: true }).forEach(a => a.cancel());
+    stage.replaceChildren();
+    const { s, len } = scenes[i];
+    const L = h("div", "layer"); stage.appendChild(L);
+    B[s.type](L, s, len);
+    L.getAnimations({ subtree: true }).forEach(a => { a.currentTime = offset; run ? a.play() : a.pause(); });
+  }
+  const sceneAt = t => { let i = 0; while (i + 1 < scenes.length && t >= scenes[i + 1].start) i++; return i; };
+
+  // deterministic frame access for MP4 capture
+  window.reelDuration = DUR;
+  window.reelSeek = t => { const i = sceneAt(t); show(i, t - scenes[i].start, false); };
+
+  // preload every glyph so lazily-subset Japanese fonts are ready before frame 1
+  const pre = h("div", "preload");
+  const strings = JSON.stringify(REEL);
+  ["d", "s", "m"].forEach(c => pre.appendChild(h("div", c, strings)));
+  document.body.appendChild(pre);
+  window.reelReady = document.fonts.ready
+    .then(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))))
+    .then(() => document.fonts.ready)
+    .then(() => { pre.remove(); });
+
+  if (capture) return;
+
+  let elapsed = 0, last = 0, playing = false, cur = -1, raf = 0;
+  const fill = document.getElementById("fill"), timeEl = document.getElementById("time"), playBtn = document.getElementById("play");
+  function tick(now) {
+    if (!playing) return;
+    elapsed += now - last; last = now;
+    if (elapsed >= DUR) { elapsed = 0; cur = -1; }
+    const i = sceneAt(elapsed);
+    if (i !== cur) { cur = i; show(i, elapsed - scenes[i].start, true); }
+    fill.style.width = (elapsed / DUR * 100) + "%";
+    timeEl.textContent = `${(elapsed / 1000).toFixed(1)} / ${(DUR / 1000).toFixed(1)}s`;
+    raf = requestAnimationFrame(tick);
+  }
+  function play() { playing = true; last = performance.now(); playBtn.textContent = "一時停止"; stage.getAnimations({ subtree: true }).forEach(a => a.play()); raf = requestAnimationFrame(tick); }
+  function pause() { playing = false; cancelAnimationFrame(raf); playBtn.textContent = "再生"; stage.getAnimations({ subtree: true }).forEach(a => a.pause()); }
+  playBtn.addEventListener("click", () => playing ? pause() : play());
+  document.getElementById("restart").addEventListener("click", () => { pause(); elapsed = 0; cur = -1; play(); });
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  window.reelReady.then(() => { if (reduce) { window.reelSeek(DUR - 1); playBtn.textContent = "再生"; } else play(); });
+})();
+</script>
+</body>
+</html>
