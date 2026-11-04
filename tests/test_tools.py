@@ -26,13 +26,37 @@ class ToolTests(unittest.TestCase):
         self.assertEqual(r["parts"]["block"]["bbox_mm"]["size"], [20.0, 10.0, 5.0])
         self.assertTrue(r["parts"]["block"]["valid"])
         self.assertEqual(r["interference"], [])
-        img, text = server.preview("t-flow")
-        self.assertTrue(Path(text.split(": ", 1)[1]).exists())
+        views, sheet, text = server.preview("t-flow")
+        self.assertTrue(Path(views.path).exists())
+        self.assertTrue(Path(sheet.path).exists())
+        self.assertTrue(str(sheet.path).endswith("sheet.png"))
         pub = server.publish_ar("t-flow")
         self.assertTrue(Path(pub["published"]).exists())
         # block is 20 mm wide along X; USDZ must be in metres
         self.assertIn(0.02, pub["size_m"])
         self.assertLess(max(pub["size_m"]), 1.0)
+        # parts-only size leaves out the 40 mm context pipe
+        self.assertEqual(pub["parts_size_m"], [0.02, 0.01, 0.005])
+
+    def test_holes_bed_and_lists(self):
+        code = ("from build123d import *\n"
+                "plate = Box(60, 20, 5) - Pos(-20, 0, 0) * Cylinder(2.75, 10) - Pos(20, 0, 0) * Cylinder(2.75, 10)\n"
+                "parts = {'plate': plate, 'long': Pos(0, 50, 0) * Box(300, 10, 5)}\n"
+                "hardware = ['M5×12 ボルト・ナット 2組']\n"
+                "checks = ['穴の間隔 40 mm']\n")
+        r = server.build_model("t-holes", code)
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(r["parts"]["plate"]["holes"], [{"d": 5.5, "n": 2, "half": False}])
+        self.assertTrue(r["parts"]["plate"]["fits_bed"])
+        self.assertFalse(r["parts"]["long"]["fits_bed"])  # 300 mm > 256 mm bed
+        self.assertEqual(r["hardware"], ["M5×12 ボルト・ナット 2組"])
+        self.assertEqual(r["checks"], ["穴の間隔 40 mm"])
+        self.assertEqual(r["parts_size_mm"], [300.0, 65.0, 5.0])
+
+    def test_bad_hardware_list(self):
+        r = server.build_model("t-hw", BOX + "hardware = 'M5'\n")
+        self.assertFalse(r["ok"])
+        self.assertIn("hardware", r["error"])
 
     def test_versions_and_code(self):
         server.build_model("t-ver", BOX)

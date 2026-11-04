@@ -31,13 +31,13 @@ def main(argv):
     if cmd == "build":
         out = server.build_model(a[0], Path(a[1]).read_text(encoding="utf-8"), a[2] if len(a) > 2 else "")
     elif cmd == "preview":
-        out = server.preview(a[0], _ver(a, 1))[1]
+        out = server.preview(a[0], _ver(a, 1))[-1]
     elif cmd == "publish":
         out = server.publish_ar(a[0], _ver(a, 1), "--no-context" not in a)
     elif cmd == "list":
         out = server.list_projects(a[0] if a else None)
     elif cmd == "code":
-        print(server.get_code(a[0], _ver(a, 1)))
+        sys.stdout.write(server.get_code(a[0], _ver(a, 1)))
         return 0
     else:
         print(f"unknown command {cmd!r}\n{__doc__}")

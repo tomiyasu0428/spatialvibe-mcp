@@ -84,8 +84,13 @@ def build_model(project: str, code: str, note: str = "") -> dict:
     `parts = {"name": shape, ...}` — the things to print — and may define
     `context = {"name": shape, ...}` — surroundings (pipe, box, wall...) shown translucent
     in previews and AR but never printed. Names: ASCII letters, digits, _ or -.
-    Returns per-part validity, solid count, volume, bounding box, any overlap between parts
-    and context (usually a design error), and the paths of the STL/STEP files.
+    Optional `hardware = ["M5×30 ボルト・ナット 6組", ...]` (what to buy) and
+    `checks = ["パイプの周長 7.0 cm（Ø22.2）", ...]` (what to measure before printing) are echoed
+    in the result and printed on the dimension sheet.
+    Returns per-part validity, solid count, volume, bounding box, round holes, whether it fits
+    the print bed ($SPATIALVIBE_BED, default 256×256×256 mm), the overall size of the printed
+    parts, any overlap between parts and context (usually a design error; faces that only touch
+    are not reported), and the paths of the STL/STEP files.
     Always call `preview` afterwards and look at the image before showing the user.
     """
     pdir = _project_dir(project)
@@ -113,19 +118,26 @@ def build_model(project: str, code: str, note: str = "") -> dict:
 
 @mcp.tool()
 def preview(project: str, version: int | None = None) -> list:
-    """Render four views (front-oblique, rear-oblique, right side, below) of a version.
+    """Render the 4-view picture and the dimension sheet of a version (latest by default).
 
-    Parts are opaque orange/red/blue, context is translucent grey. Inspect the image
-    yourself: check that parts sit where intended relative to the context, nothing floats,
-    and features (holes, slots, walls) exist. Defaults to the latest version.
+    1) Four views (front-oblique, rear-oblique, right side, below), framed on the printed parts;
+       parts in distinct opaque colours, context translucent grey and cut to the frame.
+    2) Dimension sheet for the user's phone: part count, overall size, and per part the size
+       W×D×H mm, round holes, whether it fits the print bed, top/front views with dimension lines,
+       then the script's `hardware` and `checks` lists.
+    Look at both yourself before replying; send the user the sheet (sheet.png) with your reply.
     """
     vdir = _built_version_dir(project, version)
-    argv = [sys.executable, "-m", "spatialvibe_mcp._render", str(vdir)]
-    p = subprocess.run(argv, capture_output=True, text=True, timeout=TIMEOUT, env=_child_env())
-    png = vdir / "preview.png"
-    if p.returncode != 0 or not png.exists():
-        raise RuntimeError(p.stderr[-2000:])
-    return [Image(path=str(png)), f"{project} {vdir.name}: {png}"]
+    out = []
+    for mod, name in (("_render", "preview.png"), ("_sheet", "sheet.png")):
+        argv = [sys.executable, "-m", f"spatialvibe_mcp.{mod}", str(vdir)]
+        p = subprocess.run(argv, capture_output=True, text=True, timeout=TIMEOUT, env=_child_env())
+        png = vdir / name
+        if p.returncode != 0 or not png.exists():
+            raise RuntimeError(f"{mod}: {p.stderr[-2000:]}")
+        out.append(png)
+    return [Image(path=str(out[0])), Image(path=str(out[1])),
+            f"{project} {vdir.name}: views {out[0]} / dimension sheet {out[1]}"]
 
 
 @mcp.tool()
@@ -151,8 +163,11 @@ def publish_ar(project: str, version: int | None = None, include_context: bool =
         raise RuntimeError(f"unknown SPATIALVIBE_PUBLISH={PUBLISH!r}")
     dest_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(usdz, dest_dir / fname)
+    res = json.loads((vdir / "result.json").read_text(encoding="utf-8"))
+    parts_m = [round(v / 1000, 4) for v in res.get("parts_size_mm", [])]
     return {"usdz": str(usdz), "published": str(dest_dir / fname), "how_to_open": how,
-            "size_m": usdz_size_m(usdz), "include_context": include_context}
+            "size_m": usdz_size_m(usdz), "parts_size_m": parts_m, "include_context": include_context,
+            "note": "size_m includes context; quote parts_size_m as the size of what is printed"}
 
 
 @mcp.tool()

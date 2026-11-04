@@ -19,8 +19,8 @@
 
 | ツール | 内容 |
 | --- | --- |
-| `build_model(project, code, note)` | build123d スクリプトを別プロセスで実行。`parts`（印刷するもの）と `context`（周囲：パイプ・箱など）を STL/STEP に。形の有効性・体積・外形、**部品と周囲の重なり**を返す。版ごと（v001, v002…）に保存 |
-| `preview(project, version?)` | 4 方向の画像。Claude が自分で見て直す |
+| `build_model(project, code, note)` | build123d スクリプトを別プロセスで実行。`parts`（印刷するもの）と `context`（周囲：パイプ・箱など）を STL/STEP に。形の有効性・体積・外形・**丸穴**・**ベッドに入るか**・部品全体の大きさ、**部品と周囲の重なり**を返す。任意で `hardware`（買うもの）と `checks`（印刷前に確認）を書くと結果とシートに載る。版ごと（v001, v002…）に保存 |
+| `preview(project, version?)` | 4 方向の画像と **寸法シート**（スマホ 1 画面: 部品ごとの W×D×H・穴・ベッドに入るか・上/正面の寸法線、買うもの、印刷前に確認）。Claude が自分で見て直し、シートをユーザーに渡す |
 | `publish_ar(project, version?)` | 実寸 USDZ（m, Y-up）を作り iCloud Drive の `SpatialVibe/` に置く → iPhone の「ファイル」からタップで AR。回線を問わない |
 | `list_projects` / `get_code` | 版の一覧、過去のスクリプト |
 
@@ -41,6 +41,7 @@ Claude Desktop では `claude_desktop_config.json` の `mcpServers` に同じコ
 | `SPATIALVIBE_HOME` | `./data/mcp_projects` | プロジェクトと版の保存先 |
 | `SPATIALVIBE_PUBLISH` | `icloud` | AR ファイルの置き場所（`icloud` / `dir:/path`） |
 | `SPATIALVIBE_TIMEOUT` | `180` | 1 回の実行の制限秒数 |
+| `SPATIALVIBE_BED` | `256,256,256` | プリンタの造形範囲 mm（`fits_bed` の判定） |
 
 ## 作例
 
@@ -59,6 +60,12 @@ M8 調整脚でお辞儀止めと水平出し、後ろパネルのネジで抜�
 uv pip install --python .venv/bin/python -r requirements-reel.txt && .venv/bin/python -m playwright install chromium
 .venv/bin/python reel/make_reel.py reels/2026-11-04-app-to-mcp
 ```
+
+## エージェントでの試験（現場の使い方を再現）
+
+`.claude/agents/` の 3 つのサブエージェント（`field-user` 農家役・`designer` 設計役・`checker` 検証役）で、
+現場からの依頼 → 質問 → 回答 → 設計 → 検証と評価 を 1 ラウンドとして回し、見つかった問題でツールと
+WORKFLOW.md を直します。記録は [`sessions/`](sessions/README.md)、ツールはシェルから `tools/sv.py` で呼べます。
 
 ## テスト
 

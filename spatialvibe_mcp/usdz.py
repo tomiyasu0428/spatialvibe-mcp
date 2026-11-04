@@ -4,13 +4,13 @@ from pathlib import Path
 import trimesh
 from pxr import Gf, Sdf, Usd, UsdGeom, UsdShade, UsdUtils
 
-PART_COLORS = [(0.95, 0.55, 0.15), (0.85, 0.30, 0.10), (0.20, 0.55, 0.85), (0.30, 0.70, 0.35)]
+from ._style import CONTEXT_COLOR, part_color
 
 
 def build_usdz(vdir: Path, include_context: bool = True) -> Path:
-    items = [(f, PART_COLORS[i % len(PART_COLORS)], 1.0) for i, f in enumerate(sorted(vdir.glob("part_*.stl")))]
+    items = [(f, part_color(i), 1.0) for i, f in enumerate(sorted(vdir.glob("part_*.stl")))]
     if include_context:
-        items += [(f, (0.55, 0.60, 0.68), 0.35) for f in sorted(vdir.glob("ctx_*.stl"))]
+        items += [(f, CONTEXT_COLOR, 0.35) for f in sorted(vdir.glob("ctx_*.stl"))]
 
     usdc = vdir / "model.usdc"
     stage = Usd.Stage.CreateNew(str(usdc))
