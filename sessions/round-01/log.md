@@ -1,6 +1,6 @@
 # Round 01 — ハウスの横パイプにセンサー箱を吊るす
 
-Date: 2026-11-04 · Tools: before the dimension sheet (commit 5d2b6a5 baseline)
+Date: 2026-11-04 · Tools: before the dimension sheet (baseline fe70307)
 
 ## Exchange
 **field-user (request)**
