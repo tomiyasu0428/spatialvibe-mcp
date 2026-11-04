@@ -1,7 +1,7 @@
 {
   "title": "アプリから、MCPへ。",
   "sig": "spatialvibe · 2026.11.04",
-  "covers": {"from": null, "to": null, "summary": "Web アプリ（v0.1）から MCP サーバーへの方針転換"},
+  "covers": {"from": null, "to": "ec3c9ff", "summary": "Web アプリ（v0.1）から MCP サーバーへの方針転換"},
   "scenes": [
     {"type": "drop", "dur": 2600, "line": "畑で、", "big": "ひらめく。", "meta": "長ネギ・ブロッコリー・大豆・かぼちゃ ／ 北海道平取町"},
     {"type": "stamp", "dur": 2600, "small": "だから、まず作ったのは", "big": "アプリ", "chips": ["ボタン", "画面", "決まったルールの会話"]},
