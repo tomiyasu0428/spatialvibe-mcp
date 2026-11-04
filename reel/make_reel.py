@@ -1,20 +1,31 @@
-"""Build a 20-second kinetic-typography reel from scenes.json: HTML (playable) + MP4 (1920x1080, 30 fps).
+"""Build a 20-second beat-synced kinetic-typography reel from scenes.json.
+
+Outputs in the reel folder: audio.wav (synthesised, 44.1 kHz stereo), reel.html (playable, sound
+embedded) and reel.mp4 (1920x1080, 30 fps, H.264 + AAC).
 
 Usage:
-  .venv/bin/python reel/make_reel.py reels/2026-11-04-app-to-mcp            # html + mp4
-  .venv/bin/python reel/make_reel.py reels/... --html-only                  # skip recording
-  .venv/bin/python reel/make_reel.py reels/... --check                      # validate scenes.json only
+  .venv/bin/python reel/make_reel.py reels/<dir>              # everything
+  .venv/bin/python reel/make_reel.py reels/<dir> --html-only  # skip the MP4
+  .venv/bin/python reel/make_reel.py reels/<dir> --check      # validate scenes.json only
 
-Frames are rendered deterministically (seek -> screenshot), so the MP4 is smooth regardless of machine speed.
+Frames are rendered deterministically (seek -> screenshot) and the music is generated from the same
+scene timing, so picture and sound stay locked to the beat on any machine.
 """
 import argparse
+import base64
 import io
 import json
+import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import music  # noqa: E402
+
 ROOT = Path(__file__).resolve().parent
-TOTAL_MS = 20000
+BPM = 120
+TOTAL_BARS = 10          # 10 bars at 120 BPM = 20 s
 FPS = 30
 W, H = 1920, 1080
 
@@ -27,9 +38,11 @@ FIELDS = {
 def validate(reel: dict) -> list:
     errs = []
     scenes = reel.get("scenes") or []
+    if reel.get("bpm", BPM) != BPM:
+        errs.append(f"bpm must be {BPM}")
     if not 4 <= len(scenes) <= 10:
         errs.append(f"use 4-10 scenes (got {len(scenes)})")
-    total = 0
+    bars = 0
     for i, s in enumerate(scenes):
         t = s.get("type")
         if t not in FIELDS:
@@ -38,56 +51,68 @@ def validate(reel: dict) -> list:
         missing = FIELDS[t] - set(s)
         if missing:
             errs.append(f"scene {i} ({t}): missing {sorted(missing)}")
-        d = s.get("dur")
-        if not isinstance(d, int) or not 1400 <= d <= 4000:
-            errs.append(f"scene {i}: dur must be an int 1400-4000 ms (got {d!r})")
+        n = s.get("bars")
+        if not isinstance(n, int) or not 1 <= n <= 3:
+            errs.append(f"scene {i}: bars must be 1, 2 or 3 (got {n!r})")
         else:
-            total += d
+            bars += n
         if t == "flow" and not 2 <= len(s.get("steps", [])) <= 4:
             errs.append(f"scene {i}: flow needs 2-4 steps")
         if t == "split" and not all("title" in s.get(k, {}) for k in ("left", "right")):
             errs.append(f"scene {i}: split needs left.title and right.title")
+        if t == "final" and s.get("bars") != 2:
+            errs.append(f"scene {i}: final must be 2 bars (hit + tail)")
     if scenes and scenes[-1].get("type") != "final":
         errs.append("last scene must be type 'final'")
-    if total != TOTAL_MS:
-        errs.append(f"durations must add up to {TOTAL_MS} ms (got {total})")
+    if bars != TOTAL_BARS:
+        errs.append(f"bars must add up to {TOTAL_BARS} (got {bars})")
     return errs
 
 
-def build_html(reel: dict, out: Path) -> Path:
+def build(reel: dict, out: Path):
+    st, hits = music.render(reel["scenes"], BPM)
+    wav = out / "audio.wav"
+    music.write_wav(wav, st)
+    buf = io.BytesIO()
+    music.write_wav(buf, music.mono_22k(st), sr=music.SR // 2)
+    data = dict(reel, bpm=BPM, hits=hits)
     tpl = (ROOT / "engine.html").read_text(encoding="utf-8")
-    data = json.dumps(reel, ensure_ascii=False).replace("</", "<\\/")
-    html = tpl.replace("/*__REEL__*/", data).replace("<title>spatialvibe reel</title>", f"<title>{reel.get('title', 'reel')}</title>")
-    path = out / "reel.html"
-    path.write_text(html, encoding="utf-8")
-    return path
+    html = (tpl.replace("/*__REEL__*/", json.dumps(data, ensure_ascii=False).replace("</", "<\\/"))
+               .replace("/*__AUDIO__*/", "data:audio/wav;base64," + base64.b64encode(buf.getvalue()).decode())
+               .replace("<title>spatialvibe reel</title>", f"<title>{reel.get('title', 'reel')}</title>"))
+    page = out / "reel.html"
+    page.write_text(html, encoding="utf-8")
+    return page, wav
 
 
-def record(html: Path, mp4: Path) -> None:
+def record(page: Path, wav: Path, mp4: Path) -> None:
     import imageio_ffmpeg
     from PIL import Image
     from playwright.sync_api import sync_playwright
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch()
-        page = browser.new_page(viewport={"width": W, "height": H}, device_scale_factor=1)
-        page.goto(html.resolve().as_uri() + "?capture=1")
-        page.wait_for_function("window.reelReady !== undefined")
-        page.evaluate("window.reelReady")
-        dur = page.evaluate("window.reelDuration")
-        n = int(dur / 1000 * FPS)
-        writer = imageio_ffmpeg.write_frames(
-            str(mp4), (W, H), fps=FPS, codec="libx264", pix_fmt_out="yuv420p", quality=None,
-            output_params=["-crf", "18", "-preset", "medium", "-movflags", "+faststart"], macro_block_size=8)
-        writer.send(None)
-        for f in range(n):
-            page.evaluate(f"window.reelSeek({f * 1000 / FPS})")
-            png = page.screenshot(type="png")
-            writer.send(Image.open(io.BytesIO(png)).convert("RGB").tobytes())
-            if f % 60 == 0:
-                print(f"  frame {f}/{n}", file=sys.stderr)
-        writer.close()
-        browser.close()
+    with tempfile.TemporaryDirectory() as tmp:
+        silent = Path(tmp) / "video.mp4"
+        with sync_playwright() as p:
+            browser = p.chromium.launch()
+            pg = browser.new_page(viewport={"width": W, "height": H}, device_scale_factor=1)
+            pg.goto(page.resolve().as_uri() + "?capture=1")
+            pg.wait_for_function("window.reelReady !== undefined")
+            pg.evaluate("window.reelReady")
+            n = int(pg.evaluate("window.reelDuration") / 1000 * FPS)
+            w = imageio_ffmpeg.write_frames(
+                str(silent), (W, H), fps=FPS, codec="libx264", pix_fmt_out="yuv420p", quality=None,
+                output_params=["-crf", "17", "-preset", "medium"], macro_block_size=8)
+            w.send(None)
+            for f in range(n):
+                pg.evaluate(f"window.reelSeek({f * 1000 / FPS})")
+                w.send(Image.open(io.BytesIO(pg.screenshot(type="png"))).convert("RGB").tobytes())
+                if f % 60 == 0:
+                    print(f"  frame {f}/{n}", file=sys.stderr)
+            w.close()
+            browser.close()
+        subprocess.run([imageio_ffmpeg.get_ffmpeg_exe(), "-v", "error", "-y", "-i", str(silent), "-i", str(wav),
+                        "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(mp4)],
+                       check=True)
 
 
 def main():
@@ -104,11 +129,11 @@ def main():
     if a.check:
         print("ok")
         return
-    html = build_html(reel, a.reel_dir)
-    print(html)
+    page, wav = build(reel, a.reel_dir)
+    print(page)
     if not a.html_only:
         mp4 = a.reel_dir / "reel.mp4"
-        record(html, mp4)
+        record(page, wav, mp4)
         print(mp4)
 
 

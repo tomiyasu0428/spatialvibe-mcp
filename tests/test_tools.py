@@ -72,8 +72,18 @@ class ReelTests(unittest.TestCase):
             self.assertEqual(make_reel.validate(json.loads(f.read_text(encoding="utf-8"))), [], f)
 
     def test_validator_rejects_wrong_total(self):
-        reel = {"scenes": [{"type": "drop", "dur": 3000, "big": "あ"}] * 3 + [{"type": "final", "dur": 3000, "big": "い"}]}
-        self.assertTrue(any("20000" in e for e in make_reel.validate(reel)))
+        reel = {"scenes": [{"type": "drop", "bars": 1, "big": "あ"}] * 3 + [{"type": "final", "bars": 2, "big": "い"}]}
+        self.assertTrue(any("add up to 10" in e for e in make_reel.validate(reel)))
+
+    def test_music_matches_timeline(self):
+        import music
+        scenes = json.loads((ROOT / "reels/2026-11-04-app-to-mcp/scenes.json").read_text(encoding="utf-8"))["scenes"]
+        st, hits = music.render(scenes)
+        self.assertAlmostEqual(len(st) / music.SR, 20.0, places=2)
+        self.assertLessEqual(abs(st).max(), 1.0)
+        kicks = [h["t"] for h in hits if h["k"] == "kick"]
+        # every kick sits on the 32nd-note grid (62.5 ms at 120 BPM; the glitch stutter uses 32nds)
+        self.assertTrue(all(abs(t / 62.5 - round(t / 62.5)) < 0.02 for t in kicks))
 
 
 if __name__ == "__main__":

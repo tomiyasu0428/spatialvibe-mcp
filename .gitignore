@@ -17,3 +17,4 @@ reels/*/reel.mp4
 .DS_Store
 .idea/
 .vscode/
+reels/*/audio.wav

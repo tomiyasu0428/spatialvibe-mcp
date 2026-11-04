@@ -1,15 +1,17 @@
 {
   "title": "アプリから、MCPへ。",
+  "code": "PROGRESS 001",
   "sig": "spatialvibe · 2026.11.04",
+  "bpm": 120,
   "covers": {"from": null, "to": "ec3c9ff", "summary": "Web アプリ（v0.1）から MCP サーバーへの方針転換"},
   "scenes": [
-    {"type": "drop", "dur": 2600, "line": "畑で、", "big": "ひらめく。", "meta": "長ネギ・ブロッコリー・大豆・かぼちゃ ／ 北海道平取町"},
-    {"type": "stamp", "dur": 2600, "small": "だから、まず作ったのは", "big": "アプリ", "chips": ["ボタン", "画面", "決まったルールの会話"]},
-    {"type": "overflow", "dur": 2600, "small": "でも、", "label": "template_holder_v1", "boxed": "テンプレートに", "burst": "収まらない。"},
-    {"type": "stretch", "dur": 2400, "small": "ほしいのは", "big": "目的に合う形", "meta": "どの寸法の、どんな形がベストか ─ それがわからない"},
-    {"type": "swap", "dur": 2600, "from": "アプリ", "to": "MCP", "meta": "Model Context Protocol"},
-    {"type": "split", "dur": 2600, "left": {"label": "考える・聞く・決める", "title": "Claude"}, "right": {"label": "動かす・確かめる・届ける", "title": "MCP"}},
-    {"type": "flow", "dur": 2900, "head": "質問に答えるだけで、3Dが立ち上がる", "steps": [["聞く", "選択肢で 4問"], ["探す", "手順書から Ø25.6mm"], ["形に", "build123d → STL"], ["AR", "iCloud → iPhone"]], "meta": "120.5 × 220 × 56 mm ／ クランプ ×2 ＋ M8 調整脚"},
-    {"type": "final", "dur": 1700, "line": "アプリから、", "big": "MCPへ。"}
+    {"type": "drop", "bars": 1, "line": "畑で、", "big": "ひらめく。", "meta": "BIRATORI, HOKKAIDO — NEGI / BROCCOLI / SOY / PUMPKIN"},
+    {"type": "stamp", "bars": 1, "small": "まず作ったのは", "big": "アプリ", "chips": ["ボタン", "画面", "ルールの会話"]},
+    {"type": "overflow", "bars": 1, "small": "でも、", "label": "TEMPLATE_V1", "boxed": "テンプレートに", "burst": "収まらない"},
+    {"type": "stretch", "bars": 1, "small": "ほしいのは", "big": "目的に合う形", "meta": "WHICH SHAPE? WHICH SIZE?"},
+    {"type": "swap", "bars": 1, "from": "アプリ", "to": "MCP", "meta": "MODEL CONTEXT PROTOCOL"},
+    {"type": "split", "bars": 1, "left": {"label": "考える・聞く・決める", "title": "Claude"}, "right": {"label": "動かす・確かめる・届ける", "title": "MCP"}},
+    {"type": "flow", "bars": 2, "head": "質問に答えるだけで、3Dが立ち上がる", "steps": [["聞く", "選択肢で 4 問"], ["探す", "手順書から Ø25.6 mm"], ["形に", "build123d → STL / STEP"], ["AR", "iCloud → iPhone, 1:1"]], "meta": "120.5 × 220 × 56 MM — CLAMP ×2 + M8 FOOT"},
+    {"type": "final", "bars": 2, "line": "アプリから、", "big": "MCPへ。"}
   ]
 }

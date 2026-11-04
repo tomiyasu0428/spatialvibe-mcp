@@ -6,254 +6,390 @@
 <title>spatialvibe reel</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=JetBrains+Mono:wght@500&family=Zen+Kaku+Gothic+New:wght@500;700&display=block">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+JP:wght@100..900&display=block">
 <style>
-/* One 16:9 stage on field-container blue over a millimetre grid. Single committed look. */
+/* Beat-driven stage: hard cuts on the bar, colour grounds that flip on the beat, a technical HUD
+   (timecode, bar counter, crop marks) as the one quiet layer. Single committed look. */
 :root {
-  --blue: #1b4fd8; --paper: #f3f6ff; --paper-dim: rgba(243, 246, 255, 0.62);
-  --orange: #ff7a1a; --ink: #0a1a40;
-  --grid: rgba(243, 246, 255, 0.07); --grid-major: rgba(243, 246, 255, 0.13);
-  --display: "Dela Gothic One", "Hiragino Sans", "Yu Gothic", sans-serif;
-  --body: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --ink: #0d0e10;
+  --paper: #f1f0ec;
+  --orange: #ff5a1f;     /* printed-part orange */
+  --blue: #1f4fe0;       /* field-container blue */
+  --jp: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --lat: "Archivo", "Helvetica Neue", Arial, sans-serif;
   --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
   color-scheme: dark;
 }
 html, body { height: 100%; margin: 0; }
 body {
-  background: var(--ink); color: var(--paper); font-family: var(--body);
+  background: #060607; color: var(--paper); font-family: var(--jp);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
   padding-block: 16px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
   box-sizing: border-box;
 }
 body.capture { padding: 0; gap: 0; }
 .stage {
-  container-type: inline-size; position: relative; overflow: hidden; border-radius: 6px;
+  --bg: var(--ink); --fg: var(--paper); --ac: var(--orange); --pulse: 0;
+  container-type: inline-size; position: relative; overflow: hidden;
   width: min(100%, 1100px, calc((100vh - 110px) * 16 / 9)); aspect-ratio: 16 / 9;
-  background-color: var(--blue);
-  background-image:
-    linear-gradient(var(--grid-major) 1px, transparent 1px), linear-gradient(90deg, var(--grid-major) 1px, transparent 1px),
-    linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-  background-size: 10cqw 10cqw, 10cqw 10cqw, 1cqw 1cqw, 1cqw 1cqw; background-position: -1px -1px;
+  background: var(--bg); color: var(--fg);
 }
-body.capture .stage { width: 100vw; height: 100vh; aspect-ratio: auto; border-radius: 0; }
-.layer { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.2cqw; text-align: center; }
-.ch { display: inline-block; white-space: pre; }
-.d { font-family: var(--display); line-height: 1.05; letter-spacing: 0.01em; white-space: nowrap; }
-.s { font-weight: 700; font-size: 3.2cqw; color: var(--paper-dim); letter-spacing: 0.08em; }
-.m { font-family: var(--mono); font-size: 1.8cqw; color: var(--paper-dim); letter-spacing: 0.02em; }
-.xl { font-size: 15cqw; } .l { font-size: 10cqw; } .md { font-size: 6.4cqw; }
-.or { color: var(--orange); }
-.chip { position: absolute; font-weight: 700; font-size: 2.4cqw; padding: 0.7cqw 1.6cqw; border: 0.25cqw solid var(--paper); border-radius: 99px; white-space: nowrap; }
-.tbox { position: relative; border: 0.35cqw dashed var(--paper); padding: 1.4cqw 2cqw; }
-.tlabel { position: absolute; top: -1.4cqw; left: 1.2cqw; background: var(--blue); padding: 0 0.6cqw; font-family: var(--mono); font-size: 1.5cqw; color: var(--paper-dim); }
-.ruler { position: absolute; left: 6cqw; right: 6cqw; bottom: 9cqw; height: 3cqw; border-top: 0.25cqw solid var(--orange); transform-origin: left; }
-.ruler i { position: absolute; top: 0; width: 0.2cqw; background: var(--orange); }
-.strike { position: absolute; left: -4%; right: -4%; top: 52%; height: 1.6cqw; background: var(--orange); transform-origin: left; }
-.flash { position: absolute; inset: 0; background: var(--paper); pointer-events: none; }
-.split { position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr; }
-.split > div { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.4cqw; padding: 0 2cqw; }
-.split .right { background: var(--orange); color: var(--ink); }
-.split .right .s { color: rgba(10, 26, 64, 0.7); }
-.flow { display: flex; align-items: center; gap: 1.2cqw; }
-.step { display: flex; flex-direction: column; align-items: center; gap: 0.9cqw; }
-.step .d { font-size: 4.6cqw; }
-.step .m { font-size: 1.35cqw; white-space: nowrap; }
-.arrow { font-family: var(--display); font-size: 3.4cqw; color: var(--orange); }
-.under { height: 0.9cqw; width: 38cqw; background: var(--orange); transform-origin: left; }
-.sig { position: absolute; bottom: 4cqw; left: 0; right: 0; font-family: var(--mono); font-size: 1.5cqw; color: var(--paper-dim); letter-spacing: 0.1em; }
-.preload { position: absolute; left: 0; top: 0; opacity: 0.01; pointer-events: none; font-size: 12px; white-space: nowrap; }
-.bar { width: min(100%, 1100px); display: flex; align-items: center; gap: 14px; }
-.bar button { font: 700 14px/1 var(--body); color: var(--paper); background: transparent; border: 1.5px solid var(--paper-dim); border-radius: 99px; padding: 9px 16px; cursor: pointer; }
-.bar button:hover { border-color: var(--orange); color: var(--orange); }
-.bar button:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px; }
-.track { flex: 1; height: 4px; background: rgba(243, 246, 255, 0.15); border-radius: 2px; overflow: hidden; }
-.fill { height: 100%; width: 0; background: var(--orange); }
-.time { font: 500 13px var(--mono); color: var(--paper-dim); font-variant-numeric: tabular-nums; min-width: 92px; text-align: right; }
-body.capture .bar { display: none; }
+body.capture .stage { width: 100vw; height: 100vh; aspect-ratio: auto; }
+.stage[data-theme="light"]  { --bg: var(--paper);  --fg: var(--ink);   --ac: var(--orange); }
+.stage[data-theme="orange"] { --bg: var(--orange); --fg: var(--ink);   --ac: var(--paper); }
+.stage[data-theme="blue"]   { --bg: var(--blue);   --fg: var(--paper); --ac: var(--orange); }
+.scene { position: absolute; inset: 0; }
+.abs { position: absolute; }
+.center { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; }
+.t { white-space: nowrap; line-height: 0.98; }
+.jp { font-family: var(--jp); letter-spacing: -0.045em; }
+.lat { font-family: var(--lat); letter-spacing: -0.035em; }
+.mono { font-family: var(--mono); font-size: 1.25cqw; letter-spacing: 0.14em; text-transform: uppercase; }
+.k { display: inline-block; overflow: hidden; vertical-align: bottom; padding: 0.06em 0.01em 0.1em; margin: -0.06em -0.01em -0.1em; }
+.k > i { display: inline-block; font-style: normal; will-change: transform; }
+.wp { font-weight: clamp(100, calc(var(--w, 800) + var(--pulse) * 140), 900); }
+.pulse { transform: scale(calc(1 + var(--pulse) * 0.035)); }
+.ac { color: var(--ac); }
+/* HUD */
+.hud { position: absolute; inset: 0; pointer-events: none; color: var(--fg); opacity: 0.55; }
+.hud .mono { position: absolute; font-size: 1.05cqw; }
+.hud .tl { left: 3.2cqw; top: 2.8cqw; } .hud .tr { right: 3.2cqw; top: 2.8cqw; }
+.hud .bl { left: 3.2cqw; bottom: 2.8cqw; } .hud .br { right: 3.2cqw; bottom: 2.8cqw; }
+.crop { position: absolute; width: 1.6cqw; height: 1.6cqw; border-color: var(--fg); border-style: solid; border-width: 0; }
+.crop.a { left: 1.6cqw; top: 1.6cqw; border-left-width: 1px; border-top-width: 1px; }
+.crop.b { right: 1.6cqw; top: 1.6cqw; border-right-width: 1px; border-top-width: 1px; }
+.crop.c { left: 1.6cqw; bottom: 1.6cqw; border-left-width: 1px; border-bottom-width: 1px; }
+.crop.d { right: 1.6cqw; bottom: 1.6cqw; border-right-width: 1px; border-bottom-width: 1px; }
+.dots { position: absolute; left: 50%; bottom: 2.9cqw; transform: translateX(-50%); display: flex; gap: 0.7cqw; }
+.dots i { width: 0.55cqw; height: 0.55cqw; border: 1px solid var(--fg); border-radius: 50%; }
+.dots i.on { background: var(--fg); }
+.beatline { position: absolute; left: 0; right: 0; bottom: 0; height: 0.35cqw; background: var(--ac); transform-origin: left; }
+.flash { position: absolute; inset: 0; background: var(--fg); pointer-events: none; opacity: 0; }
+/* scene parts */
+.tag { position: absolute; font-family: var(--mono); font-size: 1.5cqw; letter-spacing: 0.08em; padding: 0.5cqw 1cqw; border: 1px solid var(--fg); white-space: nowrap; }
+.box { position: relative; border: 0.22cqw solid var(--fg); padding: 1.6cqw 2.6cqw; }
+.box .lbl { position: absolute; left: -0.22cqw; top: -2.2cqw; font-size: 1.05cqw; }
+.ruler { position: absolute; left: 8cqw; right: 8cqw; bottom: 13cqw; height: 4cqw; }
+.ruler i { position: absolute; bottom: 0; width: 1px; background: var(--fg); }
+.ruler b { position: absolute; bottom: -2.2cqw; font: 400 0.95cqw var(--mono); transform: translateX(-50%); }
+.bar { position: absolute; height: 1.2cqw; background: var(--fg); transform-origin: left; }
+.half { position: absolute; top: 0; bottom: 0; width: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.2cqw; }
+.track { position: absolute; left: 14cqw; right: 14cqw; bottom: 13.5cqw; height: 1px; background: color-mix(in srgb, var(--fg) 30%, transparent); }
+.track .fillx { position: absolute; left: 0; top: -1px; height: 3px; background: var(--ac); transform-origin: left; width: 100%; }
+.node { position: absolute; top: 0; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 1cqw; }
+.node i { width: 1cqw; height: 1cqw; border-radius: 50%; border: 1px solid var(--fg); background: var(--bg); }
+.node.on i { background: var(--ac); border-color: var(--ac); }
+.node span { font-size: 1.6cqw; font-weight: 700; margin-top: 2.6cqw; position: absolute; top: 0; white-space: nowrap; }
+.underline { height: 0.6cqw; background: var(--ac); transform-origin: left; }
+.preload { position: absolute; left: 0; top: 0; opacity: 0.01; pointer-events: none; font-size: 10px; white-space: nowrap; }
+/* player */
+.gate { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(6, 6, 7, 0.35); }
+.gate button { font: 700 clamp(14px, 1.6cqw, 20px) var(--jp); color: var(--ink); background: var(--paper); border: 0; border-radius: 99px; padding: 1.1em 1.8em; cursor: pointer; }
+.gate button:focus-visible, .ctl button:focus-visible { outline: 2px solid var(--orange); outline-offset: 3px; }
+.ctl { width: min(100%, 1100px); display: flex; align-items: center; gap: 14px; }
+.ctl button { font: 700 14px/1 var(--jp); color: var(--paper); background: transparent; border: 1px solid rgba(241, 240, 236, 0.5); border-radius: 99px; padding: 9px 16px; cursor: pointer; }
+.ctl button:hover { border-color: var(--orange); color: var(--orange); }
+.prog { flex: 1; height: 3px; background: rgba(241, 240, 236, 0.15); }
+.prog div { height: 100%; width: 0; background: var(--orange); }
+.time { font: 400 12px var(--mono); color: rgba(241, 240, 236, 0.6); font-variant-numeric: tabular-nums; min-width: 88px; text-align: right; }
+body.capture .ctl, body.capture .gate { display: none; }
 </style>
 </head>
 <body>
-<div class="stage" id="stage"></div>
-<div class="bar">
-  <button id="play" type="button">一時停止</button>
+<div class="stage" id="stage">
+  <div class="scene" id="scene"></div>
+  <div class="hud" aria-hidden="true">
+    <i class="crop a"></i><i class="crop b"></i><i class="crop c"></i><i class="crop d"></i>
+    <div class="mono tl" id="hud-tl"></div><div class="mono tr" id="hud-tc"></div>
+    <div class="mono bl" id="hud-bpm"></div><div class="mono br" id="hud-bar"></div>
+    <div class="dots" id="dots"><i></i><i></i><i></i><i></i></div>
+  </div>
+  <div class="beatline" id="beatline"></div>
+  <div class="flash" id="flash"></div>
+  <div class="gate" id="gate"><button id="start" type="button">▶ 音ありで再生</button></div>
+</div>
+<div class="ctl">
+  <button id="play" type="button">再生</button>
   <button id="restart" type="button">最初から</button>
-  <div class="track"><div class="fill" id="fill"></div></div>
+  <div class="prog"><div id="prog"></div></div>
   <div class="time" id="time"></div>
 </div>
+<audio id="aud" preload="auto" src="/*__AUDIO__*/"></audio>
 <script id="reel-data" type="application/json">/*__REEL__*/</script>
 <script>
 (() => {
-  const REEL = JSON.parse(document.getElementById("reel-data").textContent);
+  const R = JSON.parse(document.getElementById("reel-data").textContent);
   const capture = new URLSearchParams(location.search).has("capture");
   if (capture) document.body.classList.add("capture");
-  const stage = document.getElementById("stage");
-  const E = { out: "cubic-bezier(.16,1,.3,1)", in: "cubic-bezier(.7,0,.84,0)", snap: "cubic-bezier(.34,1.56,.64,1)" };
+  const $ = id => document.getElementById(id);
+  const stage = $("stage"), sceneEl = $("scene");
+  const BEAT = 60000 / (R.bpm || 120), BAR = 4 * BEAT;
+
+  // ---------- helpers ----------
+  const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+  const outExpo = p => p >= 1 ? 1 : 1 - Math.pow(2, -10 * p);
+  const inOut = p => p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;
+  const inCubic = p => p * p * p;
   const h = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
-  const chars = (text, cls) => { const w = h("div", cls); [...text].forEach(c => w.appendChild(h("span", "ch", c))); return w; };
-  const anim = (el, kf, dur, delay = 0, easing = E.out) => el.animate(kf, { duration: dur, delay, easing, fill: "both" });
-  const each = (w, fn) => [...w.querySelectorAll(".ch")].forEach(fn);
-  const exit = (L, len, dur = 240) => anim(L, [{ opacity: 1, transform: "none", filter: "blur(0)" }, { opacity: 0, transform: "scale(1.04)", filter: "blur(6px)" }], dur, len - dur, E.in);
-  // shrink a line that would not fit the stage (long Japanese strings)
-  const fit = (el, maxFrac = 0.9) => {
-    const max = stage.clientWidth * maxFrac;
-    if (el.scrollWidth > max) el.style.fontSize = (parseFloat(getComputedStyle(el).fontSize) * max / el.scrollWidth) + "px";
+  const isLat = c => /[\x20-\x7e]/.test(c);
+  // text made of masked characters; latin chars get the latin face automatically
+  const T = (text, size, w, extra = "") => {
+    const d = h("div", "t wp " + extra); d.style.fontSize = size; d.style.setProperty("--w", w);
+    for (const c of text) { const k = h("span", "k " + (isLat(c) ? "lat" : "jp")); k.appendChild(h("i", null, c)); d.appendChild(k); }
+    return d;
+  };
+  const ks = el => [...el.querySelectorAll(".k > i")];
+  // reveal chars upward through their mask: start beat, stagger (beats), duration (beats)
+  const rise = (el, b, b0, stag = 0.125, dur = 0.5, from = 105) => ks(el).forEach((c, i) => {
+    const p = outExpo(clamp((b - b0 - i * stag) / dur));
+    c.style.transform = `translateY(${(1 - p) * from}%)`;
+  });
+  const typed = (el, full, b, b0, perBeat = 24) => { el.textContent = full.slice(0, Math.max(0, Math.floor((b - b0) * perBeat))); };
+  const show = (el, on) => { el.style.visibility = on ? "visible" : "hidden"; };
+  const fit = (el, frac) => { const max = stage.clientWidth * frac; if (el.scrollWidth > max) el.style.fontSize = (parseFloat(el.style.fontSize ? getComputedStyle(el).fontSize : 16) * max / el.scrollWidth) + "px"; };
+  const rnd = (seed) => { const x = Math.sin(seed * 12.9898) * 43758.5453; return x - Math.floor(x); };
+
+  // ---------- scene types ----------
+  // build(L, s) -> refs ; update(refs, b, s, beats) -> theme   (b = beats since scene start)
+  const S = {
+    drop: {
+      build(L, s) {
+        const c = h("div", "center"); L.appendChild(c);
+        const line = T(s.line || "", "5.2cqw", 300), big = T(s.big, "17cqw", 900, "ac pulse"), meta = h("div", "mono");
+        meta.style.marginTop = "2.4cqw"; c.append(line, big, meta); fit(big, 0.86);
+        return { line, big, meta };
+      },
+      update(r, b, s) {
+        rise(r.line, b, 0, 0.1, 0.6);
+        rise(r.big, b, 1, 0.25, 0.5);
+        r.big.style.setProperty("--w", Math.round(200 + 700 * outExpo(clamp((b - 1) / 1.5))));
+        typed(r.meta, s.meta || "", b, 2.25, 30);
+        return "dark";
+      },
+    },
+    stamp: {
+      build(L, s) {
+        const c = h("div", "center"); L.appendChild(c);
+        const small = T(s.small || "", "3.4cqw", 500), big = T(s.big, "22cqw", 900, "pulse");
+        c.append(small, big); fit(big, 0.8);
+        const spots = [[13, 22], [72, 18], [16, 74], [70, 76]];
+        const tags = (s.chips || []).slice(0, 4).map((t, i) => { const g = h("div", "tag", `[ ${t} ]`); g.style.left = spots[i][0] + "%"; g.style.top = spots[i][1] + "%"; L.appendChild(g); return g; });
+        return { small, big, tags };
+      },
+      update(r, b) {
+        rise(r.small, b, 0, 0.06, 0.5);
+        show(r.big, b >= 1);
+        r.big.style.transform = `scale(${1 + 0.28 * (1 - outExpo(clamp((b - 1) / 0.35)))})`;
+        r.tags.forEach((g, i) => { const at = 2 + i * 0.5; show(g, b >= at); g.style.transform = `translateY(${(1 - outExpo(clamp((b - at) / 0.25))) * 40}%)`; });
+        return "light";
+      },
+    },
+    overflow: {
+      build(L, s) {
+        const c = h("div", "center"); c.style.gap = "3cqw"; L.appendChild(c);
+        const small = T(s.small || "", "7cqw", 200);
+        const box = h("div", "box"), lbl = h("div", "mono lbl", s.label || "template_v1"), boxed = T(s.boxed, "6.4cqw", 700);
+        box.append(lbl, boxed);
+        const burst = T(s.burst, "13cqw", 900, "ac pulse");
+        c.append(small, box, burst);
+        return { small, box, boxed, burst };
+      },
+      update(r, b) {
+        rise(r.small, b, 0, 0.08, 0.5);
+        const shrink = outExpo(clamp((b - 1) / 0.5));
+        r.small.style.fontSize = (7 - 3.6 * shrink) + "cqw";
+        r.box.style.clipPath = `inset(0 ${(1 - outExpo(clamp((b - 1) / 0.5))) * 100}% 0 0)`;
+        rise(r.boxed, b, 1.25, 0.06, 0.5);
+        const hit = b >= 3;
+        const j = hit ? (1 - clamp((b - 3) / 0.6)) : 0, f = Math.floor(b * 16);
+        r.box.style.transform = `translate(${(rnd(f) - 0.5) * 30 * j}px, ${(rnd(f + 7) - 0.5) * 16 * j}px)`;
+        r.box.style.borderColor = hit ? "var(--ac)" : "var(--fg)";
+        r.boxed.style.transform = `scaleX(${1 - 0.25 * outExpo(clamp((b - 3) / 0.3))})`;
+        show(r.burst, hit);
+        ks(r.burst).forEach((c, i) => {
+          const p = outExpo(clamp((b - 3 - i * 0.04) / 0.45));
+          c.style.transform = `translate(${(rnd(i + 3) - 0.5) * 220 * (1 - p)}%, ${(rnd(i + 9) - 0.2) * 160 * (1 - p)}%) rotate(${(rnd(i) - 0.5) * 70 * (1 - p)}deg)`;
+        });
+        return "dark";
+      },
+    },
+    stretch: {
+      build(L, s) {
+        const c = h("div", "center"); c.style.gap = "2cqw"; c.style.paddingBottom = "6cqw"; L.appendChild(c);
+        const small = T(s.small || "", "3.4cqw", 500), big = T(s.big, "11cqw", 100, "pulse"), meta = h("div", "mono");
+        c.append(small, big, meta);
+        const ru = h("div", "ruler"); L.appendChild(ru);
+        const ticks = [];
+        for (let i = 0; i <= 100; i++) {
+          const t = h("i"); t.style.left = i + "%"; t.style.height = (i % 10 ? (i % 5 ? 0.9 : 1.8) : 3.2) + "cqw"; ru.appendChild(t); ticks.push(t);
+          if (i % 20 === 0) { const l = h("b", null, `${i * 2}`); l.style.left = i + "%"; ru.appendChild(l); ticks.push(l); }
+        }
+        return { small, big, meta, ticks };
+      },
+      update(r, b, s, beats) {
+        rise(r.small, b, 0, 0.06, 0.5);
+        const p = inOut(clamp((b - 0.25) / (beats - 1)));
+        r.big.style.setProperty("--w", Math.round(100 + 800 * p));
+        r.big.style.letterSpacing = (0.5 - 0.545 * p) + "em";
+        r.ticks.forEach((t, i) => show(t, i / r.ticks.length < clamp(b / (beats - 0.5))));
+        typed(r.meta, s.meta || "", b, beats * 0.5, 28);
+        return "light";
+      },
+    },
+    swap: {
+      build(L, s) {
+        const c = h("div", "center"); L.appendChild(c);
+        const wrap = h("div"); wrap.style.position = "relative";
+        const from = T(s.from, "20cqw", 900), strike = h("div", "bar");
+        strike.style.left = "-4%"; strike.style.right = "-4%"; strike.style.top = "50%";
+        wrap.append(from, strike); c.appendChild(wrap);
+        const to = T(s.to, "30cqw", 900, "ac pulse"); to.style.position = "absolute";
+        const meta = h("div", "mono"); meta.style.position = "absolute"; meta.style.bottom = "13cqw";
+        L.append(to, meta);
+        const cc = h("div", "center"); cc.appendChild(to); L.appendChild(cc);
+        return { from, strike, to, meta };
+      },
+      update(r, b, s) {
+        show(r.from, b < 2);
+        r.strike.style.transform = `scaleX(${outExpo(clamp((b - 1) / 0.25))})`;
+        show(r.strike, b >= 1 && b < 1.75);
+        ks(r.from).forEach((c, i) => { const p = inCubic(clamp((b - 1.4 - i * 0.06) / 0.5)); c.style.transform = `translateY(${p * 140}%) rotate(${(i - 1) * 30 * p}deg)`; });
+        $("flash").style.opacity = b >= 2 && b < 2.2 ? String(0.9 * (1 - (b - 2) / 0.2)) : "0";
+        show(r.to, b >= 2);
+        const p = outExpo(clamp((b - 2) / 0.5));
+        r.to.style.fontStretch = (125 - 50 * p) + "%";
+        r.to.style.transform = `scale(${1.6 - 0.6 * p})`;
+        typed(r.meta, s.meta || "", b, 2.75, 40);
+        return b < 2 ? "orange" : "dark";
+      },
+    },
+    split: {
+      build(L, s) {
+        const mk = (side, x) => { const d = h("div", "half"); d.style.left = x; const lab = T(side.label || "", "2.2cqw", 500), tt = T(side.title, "11cqw", 900, "pulse"); d.append(tt, lab); L.appendChild(d); fit(tt, 0.42); return { d, lab, tt }; };
+        return { a: mk(s.left, "0"), z: mk(s.right, "50%") };
+      },
+      update(r, b) {
+        const flip = Math.floor(b) % 2 === 1;
+        const paint = (x, inv) => { x.d.style.background = inv ? "var(--orange)" : "var(--ink)"; x.d.style.color = inv ? "var(--ink)" : "var(--paper)"; };
+        paint(r.a, flip); paint(r.z, !flip);
+        rise(r.a.tt, b, 0, 0.06, 0.4); rise(r.a.lab, b, 0.25, 0.03, 0.4);
+        rise(r.z.tt, b, 0.5, 0.06, 0.4); rise(r.z.lab, b, 0.75, 0.03, 0.4);
+        return "dark";
+      },
+    },
+    flow: {
+      build(L, s) {
+        const head = T(s.head || "", "2.6cqw", 500); head.style.position = "absolute"; head.style.left = "0"; head.style.right = "0"; head.style.top = "6.5cqw"; head.style.textAlign = "center";
+        L.appendChild(head);
+        const steps = s.steps.slice(0, 4);
+        const c = h("div", "center"); c.style.gap = "1.4cqw"; c.style.paddingBottom = "9cqw"; L.appendChild(c);
+        const idx = h("div", "mono"), word = h("div"), det = h("div", "mono"); det.style.fontSize = "1.7cqw"; det.style.letterSpacing = "0.06em"; det.style.textTransform = "none";
+        c.append(idx, word, det);
+        const words = steps.map(([t]) => { const w = T(t, "19cqw", 900, "pulse"); fit(w, 0.8); return w; });
+        const tr = h("div", "track"), fl = h("div", "fillx"); tr.appendChild(fl); L.appendChild(tr);
+        const nodes = steps.map(([t], i) => { const n = h("div", "node"); n.style.left = (i / (steps.length - 1) * 100) + "%"; n.append(h("i"), h("span", null, t)); tr.appendChild(n); return n; });
+        const meta = h("div", "mono"); meta.style.position = "absolute"; meta.style.left = "0"; meta.style.right = "0"; meta.style.bottom = "6cqw"; meta.style.textAlign = "center"; L.appendChild(meta);
+        return { head, idx, word, det, words, fl, nodes, meta, steps, cur: -1 };
+      },
+      update(r, b, s, beats) {
+        rise(r.head, b, 0, 0.03, 0.5);
+        const per = beats / r.steps.length, i = Math.min(r.steps.length - 1, Math.floor(b / per)), lb = b - i * per;
+        if (r.cur !== i) { r.word.replaceChildren(r.words[i]); r.cur = i; }
+        r.idx.textContent = `STEP ${String(i + 1).padStart(2, "0")} / ${String(r.steps.length).padStart(2, "0")}`;
+        rise(r.words[i], lb, 0, 0.08, 0.4);
+        typed(r.det, r.steps[i][1] || "", lb, 0.3, 30);
+        r.fl.style.transform = `scaleX(${clamp((i + outExpo(clamp(lb / 0.5))) / (r.steps.length - 1))})`;
+        r.nodes.forEach((n, k) => n.classList.toggle("on", k <= i));
+        typed(r.meta, s.meta || "", b, beats - 1.5, 40);
+        return i === r.steps.length - 1 ? "blue" : "dark";
+      },
+    },
+    final: {
+      build(L, s) {
+        const c = h("div", "center"); c.style.gap = "1.4cqw"; L.appendChild(c);
+        const line = T(s.line || "", "7cqw", 300), big = T(s.big, "19cqw", 900, "pulse"), u = h("div", "underline"), sig = h("div", "mono");
+        u.style.width = "40cqw"; c.append(line, big, u, sig); fit(big, 0.88);
+        return { line, big, u, sig };
+      },
+      update(r, b, s, beats) {
+        rise(r.line, b, 0, 0.08, 0.5);
+        rise(r.big, b, 1, 0.125, 0.5);
+        r.big.style.color = b >= 4 ? "var(--orange)" : "var(--ink)";
+        r.u.style.transform = `scaleX(${outExpo(clamp((b - 4.25) / 0.75))})`;
+        typed(r.sig, s.sig || R.sig || "", b, 5, 30);
+        $("flash").style.background = "#000";
+        $("flash").style.opacity = String(clamp((b - (beats - 1)) / 1));
+        return b < 4 ? "orange" : "dark";
+      },
+    },
   };
 
-  const B = {
-    drop(L, s, len) {
-      const a = chars(s.line || "", "d md"), b = chars(s.big, "d xl or");
-      L.append(a, b); fit(a); fit(b);
-      each(a, (c, i) => anim(c, [{ opacity: 0, transform: "translateX(-40px)" }, { opacity: 1, transform: "none" }], 420, 120 + i * 70));
-      each(b, (c, i) => anim(c, [{ opacity: 0, transform: "translateY(-120%) rotate(-8deg)" }, { opacity: 1, transform: "none" }], 520, 650 + i * 85, E.snap));
-      if (s.meta) { const m = h("div", "m", s.meta); L.append(m); fit(m); anim(m, [{ opacity: 0 }, { opacity: 1 }], 500, 1400); }
-      exit(L, len);
-    },
-    stamp(L, s, len) {
-      const sm = h("div", "s", s.small || ""), a = chars(s.big, "d xl");
-      L.append(sm, a); fit(a);
-      anim(sm, [{ opacity: 0, letterSpacing: "0.5em" }, { opacity: 1, letterSpacing: "0.08em" }], 500);
-      each(a, (c, i) => anim(c, [{ opacity: 0, transform: "scale(2.4)" }, { opacity: 1, transform: "none" }], 360, 380 + i * 110));
-      const pos = [["18%", "22%"], ["78%", "26%"], ["50%", "82%"], ["20%", "78%"]];
-      (s.chips || []).slice(0, 4).forEach((t, i) => {
-        const c = h("div", "chip", t); c.style.left = pos[i][0]; c.style.top = pos[i][1]; L.appendChild(c);
-        anim(c, [{ opacity: 0, transform: "translate(-50%,-50%) scale(.4)" }, { opacity: 1, transform: "translate(-50%,-50%) scale(1)" }], 380, 1050 + i * 180, E.snap);
-      });
-      exit(L, len, 220);
-    },
-    overflow(L, s, len) {
-      const sm = h("div", "s", s.small || ""), box = h("div", "tbox");
-      box.appendChild(h("span", "tlabel", s.label || "v1"));
-      const a = chars(s.boxed, "d md"); box.appendChild(a);
-      const b = chars(s.burst, "d l or");
-      L.append(sm, box, b); fit(b);
-      anim(sm, [{ opacity: 0 }, { opacity: 1 }], 300);
-      anim(box, [{ opacity: 0, transform: "scaleX(.2)" }, { opacity: 1, transform: "none" }], 420, 200);
-      each(a, (c, i) => anim(c, [{ opacity: 0, transform: "translateY(30px)" }, { opacity: 1, transform: "none" }], 300, 420 + i * 45));
-      anim(box, [{ transform: "none" }, { transform: "translateX(-8px) rotate(-1deg)" }, { transform: "translateX(8px) rotate(1deg)" }, { transform: "translateX(-5px)" }, { transform: "none" }], 360, 1150, "linear");
-      anim(box, [{ borderColor: "#f3f6ff" }, { borderColor: "#ff7a1a" }], 200, 1150);
-      const n = [...s.burst].length;
-      each(b, (c, i) => anim(c, [{ opacity: 0, transform: `translate(${(i - n / 2) * 18}px, 60px) rotate(${(i - n / 2) * 9}deg)` }, { opacity: 1, transform: "none" }], 460, 1250 + i * 55, E.snap));
-      exit(L, len);
-    },
-    stretch(L, s, len) {
-      const sm = h("div", "s", s.small || ""), a = chars(s.big, "d l");
-      L.append(sm, a); fit(a, 0.8);
-      anim(sm, [{ opacity: 0, transform: "translateY(20px)" }, { opacity: 1, transform: "none" }], 400);
-      anim(a, [{ letterSpacing: "0.6em", opacity: 0 }, { letterSpacing: "0.01em", opacity: 1 }], 1100, 250);
-      const r = h("div", "ruler");
-      for (let i = 0; i <= 88; i++) { const t = h("i"); t.style.left = (i / 88 * 100) + "%"; t.style.height = (i % 10 === 0 ? 2.6 : i % 5 === 0 ? 1.8 : 1.1) + "cqw"; r.appendChild(t); }
-      L.appendChild(r); anim(r, [{ transform: "scaleX(0)" }, { transform: "scaleX(1)" }], 1200, 500);
-      if (s.meta) { const m = h("div", "m", s.meta); L.appendChild(m); fit(m); anim(m, [{ opacity: 0 }, { opacity: 1 }], 400, 1300); }
-      exit(L, len, 200);
-    },
-    swap(L, s, len) {
-      const wrap = h("div"); wrap.style.position = "relative";
-      const a = chars(s.from, "d xl"), st = h("div", "strike");
-      wrap.append(a, st); L.appendChild(wrap); fit(a);
-      anim(a, [{ opacity: 0 }, { opacity: 1 }], 150);
-      anim(st, [{ transform: "scaleX(0)" }, { transform: "scaleX(1)" }], 320, 350, E.in);
-      each(a, (c, i) => anim(c, [{ opacity: 1, transform: "none" }, { opacity: 0, transform: `translateY(${70 + i * 25}%) rotate(${(i - 1) * 24}deg)` }], 420, 780 + i * 60, E.in));
-      anim(st, [{ opacity: 1 }, { opacity: 0 }], 200, 900);
-      const fl = h("div", "flash"); L.appendChild(fl);
-      anim(fl, [{ opacity: 0 }, { opacity: 0.9 }, { opacity: 0 }], 360, 1180, "linear");
-      const to = chars(s.to, "d xl or"); to.style.position = "absolute"; to.style.fontSize = "24cqw";
-      L.appendChild(to); fit(to);
-      anim(to, [{ opacity: 0, transform: "scale(3)", filter: "blur(10px)" }, { opacity: 1, transform: "scale(1)", filter: "blur(0)" }], 420, 1200);
-      if (s.meta) { const m = h("div", "m", s.meta); m.style.position = "absolute"; m.style.bottom = "12cqw"; L.appendChild(m); anim(m, [{ opacity: 0 }, { opacity: 1 }], 400, 1650); }
-      exit(L, len, 220);
-    },
-    split(L, s, len) {
-      const sp = h("div", "split"), left = h("div"), right = h("div", "right");
-      const ls = h("div", "s", s.left.label || ""), ld = chars(s.left.title, "d l");
-      const rs = h("div", "s", s.right.label || ""), rd = chars(s.right.title, "d l");
-      left.append(ls, ld); right.append(rs, rd); sp.append(left, right); L.appendChild(sp);
-      fit(ld, 0.42); fit(rd, 0.42); fit(ls, 0.45); fit(rs, 0.45);
-      anim(right, [{ clipPath: "inset(0 0 0 100%)" }, { clipPath: "inset(0 0 0 0)" }], 520, 700);
-      anim(ls, [{ opacity: 0 }, { opacity: 1 }], 300, 100);
-      each(ld, (c, i) => anim(c, [{ opacity: 0, transform: "translateY(60%)" }, { opacity: 1, transform: "none" }], 380, 220 + i * 55));
-      anim(rs, [{ opacity: 0 }, { opacity: 1 }], 300, 1000);
-      each(rd, (c, i) => anim(c, [{ opacity: 0, transform: "translateY(-60%)" }, { opacity: 1, transform: "none" }], 380, 1050 + i * 80, E.snap));
-      exit(L, len);
-    },
-    flow(L, s, len) {
-      const steps = s.steps.slice(0, 4), gap = Math.min(560, (len - 1200) / steps.length);
-      const flow = h("div", "flow");
-      steps.forEach(([t, d], i) => {
-        const at = 260 + i * gap;
-        if (i) { const ar = h("div", "arrow", "→"); flow.appendChild(ar); anim(ar, [{ opacity: 0, transform: "translateX(-20px)" }, { opacity: 1, transform: "none" }], 240, at - 140); }
-        const st = h("div", "step"), dt = h("div", "d", t), dd = h("div", "m", d || "");
-        st.append(dt, dd); flow.appendChild(st);
-        anim(st, [{ opacity: 0, transform: "translateY(40px) scale(.9)" }, { opacity: 1, transform: "none" }], 380, at, E.snap);
-        anim(dt, [{ color: "#ff7a1a" }, { color: "#f3f6ff" }], 500, at + 380, "linear");
-      });
-      const head = h("div", "s", s.head || "");
-      L.append(head, flow); fit(flow, 0.94); fit(head);
-      if (flow.scrollWidth > stage.clientWidth * 0.94) flow.style.transform = `scale(${stage.clientWidth * 0.94 / flow.scrollWidth})`;
-      anim(head, [{ opacity: 0 }, { opacity: 1 }], 300);
-      if (s.meta) { const m = h("div", "m", s.meta); L.appendChild(m); fit(m); anim(m, [{ opacity: 0 }, { opacity: 1 }], 400, Math.max(len - 700, 1200)); }
-      exit(L, len, 220);
-    },
-    final(L, s) {
-      const a = chars(s.line || "", "d l"), b = chars(s.big, "d xl or"), u = h("div", "under");
-      L.append(a, b, u); fit(a); fit(b);
-      each(a, (c, i) => anim(c, [{ opacity: 0, transform: "translateX(-30px)" }, { opacity: 1, transform: "none" }], 300, i * 45));
-      each(b, (c, i) => anim(c, [{ opacity: 0, transform: "scale(1.8)" }, { opacity: 1, transform: "none" }], 340, 330 + i * 70));
-      anim(u, [{ transform: "scaleX(0)" }, { transform: "scaleX(1)" }], 500, 800);
-      const sig = h("div", "sig", s.sig || REEL.sig || ""); L.appendChild(sig);
-      anim(sig, [{ opacity: 0 }, { opacity: 1 }], 400, 1000);
-    },
-  };
+  // ---------- timeline ----------
+  let acc = 0;
+  const scenes = R.scenes.map(s => { const r = { s, start: acc, len: s.bars * BAR }; acc += r.len; return r; });
+  const DUR = acc, BARS = Math.round(DUR / BAR);
+  const kicks = (R.hits || []).filter(x => x.k === "kick" || x.k === "impact" || x.k === "step");
+  $("hud-tl").textContent = "SPATIALVIBE / " + (R.code || "PROGRESS");
+  $("hud-bpm").textContent = `${R.bpm || 120} BPM · 4/4`;
+  const dots = [...$("dots").children];
+  let cur = -1, refs = null;
 
-  // timeline
-  let t0 = 0;
-  const scenes = REEL.scenes.map(s => { const r = { s, start: t0, len: s.dur }; t0 += s.dur; return r; });
-  const DUR = t0;
-  document.getElementById("time").textContent = `0.0 / ${(DUR / 1000).toFixed(1)}s`;
-
-  function show(i, offset, run) {
-    stage.getAnimations({ subtree: true }).forEach(a => a.cancel());
-    stage.replaceChildren();
-    const { s, len } = scenes[i];
-    const L = h("div", "layer"); stage.appendChild(L);
-    B[s.type](L, s, len);
-    L.getAnimations({ subtree: true }).forEach(a => { a.currentTime = offset; run ? a.play() : a.pause(); });
+  function render(t) {
+    t = clamp(t, 0, DUR - 1);
+    let i = 0; while (i + 1 < scenes.length && t >= scenes[i + 1].start) i++;
+    const sc = scenes[i];
+    if (i !== cur) {
+      cur = i; sceneEl.replaceChildren(); $("flash").style.opacity = "0"; $("flash").style.background = "";
+      refs = S[sc.s.type].build(sceneEl, sc.s);
+    }
+    const b = (t - sc.start) / BEAT;
+    stage.dataset.theme = S[sc.s.type].update(refs, b, sc.s, sc.s.bars * 4) || "dark";
+    // heartbeat: decay from the most recent hit
+    let env = 0;
+    for (let k = kicks.length - 1; k >= 0; k--) { if (kicks[k].t <= t) { env = kicks[k].v * Math.exp(-(t - kicks[k].t) / 110); break; } }
+    stage.style.setProperty("--pulse", env.toFixed(4));
+    $("beatline").style.transform = `scaleX(${((t % BEAT) / BEAT).toFixed(4)})`;
+    $("beatline").style.opacity = (0.35 + 0.65 * env).toFixed(3);
+    const beatIdx = Math.floor((t % BAR) / BEAT);
+    dots.forEach((d, k) => d.classList.toggle("on", k === beatIdx));
+    const sec = t / 1000;
+    $("hud-tc").textContent = `00:${String(Math.floor(sec)).padStart(2, "0")}.${String(Math.floor((sec % 1) * 100)).padStart(2, "0")}`;
+    $("hud-bar").textContent = `BAR ${String(Math.floor(t / BAR) + 1).padStart(2, "0")} / ${String(BARS).padStart(2, "0")}`;
   }
-  const sceneAt = t => { let i = 0; while (i + 1 < scenes.length && t >= scenes[i + 1].start) i++; return i; };
-
-  // deterministic frame access for MP4 capture
   window.reelDuration = DUR;
-  window.reelSeek = t => { const i = sceneAt(t); show(i, t - scenes[i].start, false); };
+  window.reelSeek = render;
 
-  // preload every glyph so lazily-subset Japanese fonts are ready before frame 1
-  const pre = h("div", "preload");
-  const strings = JSON.stringify(REEL);
-  ["d", "s", "m"].forEach(c => pre.appendChild(h("div", c, strings)));
+  // preload all glyphs in every face so lazily-subset fonts are ready before the first frame
+  const pre = h("div", "preload"), all = JSON.stringify(R.scenes) + (R.sig || "") + "0123456789:./BARSTEPBPM";
+  ["jp", "lat", "mono"].forEach(c => [100, 500, 900].forEach(w => { const d = h("div", c, all); d.style.fontWeight = w; pre.appendChild(d); }));
   document.body.appendChild(pre);
   window.reelReady = document.fonts.ready
     .then(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))))
-    .then(() => document.fonts.ready)
-    .then(() => { pre.remove(); });
-
+    .then(() => document.fonts.ready).then(() => { pre.remove(); render(0); });
   if (capture) return;
 
-  let elapsed = 0, last = 0, playing = false, cur = -1, raf = 0;
-  const fill = document.getElementById("fill"), timeEl = document.getElementById("time"), playBtn = document.getElementById("play");
-  function tick(now) {
-    if (!playing) return;
-    elapsed += now - last; last = now;
-    if (elapsed >= DUR) { elapsed = 0; cur = -1; }
-    const i = sceneAt(elapsed);
-    if (i !== cur) { cur = i; show(i, elapsed - scenes[i].start, true); }
-    fill.style.width = (elapsed / DUR * 100) + "%";
-    timeEl.textContent = `${(elapsed / 1000).toFixed(1)} / ${(DUR / 1000).toFixed(1)}s`;
-    raf = requestAnimationFrame(tick);
-  }
-  function play() { playing = true; last = performance.now(); playBtn.textContent = "一時停止"; stage.getAnimations({ subtree: true }).forEach(a => a.play()); raf = requestAnimationFrame(tick); }
-  function pause() { playing = false; cancelAnimationFrame(raf); playBtn.textContent = "再生"; stage.getAnimations({ subtree: true }).forEach(a => a.pause()); }
-  playBtn.addEventListener("click", () => playing ? pause() : play());
-  document.getElementById("restart").addEventListener("click", () => { pause(); elapsed = 0; cur = -1; play(); });
-  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  window.reelReady.then(() => { if (reduce) { window.reelSeek(DUR - 1); playBtn.textContent = "再生"; } else play(); });
+  // ---------- player (audio is the clock) ----------
+  const aud = $("aud"), gate = $("gate"), playBtn = $("play");
+  let raf = 0;
+  const loop = () => {
+    const t = aud.currentTime * 1000;
+    render(t);
+    $("prog").style.width = (t / DUR * 100) + "%";
+    $("time").textContent = `${(t / 1000).toFixed(1)} / ${(DUR / 1000).toFixed(1)}s`;
+    if (!aud.paused) raf = requestAnimationFrame(loop);
+  };
+  const play = () => { gate.hidden = true; aud.play().then(() => { playBtn.textContent = "一時停止"; raf = requestAnimationFrame(loop); }); };
+  const pause = () => { aud.pause(); playBtn.textContent = "再生"; cancelAnimationFrame(raf); };
+  $("start").addEventListener("click", play);
+  playBtn.addEventListener("click", () => aud.paused ? play() : pause());
+  $("restart").addEventListener("click", () => { aud.currentTime = 0; play(); });
+  aud.addEventListener("ended", () => { playBtn.textContent = "再生"; gate.hidden = false; $("start").textContent = "↻ もう一度"; });
+  // poster frame: the moment the story turns
+  window.reelReady.then(() => {
+    const sw = scenes.find(x => x.s.type === "swap");
+    render(sw ? sw.start + 2.6 * BEAT : DUR * 0.5);
+    $("time").textContent = `0.0 / ${(DUR / 1000).toFixed(1)}s`;
+  });
 })();
 </script>
 </body>
