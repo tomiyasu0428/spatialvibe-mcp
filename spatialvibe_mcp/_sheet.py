@@ -20,7 +20,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 import trimesh  # noqa: E402
-from matplotlib.collections import PolyCollection  # noqa: E402
+from matplotlib.collections import LineCollection, PolyCollection  # noqa: E402
 
 from spatialvibe_mcp._style import jp_font, part_color  # noqa: E402
 
@@ -44,6 +44,10 @@ T = {  # label text, Japanese when a font exists
     "origin": ("原点 (0,0,0): {o}", "origin (0,0,0): {o}"),
     "noorigin": ("原点 (0,0,0): スクリプトに説明なし", "origin (0,0,0): not described"),
     "exp": ("予定 {e}", "plan {e}"), "nomeasure": ("測れない", "not measurable"),
+    "typed": ("（座標で指定・形からは測っていない）", "(typed coordinates, not measured)"),
+    "vs": ("{l} {v} → {d}", "{l} {v} → {d}"), "detail": ("{t}  {l}", "{t}  {l}"),
+    "seen": ("{v}から見た断面", "section, seen from {v}"), "overview": ("全体（記号の場所）", "overview (where each letter is)"),
+    "touchmany": ("接する: {l}", "touches: {l}"), "dirs": {"X": "+X側", "Y": "−Y側（正面）", "Z": "上"},
     "buy": ("買うもの", "Hardware"), "check": ("印刷前に確認", "Check before printing"),
     "missing": ("（スクリプトに書かれていません）", "(not given in the script)"),
 }
@@ -55,11 +59,14 @@ def wrap(text, width=26):
 
 
 def t(key, **kw):
-    return T[key][0 if JA else 1].format(**kw)
+    v = T[key]
+    if isinstance(v, dict):
+        return v
+    return v[0 if JA else 1].format(**kw)
 
 
 def fmt(v):
-    txt = f"{v:.1f}".rstrip("0").rstrip(".")
+    txt = (f"{v:.2f}" if abs(v) < 10 else f"{v:.1f}").rstrip("0").rstrip(".")
     return "0" if txt in ("-0", "") else txt
 
 
@@ -115,6 +122,67 @@ def _view(ax, mesh, axes, color, title, labels, marks=(), ctx=(), fits=()):
     ax.set_title(title, fontsize=9, color="0.3")
 
 
+def _section(mesh, normal, origin):
+    """Cut lines of a mesh with a plane: (n, 2, 3) segments (no extra packages needed)."""
+    try:
+        return trimesh.intersections.mesh_plane(mesh, plane_normal=normal, plane_origin=origin)
+    except Exception:
+        return []
+
+
+def _detail(ax, mesh, ctx, d, color, title):
+    """Zoomed view of one fit dimension: light silhouette, bold section through it, the arrow."""
+    import numpy as np
+    pa, pb = (np.array(d["p"][0]), np.array(d["p"][1])) if d.get("p") else (np.array(d["at"]),) * 2
+    seg = pb - pa
+    L = float(np.linalg.norm(seg))
+    if d.get("view_normal"):
+        cands = ["XYZ".index(d["view_normal"])]
+    else:
+        cands = [k for k in range(3) if abs(seg[k]) <= 0.05 * max(L, 1e-9)] or [int(np.argmin(np.abs(seg)))]
+    mid = (pa + pb) / 2
+
+    def nsec(k):
+        nv = np.zeros(3)
+        nv[k] = 1
+        return len(_section(mesh, nv, mid))
+    k = max(cands, key=nsec)  # the view whose cut shows the most shape there
+    a, b = [i for i in range(3) if i != k]
+    if k == 1:   # front view is drawn from -Y with +X to the right (same as the overview)
+        a, b = 0, 2
+    nv = np.zeros(3)
+    nv[k] = 1
+    half = max(L * 0.9, 9.0)
+    ax.add_collection(PolyCollection(mesh.triangles[:, :, [a, b]], facecolors=[(*color[:3], 0.18)],
+                                     edgecolors="none", zorder=1))
+    for cm in ctx:
+        cs = _section(cm, nv, mid)
+        if len(cs):
+            ax.add_collection(LineCollection(cs[:, :, [a, b]], colors=["0.55"], linewidths=1.2,
+                                             linestyles="dashed", zorder=2))
+    cs = _section(mesh, nv, mid)
+    if len(cs):
+        ax.add_collection(LineCollection(cs[:, :, [a, b]], colors=["0.1"], linewidths=1.8, zorder=3))
+    u0, v0, u1, v1 = pa[a], pa[b], pb[a], pb[b]
+    txt = f"{d['_tag']} {fmt(d['value'])}{'°' if d.get('unit') == '°' else ''}"
+    if L > 1e-6:
+        ax.annotate("", xy=(u1, v1), xytext=(u0, v0),
+                    arrowprops=dict(arrowstyle="<->", color="#1f4fe0", lw=2.2, shrinkA=0, shrinkB=0), zorder=5)
+    ax.text((u0 + u1) / 2, (v0 + v1) / 2 + half * 0.16, txt, ha="center", va="bottom", fontsize=13,
+            fontweight="bold", color="#1f4fe0", zorder=6,
+            bbox=dict(facecolor="white", edgecolor="#1f4fe0", pad=2, lw=0.8))
+    cx, cy = (u0 + u1) / 2, (v0 + v1) / 2
+    ax.set_xlim(cx - half, cx + half)
+    ax.set_ylim(cy - half, cy + half)
+    ax.set_aspect("equal")
+    ax.set_xticks([])
+    ax.set_yticks([])
+    for sp_ in ax.spines.values():
+        sp_.set_color("0.8")
+    ax.set_title(title, fontsize=10.5, color="0.1", loc="left")
+    ax.text(0.02, 0.02, t("seen", v=t("dirs")["XYZ"[k]]), transform=ax.transAxes, fontsize=7.5, color="0.45")
+
+
 def main():
     vdir = Path(sys.argv[1])
     res = json.loads((vdir / "result.json").read_text(encoding="utf-8"))
@@ -141,22 +209,32 @@ def main():
             txt += f" ＋{t('csk')}Ø{fmt(h['countersink']['d'])}"
         return txt
 
-    def part_lines(name, info):
-        """[(text, fontsize, colour, bold, indent)] for the left column of one part."""
+    def fit_lines(name):
         L = []
-        own = [d for d in dims_all if d.get("part") == name]
-        if own:
-            L.append((t("fit"), 10, "#1f4fe0", True, 0))
-            for d in own:
-                tag = f"{d['_tag']} " if d.get("_tag") else "   "
-                if d.get("value") is None:
-                    L += [(ln, 10.5, "#c0392b", True, 1) for ln in wrap(f"{tag}{d['label']}: {t('nomeasure')}", 22)]
-                    continue
-                v = f"{fmt(d['value'])} {d.get('unit', 'mm')}"
-                tail = ""
-                if "expect" in d:
-                    tail = "  ✓" if d.get("ok") else f"  ✗ {t('exp', e=fmt(d['expect']))}"
-                L.append((f"{tag}{d['label']}  {v}{tail}", 11.5, "#1f4fe0" if d.get("ok", True) else "#c0392b", True, 1))
+        for d in [d for d in dims_all if d.get("part") == name]:
+            tag = f"{d['_tag']} " if d.get("_tag") else "   "
+            if d.get("value") is None:
+                L += [(ln, 11, "#c0392b", True, 0) for ln in wrap(f"{tag}{d['label']}: {t('nomeasure')}", 40)]
+                continue
+            unit = d.get("unit", "mm")
+            v = f"{fmt(d['value'])}{'°' if unit == '°' else ' mm'}"
+            tail = ""
+            if "expect" in d:
+                tail = "  ✓" if d.get("ok") else f"  ✗ {t('exp', e=fmt(d['expect']))}"
+            col = "#1f4fe0" if d.get("ok", True) else "#c0392b"
+            if d.get("measured") is False:
+                col = "0.45"
+                tail = "  " + t("typed")
+            L.append((f"{tag}{d['label']}  {v}{tail}", 13, col, True, 0))
+            if "vs" in d:
+                diff = d["value"] - d["vs"]
+                L.append((t("vs", l=d["vs_label"], v=fmt(d["vs"]), d=f"{d['label']} {fmt(d['value'])}"
+                           f"（{'+' if diff >= 0 else ''}{fmt(diff)}）"), 10, "0.25", False, 1))
+        return L
+
+    def info_lines(name, info):
+        """[(text, fontsize, colour, bold, indent)] under the drawings of one part."""
+        L = []
         size = info.get("bbox_mm", {}).get("size") or [0, 0, 0]
         L.append((f"{size_text(size)} mm   W×D×H (X×Y×Z)", 11, "0.15", False, 0))
         if info.get("print_size_mm"):
@@ -168,21 +246,19 @@ def main():
         if hl:
             L.append((t("pos"), 8.5, "0.45", False, 0))
             for k, h in enumerate(hl[:MAXPOS], 1):
-                x0, y0, z0 = h["at"]
-                head = f"{k}. {hole_label(h)}"
-                xyz = f"({fmt(x0)}, {fmt(y0)}, {fmt(z0)})"
-                if len(head) + len(xyz) <= 30:
-                    L.append((f"{head}  {xyz}", 9, "0.15", False, 1))
-                else:  # never break inside a number
-                    L += [(head, 9, "0.15", False, 1), (xyz, 9, "0.15", False, 3)]
+                ax_ = h["axis"]
+                where = ", ".join(f"{c} {fmt(h['at'][i])}" for i, c in enumerate("XYZ") if c != ax_)
+                L.append((f"{k}. {hole_label(h)}  ({where})", 9.5, "0.15", False, 1))
             if len(hl) > MAXPOS:
                 L.append((t("more", n=len(hl) - MAXPOS), 9, "0.45", False, 1))
         else:
             L.append((f"{t('holes')}: {t('none')}", 10, "0.15", False, 0))
+        touching = [c["to"] for c in clear_all if c.get("part") == name and c.get("mm") == 0]
+        if touching:
+            L.append((t("touchmany", l=", ".join(touching)), 9.5, "0.25", False, 0))
         for c in clear_all:
-            if c.get("part") == name and c.get("mm") is not None:
-                L.append(((t("touch", to=c["to"]) if c["mm"] == 0 else t("clear", to=c["to"], mm=fmt(c["mm"]))),
-                          9.5, "0.25", False, 0))
+            if c.get("part") == name and c.get("mm"):
+                L.append((t("clear", to=c["to"], mm=fmt(c["mm"])), 9.5, "0.25", False, 0))
         if "fits_bed" in info:
             bed = res.get("bed_mm") or []
             ok = info["fits_bed"]
@@ -190,25 +266,32 @@ def main():
                       "0.25" if ok else "#c0392b", False, 0))
         for w in warnings:
             if w.startswith(f"{name}:"):
-                L += [(ln, 9.5, "#c0392b", False, 0) for ln in wrap(t("mark") + w[len(name) + 1:].strip())]
+                L += [(ln, 9.5, "#c0392b", False, 0) for ln in wrap(t("mark") + w[len(name) + 1:].strip(), 46)]
         return L
 
     for f, info in zip(files, infos):
         info["_name"] = f.stem[5:]
         k = 0
-        for d in dims_all:  # letters tie a drawn dimension to its line in the list
-            if d.get("part") == info["_name"] and d.get("p") and d.get("value") is not None:
+        for d in dims_all:  # letters tie a drawing to its line in the list
+            if d.get("part") == info["_name"] and d.get("value") is not None and (d.get("p") or d.get("at")):
                 d["_tag"] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[k % 26]
                 k += 1
-    LINE = 0.27
-    plines = [part_lines(info["_name"], info) for info in infos]
-    rows = [max(2.9, 0.75 + LINE * len(pl) + 0.3) for pl in plines]
+    LINE, PANEL, VIEW_H = 0.3, 2.75, 2.6
+    blocks = []
+    for info in infos:
+        name = info["_name"]
+        fl = fit_lines(name)
+        det = [d for d in dims_all if d.get("part") == name and d.get("_tag")]
+        il = info_lines(name, info)
+        h = 0.75 + (0.35 + LINE * len(fl) if fl else 0) + PANEL * ((len(det) + 2) // 3) \
+            + (0.35 if det else 0) + VIEW_H + 0.5 + LINE * len(il) + 0.3
+        blocks.append((fl, det, il, h))
     glob_w = [ln for w in warnings if not any(w.startswith(f"{i['_name']}:") for i in infos)
               for ln in wrap(w, 52)]
     head_h = 1.85 + (0.3 + 0.27 * len(glob_w) if glob_w else 0)
     lines = max(len(res.get("hardware", [])), 1) + max(len(res.get("checks", [])), 1) + 2
     foot_h = 0.32 * lines + 0.4
-    H = head_h + sum(rows) + foot_h
+    H = head_h + sum(b[3] for b in blocks) + foot_h
     fig = plt.figure(figsize=(9, H), dpi=120)
 
     def y(inch):  # figure fraction from top, in inches
@@ -228,43 +311,50 @@ def main():
 
     VIEWS = (((0, 1), "top", 2), ((0, 2), "front", 1), ((1, 2), "side", 0))  # (plane axes, label, normal axis)
     top = head_h
-    for i, (f, info, row_h, pl) in enumerate(zip(files, infos, rows, plines)):
+    for i, (f, info, (fl, det, il, block_h)) in enumerate(zip(files, infos, blocks)):
         name = info["_name"]
         mesh = trimesh.load(f)
         size = info.get("bbox_mm", {}).get("size") or list(mesh.extents)
-        fig.add_artist(plt.Line2D([0.03, 0.97], [y(top + 0.05)] * 2, color="0.85", lw=1))
         c = part_color(i)
+        fig.add_artist(plt.Line2D([0.03, 0.97], [y(top + 0.05)] * 2, color="0.85", lw=1))
         fig.add_artist(plt.Rectangle((0.04, y(top + 0.55)), 0.03, 0.18 / H * 2, color=c, transform=fig.transFigure))
         fig.text(0.085, y(top + 0.45), name, fontsize=14, fontweight="bold")
         yy = top + 0.75
-        for text, fs, col, bold, ind in pl:
-            yy += LINE
-            fig.text(0.04 + 0.015 * ind, y(yy), text, fontsize=fs, color=col, fontweight="bold" if bold else "normal")
+        if fl:
+            yy += 0.3
+            fig.text(0.04, y(yy), t("fit"), fontsize=11, color="#1f4fe0", fontweight="bold")
+            for text, fs, col, bold, ind in fl:
+                yy += LINE
+                fig.text(0.05 + 0.02 * ind, y(yy), text, fontsize=fs, color=col, fontweight="bold" if bold else "normal")
+        # one zoomed panel per fit dimension: where to put the caliper
+        for j, d in enumerate(det):
+            r_, c_ = divmod(j, 3)
+            ax = fig.add_axes((0.04 + c_ * 0.315, y(yy + 0.25 + PANEL * (r_ + 1) - 0.15), 0.29, (PANEL - 0.55) / H))
+            _detail(ax, mesh, ctx_meshes, d, c, t("detail", t=d["_tag"], l=d["label"]))
+        yy += (0.35 + PANEL * ((len(det) + 2) // 3)) if det else 0
+        # overview: whole part, hole numbers, and a letter where each fit dimension is
         marks = {"Z": [], "Y": [], "X": []}
         for k, h in enumerate(info.get("hole_list") or [], 1):
             x0, y0, z0 = h["at"]
             if h["axis"] in marks:
                 marks[h["axis"]].append((k, {"Z": (x0, y0), "Y": (x0, z0), "X": (y0, z0)}[h["axis"]]))
-        fits = {0: [], 1: [], 2: []}
-        for d in dims_all:
-            if d.get("part") != name or not d.get("p") or d.get("value") is None:
-                continue
-            pa, pb = d["p"]
-            dv = [abs(pb[k] - pa[k]) for k in range(3)]
-            length = max(1e-9, sum(x * x for x in dv) ** 0.5)
-            # views whose plane holds the segment; of those, the one where the part looks biggest
-            cands = [k for k in range(3) if dv[k] <= 0.05 * length] or [min(range(3), key=lambda k: dv[k])]
-            ext = [size[0], size[1], size[2]]
-            nrm = max(cands, key=lambda k: ext[(k + 1) % 3] * ext[(k + 2) % 3])
-            fits[nrm].append(((pa, pb), f"{d['_tag']} {fmt(d['value'])}"))
-        vh = (row_h - 0.35) / H
+        fig.text(0.04, y(yy + 0.3), t("overview"), fontsize=9, color="0.4")
         for col, (axes, key, nrm) in enumerate(VIEWS):
             a_, b_ = axes
-            seg = [((pa[a_], pa[b_]), (pb[a_], pb[b_]), txt) for (pa, pb), txt in fits[nrm]]
-            mk = marks[{2: "Z", 1: "Y", 0: "X"}[nrm]]
-            ax = fig.add_axes((0.37 + col * 0.21, y(top + row_h - 0.1), 0.2, vh))
-            _view(ax, mesh, axes, c, t(key), (fmt(size[a_]), fmt(size[b_])), mk, ctx_meshes, seg)
-        top += row_h
+            ax = fig.add_axes((0.04 + col * 0.315, y(yy + 0.35 + VIEW_H), 0.29, (VIEW_H - 0.35) / H))
+            _view(ax, mesh, axes, c, t(key), (fmt(size[a_]), fmt(size[b_])), marks[{2: "Z", 1: "Y", 0: "X"}[nrm]],
+                  ctx_meshes, ())
+            for d in det:  # small letter at the place of each fit dimension
+                pts = d.get("p") or [d.get("at"), d.get("at")]
+                mu = (pts[0][a_] + pts[1][a_]) / 2
+                mv = (pts[0][b_] + pts[1][b_]) / 2
+                ax.text(mu, mv, d["_tag"], fontsize=8, fontweight="bold", color="white", ha="center", va="center",
+                        zorder=7, bbox=dict(boxstyle="circle,pad=0.2", facecolor="#1f4fe0", edgecolor="none"))
+        yy += 0.5 + VIEW_H
+        for text, fs, col, bold, ind in il:
+            yy += LINE
+            fig.text(0.04 + 0.02 * ind, y(yy), text, fontsize=fs, color=col, fontweight="bold" if bold else "normal")
+        top += block_h
 
     ytop = top + 0.2
     fig.add_artist(plt.Line2D([0.03, 0.97], [y(ytop - 0.1)] * 2, color="0.85", lw=1))

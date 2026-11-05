@@ -163,7 +163,7 @@ def build_model(project: str, code: str, note: str = "") -> dict:
     (vdir / "result.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
     res.update(project=project, version=int(vdir.name[1:]), folder=str(vdir))
     if res.get("ok") is True:
-        res["files"] = sorted(str(f) for f in vdir.glob("part_*.*"))
+        res["files"] = sorted(str(f) for f in vdir.iterdir() if f.name.startswith(("part_", "print_", "ctx_")))
     return res
 
 

@@ -41,25 +41,38 @@ short enough to read on one phone screen: no long paragraphs, no jargon, numbers
   so overlaps are detected and the user can align the AR model with reality. Faces that only
   touch are not reported as overlap. Each part must fit the print bed (`fits_bed` in the result).
 - **Fit dimensions**: for every dimension the user will check against the real thing with a tape
-  or caliper (hole spacing, opening/slot width, inner size, wall thickness, distance from a wall,
-  height of a hole, angle, gap to a nearby object), declare it in `dims` so the tool MEASURES it on
-  the shape and draws it on the sheet. Never write such numbers only by hand.
+  or caliper, declare it in `dims` so the tool MEASURES it on the shape, draws a zoomed panel for it
+  on the sheet (where to put the caliper) and checks it against `expect`. Never write such numbers
+  only by hand. Snap the ends of a distance to real features; typed coordinates are shown greyed
+  as "not measured".
   ```python
   dims = [
+    # hole centre to hole centre
     {"label": "ケース穴 横", "part": "plate", "kind": "distance", "a": (-49, 0, 31), "b": (49, 0, 31),
-     "snap": "hole", "axis": "X", "expect": 98},                      # hole centre to hole centre
-    {"label": "口の幅", "part": "clip", "kind": "gap", "at": (0, 12, 0), "axis": "Y", "expect": 21.5},
-    {"label": "壁の厚さ", "part": "tray", "kind": "thickness", "at": (38.7, 0, 10), "axis": "X"},
-    {"label": "上面の傾き", "part": "wedge", "kind": "angle", "a": (0, 0, 8), "ref": "Z", "expect": 0},
-    {"label": "ライトとのすき間", "part": "holder", "kind": "clearance", "to": "light"},
+     "snap": "hole", "axis": "X", "expect": 98},
+    # a surface to a hole centre ("face" = this part's surface, "context:wall" = the wall's surface)
+    {"label": "壁から穴の中心", "part": "br", "kind": "distance", "a": (-25, 0, 25), "b": (-25, 40, 25),
+     "snap_a": "context:wall", "snap_b": "hole", "axis": "Y", "expect": 40},
+    # inner depth of an open box: a point on the floor to a point ON the rim (each within 10 mm of a surface)
+    {"label": "深さ", "part": "tray", "kind": "distance", "a": (0, 0, 2), "b": (0, 14, 20), "snap": "face", "axis": "Z"},
+    # width of an opening; "narrowest" sweeps the line to find the tightest place (snap-fit mouth)
+    {"label": "口の幅", "part": "clip", "kind": "gap", "at": (0, 0, 10), "axis": "X", "narrowest": (0, 0, 6),
+     "expect": 21.5},
+    {"label": "パイプ穴", "part": "clip", "kind": "diameter", "at": (0, 0, 0), "vs": 25.4, "vs_label": "パイプ"},
+    {"label": "壁の厚さ", "part": "tray", "kind": "thickness", "at": (19, 0, 10), "axis": "X"},
+    {"label": "くさびの角度", "part": "wedge", "kind": "angle", "a": (0, 0, 8), "b": (0, 0, 0), "expect": 7},
+    {"label": "柱からのはみ出し", "part": "plate", "kind": "overhang", "to": "post", "axis": "X", "side": "+"},
+    {"label": "全長", "part": "comb", "kind": "size", "axis": "X"},
+    # an intended small gap: declare it (with expect) so it is not reported as a problem
+    {"label": "筒とのすき間", "part": "br", "kind": "clearance", "to": "sensor", "expect": 0.25, "tol": 0.05},
   ]
   ```
-  `gap` needs a point in the empty space (inside a slot mouth, a pocket); `thickness` a point
-  inside the material; `expect` = what you intended — a mismatch becomes a warning (this also
-  catches a cut that went to the wrong place). 3–6 dims per part are enough.
+  `vs` / `vs_label` put the real object's size next to the part's (パイプ 25.4 → 穴 25.6). `gap`
+  needs a point in the empty space; `thickness` a point inside the material. 3–7 dims per part.
 - `origin = "壁の面・ブラケットの底・ネジの中間"`: say in words where (0,0,0) is, so the user knows
   what the coordinates are measured from. Put the origin on a real surface the user can touch.
-- `print_pose = {"wedge": Rot(-7, 0, 0)}` for parts that are modelled tilted/standing as installed:
+- `print_pose = {"bracket": "-X"}` (that face goes on the bed) or `{"wedge": Rot(-7, 0, 0)}` for parts
+  modelled tilted/standing as installed:
   the tool also writes `print_<name>.stl` in that pose and reports its size (bed check uses it).
 - Also define `hardware` (what to buy, one line per size: "M5×30 ボルト・ナット・ワッシャー 6組")
   and `checks` (2–3 things to measure or look at before printing, each with the target value:

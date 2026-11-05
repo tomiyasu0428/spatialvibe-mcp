@@ -37,8 +37,9 @@ def as_dict(obj, label):
         if not isinstance(k, str) or not NAME.fullmatch(k):
             fail(f"{label}: name {k!r} must be 1-40 ASCII letters, digits, _ or - (e.g. 'spoon_front'); "
                  "Japanese names are not allowed")
-        if not hasattr(v, "wrapped"):
-            fail(f"{label}[{k!r}] is {type(v).__name__}, not a build123d Shape")
+        if not hasattr(v, "wrapped") or not hasattr(v, "bounding_box"):
+            fail(f"{label}[{k!r}] is a {type(v).__name__}, not a shape (did a comment or a missing "
+                 "`*` drop the shape, e.g. `Pos(...)` without `* Box(...)`?)")
     return obj
 
 
@@ -243,8 +244,9 @@ def hole_spacing(hl):
     [{"d": 3.5, "axis": "Y", "along": {"X": [98.0], "Z": [62.0]}}] — the numbers a tape checks."""
     groups = {}
     for h in hl:
-        if h["axis"] in AXES and not h.get("half"):
-            groups.setdefault((h["d"], h["axis"], h.get("kind", "hole")), []).append(h["at"])
+        if h["axis"] in AXES:
+            kind = h.get("kind") or ("arc" if h.get("half") else "hole")
+            groups.setdefault((h["d"], h["axis"], kind), []).append(h["at"])
     out = []
     for (d, axis, kind), pts in sorted(groups.items()):
         if len(pts) < 2:
@@ -285,28 +287,89 @@ def _crossings(shape, p, axis):
     return spans
 
 
+def _axis(v, label="axis"):
+    """'X' / 'Y' / 'Z' or a direction (x, y, z) -> unit vector."""
+    if isinstance(v, str) and v in AXES:
+        return AXES[v]
+    if isinstance(v, (list, tuple)) and len(v) == 3 and all(isinstance(x, (int, float)) for x in v):
+        n = math.sqrt(sum(x * x for x in v))
+        if n > 1e-9:
+            return tuple(x / n for x in v)
+    raise ValueError(f'{label} must be "X", "Y", "Z" or a direction (x, y, z)')
+
+
 def _snap_hole(p, hl):
+    """The point on the nearest hole's axis line, level with p (so a point typed on a face snaps to
+    the hole centre in that face). Returns (point, index in the hole list, hole)."""
     best = None
-    for h in hl:
-        d2 = sum((p[i] - h["at"][i]) ** 2 for i in range(3))
+    for k, h in enumerate(hl):
+        ax = AXES.get(h["axis"])
+        c = h["at"]
+        if ax:
+            t = sum((p[i] - c[i]) * ax[i] for i in range(3))
+            foot = tuple(c[i] + ax[i] * t for i in range(3))
+        else:
+            foot = tuple(c)
+        d2 = sum((p[i] - foot[i]) ** 2 for i in range(3))
         if best is None or d2 < best[0]:
-            best = (d2, h)
-    if best is None or best[0] > 15.0 ** 2:
-        raise ValueError(f"no hole within 15 mm of {p}")
-    return tuple(best[1]["at"])
+            best = (d2, foot, k, h)
+    if best is None or best[0] > 12.0 ** 2:
+        raise ValueError(f"no hole axis within 12 mm of {p}")
+    return best[1], best[2], best[3]
+
+
+def _snap_face(p, shp):
+    """The nearest point on the part's surface (a wall, the floor, a rim)."""
+    from build123d import Vector, Vertex
+    q = Vector(*p)
+    f = min(shp.faces(), key=lambda f_: f_.distance_to(q))
+    a, _ = f.closest_points(Vertex(*p))
+    if math.dist((a.X, a.Y, a.Z), p) > 10.0:
+        raise ValueError(f"no surface within 10 mm of {p}")
+    return (a.X, a.Y, a.Z)
+
+
+def _end(d, key, shp, hl, ctx_shapes):
+    """One end of a distance: a typed point, snapped to a hole centre or to a surface."""
+    p = _vec(d.get(key), key)
+    how = d.get(f"snap_{key}", d.get("snap"))
+    if how == "hole":
+        q, k, h = _snap_hole(p, hl)
+        return q, f"穴{k + 1}"
+    if how == "face":
+        return _snap_face(p, shp), "面"
+    if isinstance(how, str) and how.startswith("context:"):
+        c = how.split(":", 1)[1]
+        if c not in ctx_shapes:
+            raise ValueError(f"context {c!r} not found")
+        return _snap_face(p, ctx_shapes[c]), c
+    if how not in (None, "point"):
+        raise ValueError('snap must be "hole", "face", "context:<name>" or "point"')
+    return p, None   # typed coordinate: not measured on the shape
 
 
 def measure_dims(spec, parts, context, holes_by_part):
     """Measure the fit dimensions the script asks for, on the real shapes.
 
     Each entry: {"label": str, "part": name, "kind": ..., "expect"?: number, "tol"?: number}
-      distance : "a", "b" points; "snap": "hole" moves each to the nearest hole centre;
-                 "axis": "X"|"Y"|"Z" measures only along that axis
-      gap      : "at" a point in the empty space, "axis": the empty width there (slot mouth, inside)
+      distance : ends "a", "b"; snap each with "snap_a"/"snap_b" (or "snap" for both):
+                 "hole" = that hole's centre, "face" = the part's nearest surface,
+                 "context:<name>" = that context item's nearest surface; "axis" ("X"/"Y"/"Z"
+                 or a direction) measures only along it. Unsnapped ends are typed coordinates and
+                 are marked as such.
+      gap      : "at" a point in the empty space, "axis": the empty width there (slot mouth,
+                 inner size). Add "narrowest": [dx, dy, dz] to slide the line that far and keep the
+                 smallest width (finds a snap-fit mouth without exact coordinates).
       thickness: "at" a point inside the material, "axis": the material thickness there
-      angle    : "a", "b" points on two faces: the angle between those faces in degrees; or "a" and
-                 "ref": "Z" for the tilt of face a from level ("X"/"Y": from a vertical plane)
-      clearance: "to": a context name: the smallest distance between the part and it
+      diameter : "at" a point near a hole: that hole's diameter
+      size     : "axis": the part's overall size along it
+      overhang : "to": context name, "axis", "side": "+" or "-": how far the part sticks out past it
+      angle    : "a", "b" points on two faces (angle between them); or "a" and "ref": "Z" (tilt
+                 from level; "X"/"Y": from a vertical plane)
+      clearance: "to": context name: the smallest distance between the part and it. With
+                 "expect" it also says the gap is intended, so no "すき間が … しかない" warning.
+    Any entry may add "vs": the real object's size and "vs_label": its name (e.g. vs 25.4,
+    vs_label "パイプ"), shown next to the part's value with the difference.
     Returns ([measured...], [warnings...]). Values come from the geometry, never from the script.
     """
     out, warns = [], []
@@ -322,67 +385,129 @@ def measure_dims(spec, parts, context, holes_by_part):
             name, kind = d.get("part"), d.get("kind")
             if name not in parts:
                 raise ValueError(f"part {name!r} not in parts")
-            shp = parts[name]
-            m = {"label": label, "part": name, "kind": kind}
+            shp, hl = parts[name], holes_by_part[name]
+            m = {"label": label, "part": name, "kind": kind, "measured": True}
             if kind == "distance":
-                a, b = _vec(d.get("a"), "a"), _vec(d.get("b"), "b")
-                if d.get("snap") == "hole":
-                    a, b = _snap_hole(a, holes_by_part[name]), _snap_hole(b, holes_by_part[name])
-                if d.get("axis") in AXES:
-                    ax = AXES[d["axis"]]
-                    val = abs(sum((b[i] - a[i]) * ax[i] for i in range(3)))
-                    b = tuple(a[i] + ax[i] * sum((b[j] - a[j]) * ax[j] for j in range(3)) for i in range(3))
+                (a, fa), (b, fb) = _end(d, "a", shp, hl, context), _end(d, "b", shp, hl, context)
+                if d.get("axis") is not None:
+                    ax = _axis(d["axis"])
+                    t = sum((b[i] - a[i]) * ax[i] for i in range(3))
+                    val, b = abs(t), tuple(a[i] + ax[i] * t for i in range(3))
                 else:
                     val = math.dist(a, b)
-                m.update(value=round(val, 2), unit="mm", p=[list(a), list(b)])
+                m.update(value=round(val, 2), unit="mm", p=[list(a), list(b)], ends=[fa, fb],
+                         measured=fa is not None and fb is not None)
             elif kind in ("gap", "thickness"):
                 at = _vec(d.get("at"), "at")
-                if d.get("axis") not in AXES:
-                    raise ValueError('axis must be "X", "Y" or "Z"')
-                ax = AXES[d["axis"]]
-                spans = _crossings(shp, at, ax)
-                if kind == "thickness":
-                    hit = [s_ for s_ in spans if s_[0] - 1e-6 <= 0 <= s_[1] + 1e-6]
-                    if not hit:
-                        raise ValueError(f"{at} is not inside the material of {name}")
-                    t0, t1 = hit[0]
-                else:
-                    if any(s_[0] < 0 < s_[1] for s_ in spans):
-                        raise ValueError(f"{at} is inside the material of {name}: there is no gap there "
-                                         "(was the cut made where you intended?)")
-                    before = [s_[1] for s_ in spans if s_[1] <= 1e-6]
-                    after = [s_[0] for s_ in spans if s_[0] >= -1e-6]
-                    if not before or not after:
-                        raise ValueError(f"the gap at {at} along {d['axis']} is open on one side")
-                    t0, t1 = max(before), min(after)
-                pa = [at[i] + ax[i] * t0 for i in range(3)]
-                pb = [at[i] + ax[i] * t1 for i in range(3)]
+                ax = _axis(d.get("axis"))
+                probes = [at]
+                if kind == "gap" and d.get("narrowest") is not None:
+                    span = _vec(d["narrowest"], "narrowest")
+                    probes = [tuple(at[i] + span[i] * j / 20 for i in range(3)) for j in range(21)]
+                best = None
+                for q in probes:
+                    spans = _crossings(shp, q, ax)
+                    if kind == "thickness":
+                        hit = [s_ for s_ in spans if s_[0] - 1e-6 <= 0 <= s_[1] + 1e-6]
+                        if not hit:
+                            raise ValueError(f"{q} is not inside the material of {name}")
+                        t0, t1 = hit[0]
+                    else:
+                        if any(s_[0] < 0 < s_[1] for s_ in spans):
+                            if len(probes) > 1:
+                                continue
+                            raise ValueError(f"{q} is inside the material of {name}: there is no gap there "
+                                             "(was the cut made where you intended?)")
+                        before = [s_[1] for s_ in spans if s_[1] <= 1e-6]
+                        after = [s_[0] for s_ in spans if s_[0] >= -1e-6]
+                        if not before or not after:
+                            if len(probes) > 1:
+                                continue
+                            raise ValueError(f"the gap at {q} is open on one side "
+                                             "(for a depth use distance with snap 'face' on both ends)")
+                        t0, t1 = max(before), min(after)
+                    if best is None or t1 - t0 < best[0]:
+                        best = (t1 - t0, q, t0, t1)
+                if best is None:
+                    raise ValueError(f"no closed gap found along the 'narrowest' sweep from {at}")
+                _, q, t0, t1 = best
+                pa = [q[i] + ax[i] * t0 for i in range(3)]
+                pb = [q[i] + ax[i] * t1 for i in range(3)]
                 m.update(value=round(t1 - t0, 2), unit="mm", p=[pa, pb])
+            elif kind == "diameter":
+                _, idx, h = _snap_hole(_vec(d.get("at"), "at"), hl)
+                c, ax = h["at"], AXES.get(h["axis"], (0.0, 0.0, 1.0))
+                u = next(v for v in AXES.values() if v != ax)
+                r = h["d"] / 2
+                m.update(value=h["d"], unit="mm", ends=[f"穴{idx + 1}", f"穴{idx + 1}"], at=c,
+                         p=[[c[i] - u[i] * r for i in range(3)], [c[i] + u[i] * r for i in range(3)]])
+            elif kind == "size":
+                ax = _axis(d.get("axis"))
+                bb = shp.bounding_box()
+                lo = (bb.min.X, bb.min.Y, bb.min.Z)
+                hi = (bb.max.X, bb.max.Y, bb.max.Z)
+                if ax not in AXES.values():
+                    raise ValueError('size needs "axis": "X", "Y" or "Z"')
+                i = list(AXES.values()).index(ax)
+                pa, pb = list(lo), list(lo)
+                pb[i] = hi[i]
+                m.update(value=round(hi[i] - lo[i], 2), unit="mm", p=[pa, pb])
+            elif kind == "overhang":
+                to, ax = d.get("to"), _axis(d.get("axis"))
+                if to not in context:
+                    raise ValueError(f"context {to!r} not found")
+                if ax not in AXES.values():
+                    raise ValueError('overhang needs "axis": "X", "Y" or "Z"')
+                i = list(AXES.values()).index(ax)
+                pb_, cb_ = shp.bounding_box(), context[to].bounding_box()
+                pmin, pmax = (pb_.min.X, pb_.min.Y, pb_.min.Z)[i], (pb_.max.X, pb_.max.Y, pb_.max.Z)[i]
+                cmin, cmax = (cb_.min.X, cb_.min.Y, cb_.min.Z)[i], (cb_.max.X, cb_.max.Y, cb_.max.Z)[i]
+                side = d.get("side", "+")
+                val = (pmax - cmax) if side == "+" else (cmin - pmin)
+                c = pb_.center()
+                pa, pb = [c.X, c.Y, c.Z], [c.X, c.Y, c.Z]
+                pa[i], pb[i] = (cmax, pmax) if side == "+" else (cmin, pmin)
+                m.update(value=round(val, 2), unit="mm", p=[pa, pb])
             elif kind == "angle":
                 from build123d import Vector
-                ns = []
-                keys = ("a",) if d.get("ref") in AXES else ("a", "b")
+                ns, pts = [], []
+                keys = ("a",) if d.get("ref") is not None else ("a", "b")
                 for key in keys:
                     q = Vector(*_vec(d.get(key), key))
                     f = min(shp.faces(), key=lambda f_: f_.distance_to(q))
                     ns.append(f.normal_at(q))
-                if d.get("ref") in AXES:  # tilt of face a from the plane square to that axis (Z = from level)
-                    ns.append(Vector(*AXES[d["ref"]]))
+                    pts.append([q.X, q.Y, q.Z])
+                if d.get("ref") is not None:  # tilt of face a from the plane square to that axis
+                    ns.append(Vector(*_axis(d["ref"], "ref")))
                 cosv = abs(ns[0].dot(ns[1])) / (ns[0].length * ns[1].length)
-                m.update(value=round(math.degrees(math.acos(min(1.0, cosv))), 2), unit="°")
+                n = ns[0].cross(ns[1])
+                if n.length > 1e-3:   # look along the line where the two faces meet
+                    view = max(range(3), key=lambda i: abs((n.X, n.Y, n.Z)[i]))
+                else:                 # parallel faces: look from the side so the face is seen edge-on
+                    f0 = (ns[0].X, ns[0].Y, ns[0].Z)
+                    view = min(range(3), key=lambda i: abs(f0[i]))
+                m.update(value=round(math.degrees(math.acos(min(1.0, cosv))), 2), unit="°", at=pts[0],
+                         view_normal="XYZ"[view])
             elif kind == "clearance":
                 to = d.get("to")
                 if to not in context:
                     raise ValueError(f"context {to!r} not found")
-                m.update(value=round(shp.distance_to(context[to]), 2), unit="mm")
+                dist, pa, pb = shp.distance_to_with_closest_points(context[to])
+                m.update(value=round(dist, 2), unit="mm", to=to,
+                         p=[[pa.X, pa.Y, pa.Z], [pb.X, pb.Y, pb.Z]] if dist > 1e-6 else None)
             else:
-                raise ValueError('kind must be "distance", "gap", "thickness", "angle" or "clearance"')
+                raise ValueError('kind must be distance, gap, thickness, diameter, size, overhang, angle or clearance')
+            if isinstance(d.get("vs"), (int, float)):  # the real object's size, shown next to the part's
+                m["vs"] = float(d["vs"])
+                m["vs_label"] = str(d.get("vs_label", "実物"))[:20]
             exp = d.get("expect")
             if isinstance(exp, (int, float)):
                 tol = float(d.get("tol", 0.3))
                 m["expect"], m["ok"] = float(exp), abs(m["value"] - float(exp)) <= tol
                 if not m["ok"]:
                     warns.append(f"{name}: 「{label}」を測ると {m['value']} {m['unit']}（予定 {exp}）")
+            if not m["measured"]:
+                m["note"] = "typed coordinates"
             out.append(m)
         except Exception as e:
             out.append({"label": label, "part": d.get("part") if isinstance(d, dict) else None,
@@ -425,6 +550,33 @@ def mesh_check(stl_path):
     m.merge_vertices()
     open_edges = len(group_rows(m.edges_sorted, require_count=1))
     return bool(m.is_watertight), open_edges
+
+
+DOWN = {"-Z": (0, 0, 0), "+Z": (180, 0, 0), "Z": (180, 0, 0), "-X": (0, -90, 0), "+X": (0, 90, 0),
+        "X": (0, 90, 0), "-Y": (90, 0, 0), "+Y": (-90, 0, 0), "Y": (-90, 0, 0)}
+
+
+def pose_of(spec):
+    """print_pose value -> a Location: a build123d Rot/Location, or "-X" = the face looking toward -X
+    goes on the bed (also "+Y", "-Z", ...)."""
+    from build123d import Rot
+    if isinstance(spec, str):
+        if spec.strip() not in DOWN:
+            raise ValueError(f'print_pose {spec!r}: use "-X", "+X", "-Y", "+Y", "-Z" or "+Z" (the face that goes down)')
+        return Rot(*DOWN[spec.strip()])
+    return spec
+
+
+def down_face(loc):
+    """Which side of the part (as modelled) faces the bed in the print pose."""
+    from build123d import Vertex
+    o = (loc * Vertex(0, 0, 0)).center()
+    for name, n in (("-X", (-1, 0, 0)), ("+X", (1, 0, 0)), ("-Y", (0, -1, 0)), ("+Y", (0, 1, 0)),
+                    ("-Z", (0, 0, -1)), ("+Z", (0, 0, 1))):
+        v = (loc * Vertex(*n)).center() - o
+        if v.Z < -0.99:
+            return name
+    return "tilted"
 
 
 def bed_size():
@@ -494,7 +646,9 @@ def main():
         info["fits_bed"] = fits_bed(info["bbox_mm"]["size"], bed)
         if name in print_pose:
             try:
-                pp = print_pose[name] * shp
+                pose = pose_of(print_pose[name])
+                pp = pose * shp
+                info["print_down"] = down_face(pose)
                 pb = pp.bounding_box()
                 export_stl(pp, str(out / f"print_{name}.stl"))
                 info["print_size_mm"] = [round(pb.size.X, 2), round(pb.size.Y, 2), round(pb.size.Z, 2)]
@@ -522,9 +676,11 @@ def main():
     result["dims"], dim_warns = measure_dims(ns.get("dims"), parts, context, holes_by_part)
     warn.extend(dim_warns)
     result["clearance"] = clearances(parts, context)
+    intended = {(m["part"], m.get("to")) for m in result["dims"] if m.get("kind") == "clearance" and m.get("ok")}
     for c in result["clearance"]:
-        if c["mm"] is not None and 0 < c["mm"] < 1.0:
-            warn.append(f"{c['part']}: {c['to']} とのすき間が {c['mm']} mm しかない")
+        if c["mm"] is not None and 0 < c["mm"] < 1.0 and (c["part"], c["to"]) not in intended:
+            warn.append(f"{c['part']}: {c['to']} とのすき間が {c['mm']} mm しかない"
+                        "（わざとなら dims に clearance と expect を書く）")
     lo = [min(p["bbox_mm"]["min"][i] for p in result["parts"].values()) for i in range(3)]
     hi = [max(p["bbox_mm"]["max"][i] for p in result["parts"].values()) for i in range(3)]
     result["parts_size_mm"] = [round(hi[i] - lo[i], 1) for i in range(3)]

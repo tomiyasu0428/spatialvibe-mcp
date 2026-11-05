@@ -258,6 +258,66 @@ class DimsTests(unittest.TestCase):
         _, sheet, _ = server.preview("d-dims")
         self.assertTrue(Path(sheet.path).exists())
 
+
+FACE_CODE = r"""
+from build123d import *
+# L-bracket: wall plate at y 0..5 against a wall (y<0), arm with a sensor hole 40 from the wall, 25 up
+plate = Box(55, 5, 45, align=(Align.CENTER, Align.MIN, Align.MIN))
+arm = Pos(-25, 0, 0) * Box(5, 55, 45, align=(Align.CENTER, Align.MIN, Align.MIN))
+br = plate + arm - Pos(-25, 40, 25) * Rot(0, 90, 0) * Cylinder(8.25, 20)
+tray = Pos(100, 0, 0) * (Box(40, 30, 20, align=(Align.CENTER, Align.CENTER, Align.MIN))
+                         - Pos(0, 0, 2) * Box(36, 26, 30, align=(Align.CENTER, Align.CENTER, Align.MIN)))
+parts = {"br": br, "tray": tray}
+context = {"wall": Box(200, 10, 100, align=(Align.CENTER, Align.MAX, Align.MIN)),
+           "rod": Pos(-25, 40, 25) * Rot(0, 90, 0) * Cylinder(8.0, 40)}
+print_pose = {"br": "-X"}
+dims = [
+  {"label": "壁から穴", "part": "br", "kind": "distance", "a": (-25, 0, 25), "b": (-25, 40, 25),
+   "snap_a": "context:wall", "snap_b": "hole", "axis": "Y", "expect": 40},
+  {"label": "底から穴", "part": "br", "kind": "distance", "a": (-25, 40, 0), "b": (-25, 40, 25),
+   "snap_a": "face", "snap_b": "hole", "axis": "Z", "expect": 25},
+  {"label": "穴径", "part": "br", "kind": "diameter", "at": (-25, 40, 25), "expect": 16.5, "vs": 16, "vs_label": "筒"},
+  {"label": "深さ", "part": "tray", "kind": "distance", "a": (100, 0, 2), "b": (100, 14, 20),
+   "snap": "face", "axis": "Z", "expect": 18},
+  {"label": "幅", "part": "tray", "kind": "size", "axis": "X", "expect": 40},
+  {"label": "壁から", "part": "tray", "kind": "overhang", "to": "wall", "axis": "Z", "side": "+"},
+  {"label": "筒とのすき間", "part": "br", "kind": "clearance", "to": "rod", "expect": 0.25, "tol": 0.05},
+  {"label": "手入力", "part": "br", "kind": "distance", "a": (0, 0, 0), "b": (0, 0, 10)},
+]
+"""
+
+
+class FaceSnapTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.r = server.build_model("d-face", FACE_CODE)
+
+    def dim(self, label):
+        return next(d for d in self.r["dims"] if d["label"] == label)
+
+    def test_face_and_hole_snaps_are_measured(self):
+        self.assertTrue(self.r["ok"], self.r)
+        self.assertEqual(self.dim("壁から穴")["value"], 40.0)
+        self.assertTrue(self.dim("壁から穴")["measured"])
+        self.assertEqual(self.dim("底から穴")["value"], 25.0)
+        self.assertEqual(self.dim("深さ")["value"], 18.0)                  # open-top depth, floor to rim
+        self.assertFalse(self.dim("手入力")["measured"])                    # typed points are marked
+
+    def test_other_kinds(self):
+        self.assertEqual(self.dim("穴径")["value"], 16.5)
+        self.assertEqual(self.dim("穴径")["vs"], 16.0)
+        self.assertEqual(self.dim("幅")["value"], 40.0)
+        self.assertEqual(self.dim("壁から")["value"], -80.0)               # tray top is 80 below the wall top
+        self.assertTrue(self.dim("筒とのすき間")["ok"])
+
+    def test_intended_clearance_is_not_a_warning(self):
+        self.assertFalse(any("rod とのすき間" in w for w in self.r["warnings"]), self.r["warnings"])
+
+    def test_print_pose_by_face(self):
+        self.assertEqual(self.r["parts"]["br"]["print_down"], "-X")
+        _, sheet, _ = server.preview("d-face")
+        self.assertTrue(Path(sheet.path).exists())
+
 class StdioTests(unittest.TestCase):
     """Over a real MCP stdio connection the server's own error text must reach the client."""
 
