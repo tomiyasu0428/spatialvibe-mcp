@@ -661,7 +661,7 @@ def measure_dims(spec, parts, context, holes_by_part):
                 m["vs_label"] = str(d.get("vs_label", "実物"))[:20]
             exp = d.get("expect")
             if isinstance(exp, (int, float)):
-                tol = float(d.get("tol", 0.3))
+                tol = float(d.get("tol", min(0.3, max(0.05, 0.15 * abs(float(exp))))))   # thin parts get a finer default
                 m["expect"], m["tol"], m["ok"] = float(exp), tol, abs(m["value"] - float(exp)) <= tol
                 if not m["ok"]:
                     warns.append(f"{name}: 「{label}」を測ると {m['value']} {m['unit']}（予定 {exp}）")
