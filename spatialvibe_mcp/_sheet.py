@@ -51,6 +51,8 @@ T = {  # label text, Japanese when a font exists
     "top": ("上から", "top"), "front": ("正面から", "front"),
     "side": ("右横から", "right side"),
     "conv": ("「正面」は、使う人が立つ側から見た向きです（右手側が右）", "\"Front\" is what the user sees from where they stand"),
+    "conv_v": ("「正面」は、{v}の向きです（右手側が右）", "\"Front\" is the view {v}"),
+    "ptime_re": ("今回刷るもの：約 {t}（{each}）。{keep} はそのまま使う", "to print now: {t} ({each}); keep {keep}"),
     "axes": ("座標: 使う人は −Y 側に立って +Y を見る（右手が +X、上が +Z）", "axes: user at −Y looking +Y (+X right, +Z up)"),
     "warn": ("注意", "Warnings"), "mark": ("注意: ", "! "), "pos": ("穴の中心 (X, Y, Z mm)", "hole centres (X, Y, Z mm)"),
     "more": ("ほか {n} 個", "{n} more"),
@@ -461,6 +463,11 @@ def main():
                 pass
         return None
 
+    labels = res.get("labels") or {}
+
+    def disp(n):   # the word the reply uses (下板), with the file name for whoever prints it
+        return f"{labels[n]}（{n}）" if n in labels else n
+
     for f, info in zip(files, infos):
         info["_name"] = f.stem[5:]
         k = 0
@@ -544,13 +551,18 @@ def main():
     overall = res.get("parts_size_mm")
     fig.text(0.04, y(0.95), t("parts", n=n) + ("   " + t("overall" if n == 1 else "overall_n", s=size_text(overall))
                                                 if overall else ""), fontsize=13)
-    fig.text(0.04, y(1.3), t("conv"), fontsize=9.5, color="0.4")
-    mins = [(i_["_name"], i_.get("print_minutes")) for i_ in infos if i_.get("print_minutes")]
+    fig.text(0.04, y(1.3), t("conv_v", v=res["user_view"]) if res.get("user_view") else t("conv"),
+             fontsize=9.5, color="0.4")
+    keep = set((res.get("changes") or {}).get("unchanged_parts") or [])
+    mins = [(disp(i_["_name"]), i_.get("print_minutes")) for i_ in infos
+            if i_.get("print_minutes") and i_["_name"] not in keep]
     if mins:
         def hm(m):
             return f"{m // 60}時間{m % 60:02d}分" if m >= 60 else f"{m}分"
-        fig.text(0.04, y(1.6), t("ptime", t=hm(sum(m for _, m in mins)),
-                                 each="・".join(f"{n_} {hm(m)}" for n_, m in mins[:4])), fontsize=10, color="0.25")
+        each = "・".join(f"{n_} {hm(m)}" for n_, m in mins[:4])
+        txt = t("ptime_re", t=hm(sum(m for _, m in mins)), each=each, keep="・".join(disp(k) for k in sorted(keep))) \
+            if keep else t("ptime", t=hm(sum(m for _, m in mins)), each=each)
+        fig.text(0.04, y(1.6), txt, fontsize=10, color="0.25")
 
     if glob_w:
         fig.text(0.04, y(2.02), t("warn"), fontsize=12, fontweight="bold", color="#c0392b")
@@ -606,8 +618,8 @@ def main():
         fig.text(0.04, y(m0 + 0.3), t("motion"), fontsize=12, fontweight="bold")
         base_p = {f.stem[5:]: trimesh.load(f) for f in files}
         base_c = {f.stem[4:]: trimesh.load(f) for f in sorted(vdir.glob("ctx_*.stl"))}
-        shown = [None] + pose_names[:3] if len(pose_names) <= 3 else \
-            [None] + [pose_names[int(i)] for i in np.linspace(0, len(pose_names) - 1, 3)]
+        shown = [None] + pose_names[:4] if len(pose_names) <= 4 else \
+            [None] + [pose_names[int(round(i))] for i in np.linspace(0, len(pose_names) - 1, 4)]
         frames = []
         for pn in shown:
             P_, C_ = dict(base_p), dict(base_c)
@@ -619,15 +631,28 @@ def main():
                     C_[f.stem.split("_ctx_", 1)[1]] = trimesh.load(f)
             frames.append((pn, P_, C_))
         # look along the axis the moving parts move least: the motion shows best across it
+        # (a window sash sliding past a fixed stopper moves only context: count that too)
         mv = np.zeros(3)
-        for pn, P_, _ in frames[1:]:
+        moved_c = []
+        for pn, P_, C_ in frames[1:]:
             for nm, msh in P_.items():
                 mv += np.abs(msh.centroid - base_p[nm].centroid)
+            for nm, msh in C_.items():
+                if msh is not base_c.get(nm):
+                    mv += np.abs(msh.centroid - base_c[nm].centroid)
+                    moved_c.append(msh)
         k_ax = int(np.argmin(mv)) if mv.any() else 0
         a_, b_ = [i for i in range(3) if i != k_ax]
         allm = [m for _, P_, C_ in frames for m in list(P_.values())]
         lo_ = np.min([m.bounds[0] for m in allm], axis=0)
         hi_ = np.max([m.bounds[1] for m in allm], axis=0)
+        # frame the parts plus the part of any moved surroundings within 150 mm of them, so a
+        # small holder on a big door is not a dot and a sliding sash still shows in the frame
+        lo0, hi0 = lo_ - 150, hi_ + 150
+        for msh in moved_c:
+            v_ = msh.vertices[np.all((msh.vertices >= lo0) & (msh.vertices <= hi0), axis=1)]
+            if len(v_):
+                lo_, hi_ = np.minimum(lo_, v_.min(0)), np.maximum(hi_, v_.max(0))
         cu, cv = (lo_[a_] + hi_[a_]) / 2, (lo_[b_] + hi_[b_]) / 2
         half = max(hi_[a_] - lo_[a_], hi_[b_] - lo_[b_]) * 0.65 + 15
         hits = {pn: {h["a"] for h in (res.get("poses") or {}).get(pn, [])} for pn in pose_names}
@@ -669,7 +694,7 @@ def main():
             fig.add_artist(plt.Line2D([0.03, 0.97], [y(top + 0.05)] * 2, color="0.85", lw=1))
             fig.add_artist(plt.Rectangle((0.04, y(top + 0.55)), 0.03, 0.18 / H * 2, color=part_color(i),
                                          transform=fig.transFigure))
-            fig.text(0.085, y(top + 0.45), name, fontsize=14, fontweight="bold")
+            fig.text(0.085, y(top + 0.45), disp(name), fontsize=14, fontweight="bold")
             for q, (ln, *_r) in enumerate(il):
                 fig.text(0.05, y(top + 0.9 + 0.32 * q), ln, fontsize=11, color="0.2")
             top += block_h
@@ -679,7 +704,7 @@ def main():
         c = part_color(i)
         fig.add_artist(plt.Line2D([0.03, 0.97], [y(top + 0.05)] * 2, color="0.85", lw=1))
         fig.add_artist(plt.Rectangle((0.04, y(top + 0.55)), 0.03, 0.18 / H * 2, color=c, transform=fig.transFigure))
-        fig.text(0.085, y(top + 0.45), name, fontsize=14, fontweight="bold")
+        fig.text(0.085, y(top + 0.45), disp(name), fontsize=14, fontweight="bold")
         yy = top + 0.75
         if fl:
             yy += 0.3

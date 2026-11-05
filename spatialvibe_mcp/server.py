@@ -116,7 +116,7 @@ def _child_env():
 
 
 @mcp.tool()
-def build_model(project: str, code: str, note: str = "") -> dict:
+def build_model(project: str, code: str, note: str = "", compare_to: int | None = None) -> dict:
     """Run a build123d script and save it as a new version of the project.
 
     `code` is a complete Python script using build123d (units: mm, Z up). It must define
@@ -132,6 +132,8 @@ def build_model(project: str, code: str, note: str = "") -> dict:
     overall size of the printed parts, overlaps between parts and context (`interference`; faces
     that only touch are not overlaps, tiny ones are in `near_contact`; pairs that could not be
     computed are in `interference_unchecked` = 未判定), and `warnings` you must fix or explain.
+    `changes` compares with the previous good version, or with `compare_to` (e.g. the version the
+    user already printed, after some drafts) and is saved in result.json.
     A build that fails leaves no part files behind and cannot be previewed or published.
     Always call `preview` afterwards and look at both images before showing the user.
     """
@@ -164,10 +166,16 @@ def build_model(project: str, code: str, note: str = "") -> dict:
     res.update(project=project, version=int(vdir.name[1:]), folder=str(vdir))
     if res.get("ok") is True:
         res["files"] = sorted(str(f) for f in vdir.iterdir() if f.name.startswith(("part_", "print_", "ctx_")))
-        prev = next((v for v in reversed(_versions(vdir.parent)) if v.name < vdir.name
-                     and _read_result(v).get("ok") is True), None)
+        if compare_to is not None:   # e.g. the version the user actually printed, not the last draft
+            prev = _built_version_dir(project, compare_to)
+        else:
+            prev = next((v for v in reversed(_versions(vdir.parent)) if v.name < vdir.name
+                         and _read_result(v).get("ok") is True), None)
         if prev is not None:
             res["changes"] = _diff(_read_result(prev), res, int(prev.name[1:]))
+            saved = _read_result(vdir)
+            saved["changes"] = res["changes"]
+            (vdir / "result.json").write_text(json.dumps(saved, ensure_ascii=False, indent=1), encoding="utf-8")
     return res
 
 
@@ -206,7 +214,11 @@ def _diff(old: dict, new: dict, old_version: int) -> dict:
         if gone:
             ch.append("holes removed: " + ", ".join(f"Ø{h['d']:g} {tuple(h['at'])}" for h in gone[:6]))
         if hb:
-            ch.append("holes added: " + ", ".join(f"Ø{h['d']:g} {tuple(h['at'])}" for h in hb[:6]))
+            ch.append("holes added: " + ", ".join(f"Ø{h['d']:g} {tuple(h['at'])}" for h in hb[:6])
+                      + (f" (+{len(hb) - 6} more)" if len(hb) > 6 else ""))
+        kept = len(ha) - len(gone) - len(moved)
+        if ch and kept:   # say plainly what did NOT move: screw holes already drilled in a wall
+            ch.append(f"{kept} hole(s) unchanged")
         if ch:
             lines.append(f"{n}: " + " / ".join(ch) + " → reprint")
         else:

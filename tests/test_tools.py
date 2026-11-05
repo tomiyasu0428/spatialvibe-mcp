@@ -480,6 +480,75 @@ class UseCaseRoundTests(unittest.TestCase):
         self.assertTrue(Path(sheet.path).exists())
 
 
+
+class FlowRoundGTests(unittest.TestCase):
+    """Round G: hinges off the origin, near misses, a slot narrower than the object, levers."""
+
+    def test_pose_about_a_pivot_and_near_miss(self):
+        # an arm hinged at x=0 (pin), a cup base at x=200; a handle that the base just misses
+        code = ("from build123d import *\n"
+                "arm = Pos(100, 0, 0) * Box(200, 20, 10)\n"
+                "parts = {'base': Pos(200, 0, 15) * Box(20, 20, 20)}\n"
+                "context = {'arm': arm, 'handle': Pos(-31.5, 0, 200) * Box(10, 40, 10)}\n"
+                "up = {'rot': (0, -90, 0), 'pivot': (0, 0, 0)}\n"
+                "poses = {'up': {'base': up, 'arm': up}}\n")
+        r = server.build_model("g-pivot", code)
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(r["poses"]["up"], [])
+        g = r["pose_closest"]["up"]
+        self.assertEqual(g["b"], "context:handle")
+        self.assertLess(g["mm"], 3.0)
+        self.assertTrue(any("すれすれ" in w for w in r["warnings"]), r["warnings"])
+
+    def test_pivot_moves_about_the_hinge_not_the_origin(self):
+        code = ("from build123d import *\n"
+                "parts = {'p': Pos(110, 0, 0) * Box(10, 10, 10)}\n"
+                "context = {'wall': Pos(100, 0, 60) * Box(40, 40, 4)}\n"
+                "poses = {'up': {'p': {'rot': (0, -90, 0), 'pivot': (100, 0, 0)}}}\n")
+        r = server.build_model("g-pivot2", code)
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(r["poses"]["up"], [])     # turned about x=100 it stands at z≈10, below the wall
+
+    def test_slot_narrower_than_the_object_warns(self):
+        code = ("from build123d import *\n"
+                "body = Box(30, 20, 20) - Pos(0, 0, 5) * Box(7, 30, 20)\n"
+                "parts = {'hook': body}\n"
+                "dims = [{'label': 'みぞ', 'part': 'hook', 'kind': 'gap', 'at': (0, 0, 8), 'axis': 'X',"
+                " 'vs': 8, 'vs_label': 'ふち'}]\n")
+        r = server.build_model("g-slot", code)
+        self.assertTrue(r["ok"], r)
+        self.assertTrue(any("入らない" in w for w in r["warnings"]), r["warnings"])
+
+    def test_loads_report_the_lever(self):
+        code = ("from build123d import *\n"
+                "parts = {'clamp': Box(20, 20, 20)}\n"
+                "context = {'box': Pos(0, 110, 40) * Box(100, 60, 40)}\n"
+                "loads = {'box': 0.8}\n")
+        r = server.build_model("g-load", code)
+        self.assertTrue(r["ok"], r)
+        L = r["loads"][0]
+        self.assertAlmostEqual(L["lever_mm"], 110, delta=1)
+        self.assertAlmostEqual(L["moment_Nm"], 0.86, delta=0.02)
+
+    def test_labels_view_compare_to_and_sliding_context(self):
+        base = ("from build123d import *\n"
+                "parts = {'brace': Box(20, 20, 20), 'jaw': Pos(40, 0, 0) * Box(10, 10, {h})}\n"
+                "context = {'sash': Pos(-40, 0, 0) * Box(20, 60, 60)}\n"
+                "labels = {'brace': '下板', 'jaw': '後ろ当て'}\n"
+                "user_view = '運転席に座って前を見たとき'\n"
+                "poses = {'閉めた': {'sash': Pos(0, 0, 0)}, '10cm開けた': {'sash': Pos(-100, 0, 0)}}\n")
+        r1 = server.build_model("g-labels", base.replace("{h}", "10"))
+        self.assertTrue(r1["ok"], r1)
+        server.build_model("g-labels", base.replace("{h}", "14"))          # a draft
+        r3 = server.build_model("g-labels", base.replace("{h}", "16"), compare_to=1)
+        self.assertEqual(r3["changes"]["since_version"], 1)
+        self.assertIn("brace", r3["changes"]["unchanged_parts"])
+        saved = json.loads((Path(r3["folder"]) / "result.json").read_text(encoding="utf-8"))
+        self.assertEqual(saved["changes"]["since_version"], 1)
+        self.assertEqual(saved["labels"]["brace"], "下板")
+        _, sheet, _, _ = server.preview("g-labels")
+        self.assertTrue(Path(sheet.path).exists())
+
 class StdioTests(unittest.TestCase):
     """Over a real MCP stdio connection the server's own error text must reach the client."""
 

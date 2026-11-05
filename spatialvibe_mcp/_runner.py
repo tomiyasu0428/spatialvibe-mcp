@@ -665,6 +665,10 @@ def measure_dims(spec, parts, context, holes_by_part):
             if isinstance(d.get("vs"), (int, float)):  # the real object's size, shown next to the part's
                 m["vs"] = float(d["vs"])
                 m["vs_label"] = str(d.get("vs_label", "実物"))[:20]
+                inner = kind == "gap" or (kind == "diameter" and not d.get("outer"))
+                if inner and m.get("value") is not None and m["value"] < m["vs"]:
+                    warns.append(f"{name}: 「{label}」{m['value']} mm が {m['vs_label']} {m['vs']:g} mm より"
+                                 "狭い：入らない（入れる物なら +1〜4 mm、挟む物なら意図を label に書く）")
             exp = d.get("expect")
             if isinstance(exp, (int, float)):
                 tol = float(d.get("tol", min(0.3, max(0.05, 0.15 * abs(float(exp))))))   # thin parts get a finer default
@@ -832,6 +836,12 @@ def main():
               "near_contact": [], "warnings": [], "origin": str(origin)[:120] if origin else None,
               "hardware": text_list(ns.get("hardware"), "hardware"),
               "checks": text_list(ns.get("checks"), "checks"), "bed_mm": bed}
+    labels = ns.get("labels") or {}   # {"brace": "下板"}: the words used in the reply, shown on the sheet
+    if isinstance(labels, dict):
+        result["labels"] = {str(k): str(v)[:20] for k, v in labels.items()}
+    view = ns.get("user_view")      # 「車いすに座って前を見たとき」: the viewpoint the reply also uses
+    if view:
+        result["user_view"] = str(view)[:60]
     ar_floor = ns.get("ar_floor")
     if ar_floor is not None:
         if not isinstance(ar_floor, (int, float)) or isinstance(ar_floor, bool):
@@ -918,6 +928,7 @@ def main():
         elif v > 1e-6:
             result["near_contact"].append({"a": a, "b": b, "overlap_mm3": round(v, 3)})
     _check_poses(ns.get("poses"), parts, context, result, warn, out)
+    _loads(ns.get("loads"), context, result, warn)
     if result.get("ar_floor_z") is not None:   # the AR floor must be below everything that is not the floor
         fz = result["ar_floor_z"]
         for n_, shp_ in list(parts.items()) + list(context.items()):
@@ -931,6 +942,24 @@ def main():
     write_result(result)
 
 
+def _loads(loads, context, result, warn):
+    """loads = {"context name": kg}: where each weight's centre sits from the origin (the support),
+    so the reply can say how hard it levers on the mount (「中心が11 cm前 → 約0.9 N·m」)."""
+    if not loads:
+        return
+    if not isinstance(loads, dict):
+        fail("loads must be a dict: {'context name': kg}")
+    out = []
+    for nm, kg in loads.items():
+        if nm not in context:
+            fail(f"loads: no context named {nm!r}")
+        c = context[nm].center()   # centre of the shape's volume ≈ centre of mass for a solid box
+        lever = (c.X ** 2 + c.Y ** 2) ** 0.5
+        out.append({"name": nm, "kg": float(kg), "centre_mm": [round(c.X, 1), round(c.Y, 1), round(c.Z, 1)],
+                    "lever_mm": round(lever, 1), "moment_Nm": round(float(kg) * 9.81 * lever / 1000, 2)})
+    result["loads"] = out
+
+
 def _check_poses(poses, parts, context, result, warn, out=None):
     """Moving things checked in other positions. poses = {"pose name": {"part or context name":
     Location / Rot / Pos, ...}, ...}: the named shapes are moved (others stay) and every part is
@@ -941,13 +970,39 @@ def _check_poses(poses, parts, context, result, warn, out=None):
         return
     if not isinstance(poses, dict):
         fail("poses must be a dict: {'name': {'part or context name': Rot(...) or Location(...)}}")
-    out = {}
+    from build123d import Pos, Rot
+
+    def as_loc(v, where):
+        """A Location, or {"rot": (rx, ry, rz), "pivot": (x, y, z), "move": (dx, dy, dz)}:
+        turn about a hinge that is not at the origin (then slide by "move")."""
+        if not isinstance(v, dict):
+            return v
+        try:
+            px, py, pz = (float(c) for c in v.get("pivot", (0, 0, 0)))
+            rx, ry, rz = (float(c) for c in v.get("rot", (0, 0, 0)))
+            mx, my, mz = (float(c) for c in v.get("move", (0, 0, 0)))
+        except Exception:
+            fail(f"{where}: use {{'rot': (rx, ry, rz), 'pivot': (x, y, z), 'move': (dx, dy, dz)}}")
+        return Pos(mx, my, mz) * Pos(px, py, pz) * Rot(rx, ry, rz) * Pos(-px, -py, -pz)
+
+    def together(a, b, moves):   # moved by the same motion (a base on its armrest): their gap never changes
+        if a not in moves or b not in moves:
+            return False
+        try:
+            ta = [*moves[a].position, *moves[a].orientation]
+            tb = [*moves[b].position, *moves[b].orientation]
+            return all(abs(x - y) < 1e-6 for x, y in zip(ta, tb))
+        except Exception:
+            return moves[a] is moves[b]
+
+    out, gaps = {}, {}
     for pname, moves in list(poses.items())[:24]:
         if not isinstance(moves, dict):
             fail(f"poses[{pname!r}] must be a dict of name -> Location")
         unknown = [k for k in moves if k not in parts and k not in context]
         if unknown:
             fail(f"poses[{pname!r}]: no part or context named {unknown}")
+        moves = {k: as_loc(v, f"poses[{pname!r}][{k!r}]") for k, v in moves.items()}
         P = {k: (moves[k] * v if k in moves else v) for k, v in parts.items()}
         C = {k: (moves[k] * v if k in moves else v) for k, v in context.items()}
         hits = []
@@ -963,7 +1018,21 @@ def _check_poses(poses, parts, context, result, warn, out=None):
                 continue
             if v > 1.0:
                 hits.append({"a": a, "b": b, "overlap_cm3": round(v / 1000, 3)})
+            elif v <= 1e-6 and (a in moves or b.removeprefix("context:") in moves) \
+                    and not b.removeprefix("context:").startswith("hw_") \
+                    and not together(a, b.removeprefix("context:"), moves):
+                try:   # the closest pass matters most for moving things: 3 mm on paper is 0 when printed
+                    d_ = P[a].distance_to(other)
+                except Exception:
+                    continue
+                g_ = gaps.get(str(pname))
+                if g_ is None or d_ < g_["mm"]:
+                    gaps[str(pname)] = {"a": a, "b": b, "mm": round(d_, 1)}
         out[str(pname)] = hits
+        g_ = gaps.get(str(pname))
+        if g_ and 0 < g_["mm"] < 3.0:
+            warn.append(f"姿勢「{pname}」で {g_['a']} と {g_['b']} のすき間が {g_['mm']} mm しかない"
+                        "（すれすれ：実物では当たると考える）")
         if out_dir is not None:   # the moved shapes, so the sheet can draw each pose
             from build123d import export_stl
             k_ = len(out) - 1
@@ -977,6 +1046,7 @@ def _check_poses(poses, parts, context, result, warn, out=None):
             what = "重なる" if h["overlap_cm3"] is not None else "重なりを計算できない（未判定）"
             warn.append(f"姿勢「{pname}」で {h['a']} と {h['b']} が{what}")
     result["poses"] = out
+    result["pose_closest"] = gaps   # per pose: the moving thing's closest pass to anything else
 
 
 if __name__ == "__main__":
