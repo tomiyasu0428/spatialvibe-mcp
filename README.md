@@ -19,26 +19,114 @@
 
 | ツール | 内容 |
 | --- | --- |
-| `build_model(project, code, note)` | build123d スクリプトを別プロセスで実行。`parts`（印刷するもの）と `context`（周囲：パイプ・箱など）を STL/STEP に。形の有効性・体積・外形、**部品と周囲の重なり**を返す。版ごと（v001, v002…）に保存 |
+| `build_model(project, code, note, printer?)` | build123d スクリプトを別プロセスで実行。`parts`（印刷するもの）と `context`（周囲：パイプ・箱など）を STL/STEP に。形の有効性・体積・外形、**部品と周囲の重なり**、部品ごとの**造形範囲チェック**（入る / 超過 / プリンター未設定）を返す。版ごと（v001, v002…）に保存 |
 | `preview(project, version?)` | 4 方向の画像。Claude が自分で見て直す |
 | `publish_ar(project, version?)` | 実寸 USDZ（m, Y-up）を作り iCloud Drive の `SpatialVibe/` に置く → iPhone の「ファイル」からタップで AR。回線を問わない |
+| `export_print(project, version?, printer?, quantities?, material?, hardware?, notes?, part_notes?)` | 印刷に要るものを 1 つのフォルダと ZIP にまとめる（下記） |
 | `list_projects` / `get_code` | 版の一覧、過去のスクリプト |
 
 macOS では実行を `sandbox-exec` で囲み、ネットワークと版フォルダ外への書き込みを禁止しています（個人の Mac で使う前提の最低限の隔離です）。
 
-## セットアップ（macOS）
+### プリンターと印刷姿勢
 
-```bash
-uv venv --python 3.12 .venv
-uv pip install --python .venv/bin/python -r requirements.txt
-claude mcp add --scope user -e PYTHONPATH=$(pwd) -- spatialvibe $(pwd)/.venv/bin/python -m spatialvibe_mcp
+- プリンターは `printer="a1mini"`（Bambu Lab A1 mini、180×180×180 mm）か、造形サイズ `"256x256x256"`（mm）で指定します。
+  指定がなければ環境変数 `SPATIALVIBE_PRINTER` を使い、それもなければ「未設定」と返します（勝手に機種を仮定しません）。
+- スクリプトは組付けた姿勢で書きます。印刷する向きは `print_orientation = {"部品名": (rx, ry, rz)}`（度、build123d の `Rot` と同じ）で指定します。
+  プレビューと AR は組付け姿勢のまま、印刷用 STL だけが回転して床（z=0）に置かれます。指定のない部品は「印刷姿勢 未確認」と記録されます。
+- 「超過」はその向きでの外形が大きいという意味です。90° 回せば入る場合はヒントを返します。斜め置きや分割で入ることもあるので、印刷不可とは断定しません。
+
+### 印刷用ファイル（`export_print`）
+
+版フォルダの中に `<project>_vNNN_print/` と同名の `.zip` を作ります（この Mac の中だけ。iCloud・スライサー・プリンターには何も送りません）。
+
+```
+<project>_vNNN_print/
+  PRINT_GUIDE_ja.txt  日本語の印刷案内（個数・外形・印刷姿勢・造形範囲・材料・金具・注意点・未確認の項目）
+  manifest.json       同じ内容の機械向け一覧
+  stl/                <部品名>.stl。印刷姿勢・z=0 接地・mm（向き未指定の部品は案内と manifest に「未確認」と書く）
+  step/               組付け姿勢、編集用
+  source/model.py     この版のスクリプト
 ```
 
-Claude Desktop では `claude_desktop_config.json` の `mcpServers` に同じコマンドを書きます。
+- 周囲（context）は入れません。渡されなかった個数・材料・金具は「未確認」と書き、確認済みのようには扱いません。
+- 失敗した版、途中で止まった版、形が壊れている部品、造形範囲を超える部品があると出力せず、理由を返します。
+- この機能より前に作った版は印刷姿勢の情報がないので、一度作り直します（`get_code` → `build_model`）。
+
+## はじめかた（macOS）
+
+### 1. 取得
+
+```bash
+git clone https://github.com/tomiyasu0428/spatialvibe-mcp.git
+cd spatialvibe-mcp
+```
+
+### 2. 前提ツール
+
+- macOS、git
+- [uv](https://docs.astral.sh/uv/)（`brew install uv`）。Python 3.12 は uv が用意します（uv がなければ `python3.12` でも可）
+- Claude Code または Claude Desktop
+
+### 3. セットアップと点検
+
+```bash
+scripts/setup.sh                 # 何度実行しても OK。.venv（Python 3.12）作成 → 依存を入れる → doctor
+scripts/setup.sh --printer a1mini   # 使うプリンターが決まっていれば、表示される設定に含める
+```
+
+最後に doctor が Python・依存パッケージ・sandbox・保存先・試しのビルドを点検し、下の接続設定をこの checkout の絶対パスで表示します。
+**Claude の設定ファイルは書き換えません。** あとで点検だけしたいときは `.venv/bin/python -m spatialvibe_mcp.doctor`、
+Desktop 用 JSON だけ欲しいときは `.venv/bin/python -m spatialvibe_mcp.doctor --json`。
+
+### 4. Claude につなぐ
+
+**Claude Code**（doctor が表示するコマンドを自分で実行）:
+
+```bash
+claude mcp add --scope user -e PYTHONPATH=/path/to/spatialvibe-mcp -- spatialvibe /path/to/spatialvibe-mcp/.venv/bin/python -m spatialvibe_mcp
+```
+
+**Claude Desktop**: `~/Library/Application Support/Claude/claude_desktop_config.json` に次を加え（他の `mcpServers` は残す）、Desktop を再起動します。
+`/path/to/spatialvibe-mcp` は clone した場所の絶対パスです（doctor の表示をそのままコピーできます）。
+
+```json
+{
+  "mcpServers": {
+    "spatialvibe": {
+      "command": "/path/to/spatialvibe-mcp/.venv/bin/python",
+      "args": ["-m", "spatialvibe_mcp"],
+      "env": {
+        "PYTHONPATH": "/path/to/spatialvibe-mcp",
+        "SPATIALVIBE_PRINTER": "a1mini"
+      }
+    }
+  }
+}
+```
+
+`SPATIALVIBE_PRINTER` の行は任意です（なければ Claude が最初に機種を聞きます）。
+
+### 5. 最初の小さいモデル
+
+Claude にこう頼みます:
+
+> A1 mini を使っています。spatialvibe で 40×20×5 mm、M3 の穴が 2 つあるテスト板を作って、プレビューを見せてください。
+
+Claude が `build_model` → `preview` を行い、造形範囲に入るかも返します。
+
+### 6. 印刷用に出力
+
+> 印刷用に出力して。PLA で 2 枚、金具はなし。
+
+Claude が `export_print` を呼び、フォルダと ZIP の場所を伝えます。`stl/` をスライサー（Bambu Studio など）に読み込み、
+`PRINT_GUIDE_ja.txt` の「未確認」が残っていないか確かめてから印刷してください。
+
+### 環境変数
 
 | 環境変数 | 既定 | 意味 |
 | --- | --- | --- |
-| `SPATIALVIBE_HOME` | `./data/mcp_projects` | プロジェクトと版の保存先 |
+| `SPATIALVIBE_HOME` | `./data/mcp_projects` | プロジェクトと版の保存先（変えると、元の場所の版は見えなくなります。doctor が知らせます） |
+| `SPATIALVIBE_PRINTER` | なし | 既定のプリンター（`a1mini` / `WxDxH`） |
 | `SPATIALVIBE_PUBLISH` | `icloud` | AR ファイルの置き場所（`icloud` / `dir:/path`） |
 | `SPATIALVIBE_TIMEOUT` | `180` | 1 回の実行の制限秒数 |
 

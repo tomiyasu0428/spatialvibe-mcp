@@ -1,6 +1,6 @@
 """SpatialVibe MCP server (stdio).
 
-Tools: build_model, preview, publish_ar, list_projects, get_code.
+Tools: build_model, preview, publish_ar, export_print, list_projects, get_code.
 Data lives in $SPATIALVIBE_HOME (default: <repo>/data/mcp_projects), one folder per
 project and one numbered folder per version (v001, v002, ...).
 """
@@ -14,6 +14,7 @@ from pathlib import Path
 
 from mcp.server.mcpserver import Image, MCPServer
 
+from . import printing
 from .usdz import build_usdz, usdz_size_m
 
 REPO = Path(__file__).resolve().parent.parent
@@ -28,7 +29,7 @@ mcp = MCPServer("spatialvibe", instructions=INSTRUCTIONS)
 
 
 def _project_dir(project: str) -> Path:
-    if not PROJECT.match(project):
+    if not isinstance(project, str) or not PROJECT.fullmatch(project):
         raise ValueError(f"project must match {PROJECT.pattern} (ASCII, e.g. 'aio-mount')")
     return HOME / project
 
@@ -50,12 +51,27 @@ def _version_dir(project: str, version) -> Path:
     return v
 
 
+def _result(vdir: Path) -> dict:
+    try:
+        r = json.loads((vdir / "result.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return r if isinstance(r, dict) else {}
+
+
 def _built_version_dir(project: str, version) -> Path:
-    """Like _version_dir, but the version must have built successfully."""
+    """Like _version_dir, but the version must have built successfully (not failed or half-exported)."""
     v = _version_dir(project, version)
-    if not any(v.glob("part_*.stl")):
+    if _result(v).get("ok") is not True or not any(v.glob("part_*.stl")):
         raise ValueError(f"{project} {v.name} did not build (see build_model's error); fix the script and rebuild")
     return v
+
+
+def _write_atomic(path: Path, text: str):
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.unlink(missing_ok=True)
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
 
 
 def _sandbox_cmd(out: Path, argv):
@@ -77,17 +93,23 @@ def _child_env():
 
 
 @mcp.tool()
-def build_model(project: str, code: str, note: str = "") -> dict:
+def build_model(project: str, code: str, note: str = "", printer: str = "") -> dict:
     """Run a build123d script and save it as a new version of the project.
 
     `code` is a complete Python script using build123d (units: mm, Z up). It must define
     `parts = {"name": shape, ...}` — the things to print — and may define
     `context = {"name": shape, ...}` — surroundings (pipe, box, wall...) shown translucent
     in previews and AR but never printed. Names: ASCII letters, digits, _ or -.
-    Returns per-part validity, solid count, volume, bounding box, any overlap between parts
-    and context (usually a design error), and the paths of the STL/STEP files.
+    Optionally `print_orientation = {"part": (rx, ry, rz)}` (degrees, like build123d Rot)
+    turns a part from its assembled pose to its print pose; preview/AR stay assembled.
+    `printer`: "a1mini" (Bambu Lab A1 mini, 180x180x180) or a build volume "WxDxH" in mm;
+    empty uses $SPATIALVIBE_PRINTER, else the size check is reported as printer_not_set.
+    Returns per-part validity, solid count, volume, bounding box, `print` (pose, size and
+    fit: fits / exceeds / printer_not_set — exceeds is about that pose only), any overlap
+    between parts and context (usually a design error), and the paths of the files.
     Always call `preview` afterwards and look at the image before showing the user.
     """
+    pr = printing.resolve_printer(printer)  # bad printer spec fails before anything runs
     pdir = _project_dir(project)
     pdir.mkdir(parents=True, exist_ok=True)
     vs = _versions(pdir)
@@ -103,11 +125,33 @@ def build_model(project: str, code: str, note: str = "") -> dict:
         res = {"ok": False, "error": f"timed out after {TIMEOUT}s"}
     else:
         lines = [ln for ln in p.stdout.splitlines() if ln.startswith("{")]
-        res = json.loads(lines[-1]) if lines else {"ok": False, "error": (p.stderr or p.stdout)[-3000:]}
-    (vdir / "result.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
+        try:
+            res = json.loads(lines[-1]) if lines else None
+        except ValueError:
+            res = None
+        if not isinstance(res, dict) or (res.get("ok") and p.returncode != 0):
+            res = {"ok": False, "error": (p.stderr or p.stdout)[-3000:] or f"runner exited {p.returncode}"}
+    # the script may have touched its folder; keep the source exactly as submitted
+    _write_atomic(vdir / "model.py", code)
+    _write_atomic(vdir / "note.txt", note)
+    if res.get("ok"):
+        try:
+            res["printer"] = pr
+            for info in res["parts"].values():
+                info["print"].update(printing.fit(info["print"], pr))
+        except (KeyError, TypeError, AttributeError, ValueError) as e:
+            res = {"ok": False, "error": f"runner result malformed: {e!r}"}
+    if not res.get("ok"):  # never leave a half-exported build that looks usable
+        for f in [*vdir.glob("part_*"), *vdir.glob("print_*"), *vdir.glob("ctx_*")]:
+            if f.is_symlink() or not f.is_dir():
+                f.unlink(missing_ok=True)
+    _write_atomic(vdir / "result.json", json.dumps(res, ensure_ascii=False, indent=1))
     res.update(project=project, version=int(vdir.name[1:]), folder=str(vdir))
     if res.get("ok"):
         res["files"] = sorted(str(f) for f in vdir.glob("part_*.*"))
+        res["print_files"] = sorted(str(f) for f in vdir.glob("print_*.stl"))
+        if pr is None:
+            res["printer_note"] = "printer not set: ask the user which printer (model or build volume) before export"
     return res
 
 
@@ -156,6 +200,28 @@ def publish_ar(project: str, version: int | None = None, include_context: bool =
 
 
 @mcp.tool()
+def export_print(project: str, version: int | None = None, printer: str = "",
+                 quantities: dict[str, int] | None = None, material: str = "",
+                 hardware: list[str] | None = None, notes: list[str] | None = None,
+                 part_notes: dict[str, str] | None = None) -> dict:
+    """Collect everything needed to print a version into one local folder and a ZIP.
+
+    Contents: stl/ (each part turned to its print pose, resting on z=0, mm), step/ (assembled
+    pose, for editing), source/model.py, manifest.json and PRINT_GUIDE_ja.txt. Context is never
+    included. Pass only what is actually known — quantities per part, material, hardware
+    (bolts, nuts…; [] means none), notes, part_notes; anything omitted is listed as unconfirmed.
+    `printer` overrides the one used at build time. Refuses failed builds, invalid solids and
+    parts that exceed the build volume in their print pose (returns ok=false with details).
+    Files stay on this Mac; nothing is sent to a slicer, printer or iCloud.
+    """
+    vdir = _built_version_dir(project, version)
+    res = _result(vdir)
+    pr = printing.resolve_printer(printer, res.get("printer"))
+    return printing.make_bundle(project, vdir, res, pr, quantities=quantities, material=material,
+                                hardware=hardware, notes=notes, part_notes=part_notes)
+
+
+@mcp.tool()
 def list_projects(project: str | None = None) -> dict:
     """List projects, or the versions of one project with their notes and part summaries."""
     if project is None:
@@ -165,7 +231,7 @@ def list_projects(project: str | None = None) -> dict:
                              for p in sorted(HOME.iterdir()) if p.is_dir()]}
     out = []
     for v in _versions(_project_dir(project)):
-        r = json.loads((v / "result.json").read_text()) if (v / "result.json").exists() else {}
+        r = _result(v)
         out.append({"version": int(v.name[1:]), "note": (v / "note.txt").read_text(encoding="utf-8"),
                     "ok": r.get("ok"), "parts": {k: x.get("bbox_mm", {}).get("size") for k, x in r.get("parts", {}).items()}})
     return {"project": project, "versions": out}
