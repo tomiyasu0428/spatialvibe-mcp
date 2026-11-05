@@ -203,22 +203,29 @@ def publish_ar(project: str, version: int | None = None, include_context: bool =
 def export_print(project: str, version: int | None = None, printer: str = "",
                  quantities: dict[str, int] | None = None, material: str = "",
                  hardware: list[str] | None = None, notes: list[str] | None = None,
-                 part_notes: dict[str, str] | None = None) -> dict:
-    """Collect everything needed to print a version into one local folder and a ZIP.
+                 part_notes: dict[str, str] | None = None, include_zip: bool = False) -> dict:
+    """Hand a finished version over to print preparation: one local folder of files + conditions.
 
-    Contents: stl/ (each part turned to its print pose, resting on z=0, mm), step/ (assembled
-    pose, for editing), source/model.py, manifest.json and PRINT_GUIDE_ja.txt. Context is never
+    Folder: stl/ (each part turned to its print pose, resting on z=0, mm), step/ (assembled
+    pose, for editing), source/model.py, manifest.json (the conditions: printer, material,
+    per-part quantity/pose/size/fit, hardware, notes, unconfirmed), PRINT_GUIDE_ja.txt (the
+    same for the user) and AI_HANDOFF.txt (short text for another AI). Context is never
     included. Pass only what is actually known — quantities per part, material, hardware
     (bolts, nuts…; [] means none), notes, part_notes; anything omitted is listed as unconfirmed.
     `printer` overrides the one used at build time. Refuses failed builds, invalid solids and
     parts that exceed the build volume in their print pose (returns ok=false with details).
-    Files stay on this Mac; nothing is sent to a slicer, printer or iCloud.
+    The result has absolute paths to every file, the manifest itself, `handoff` and
+    `next_steps`. This MCP does not slice or print; continue with a slicer/printer integration
+    if you have one and show the user what was actually set and estimated.
+    A ZIP is made only with include_zip=true (for sharing); otherwise a ZIP left by an earlier
+    export of this version is removed so it is never mistaken for the current files.
     """
     vdir = _built_version_dir(project, version)
     res = _result(vdir)
     pr = printing.resolve_printer(printer, res.get("printer"))
     return printing.make_bundle(project, vdir, res, pr, quantities=quantities, material=material,
-                                hardware=hardware, notes=notes, part_notes=part_notes)
+                                hardware=hardware, notes=notes, part_notes=part_notes,
+                                include_zip=bool(include_zip))
 
 
 @mcp.tool()

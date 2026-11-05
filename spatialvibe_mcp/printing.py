@@ -136,7 +136,7 @@ def _check_part_keys(d, parts, label):
 
 
 def make_bundle(project: str, vdir: Path, result: dict, printer, quantities=None, material="",
-                hardware=None, notes=None, part_notes=None) -> dict:
+                hardware=None, notes=None, part_notes=None, include_zip: bool = False) -> dict:
     parts = result.get("parts") or {}
     if (not isinstance(parts, dict) or not parts or not all(isinstance(k, str) and NAME.fullmatch(k) for k in parts)
             or len({k.casefold() for k in parts}) != len(parts)):  # macOS folders ignore case
@@ -210,8 +210,12 @@ def make_bundle(project: str, vdir: Path, result: dict, printer, quantities=None
         "size_check": "all parts fit in their print pose" if checked else "unconfirmed",
         "material": material or None, "hardware": hardware, "notes": notes, "parts": manifest_parts,
         "warnings": warnings, "unconfirmed": unconfirmed, "context_included": False,
+        "source": "source/model.py", "guide": "PRINT_GUIDE_ja.txt", "handoff": "AI_HANDOFF.txt",
+        # this tool stops here; nothing below has been computed — never fill it in from guesses
+        "not_done": ["slicing", "supports", "print time estimate", "filament estimate", "printing"],
     }
 
+    folder, zdest = vdir / bname, vdir / f"{bname}.zip"
     tmp = Path(tempfile.mkdtemp(prefix=".export-", dir=vdir))
     try:
         root = tmp / bname
@@ -223,25 +227,50 @@ def make_bundle(project: str, vdir: Path, result: dict, printer, quantities=None
         shutil.copyfile(src["model"], root / "source" / "model.py")
         (root / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
         (root / "PRINT_GUIDE_ja.txt").write_text(guide(manifest), encoding="utf-8")
-        zpath = tmp / f"{bname}.zip"
-        with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
-            for f in sorted(root.rglob("*")):
-                if f.is_file():
-                    z.write(f, f"{bname}/{f.relative_to(root).as_posix()}")
-        folder, zdest = vdir / bname, vdir / f"{bname}.zip"
+        handoff_text = handoff(manifest, folder)
+        (root / "AI_HANDOFF.txt").write_text(handoff_text, encoding="utf-8")
+        if include_zip:
+            zpath = tmp / f"{bname}.zip"
+            with zipfile.ZipFile(zpath, "w", zipfile.ZIP_DEFLATED) as z:
+                for f in sorted(root.rglob("*")):
+                    if f.is_file():
+                        z.write(f, f"{bname}/{f.relative_to(root).as_posix()}")
         if folder.is_symlink() or folder.is_file():
             folder.unlink()
         elif folder.exists():
             shutil.rmtree(folder)
         os.replace(root, folder)
-        os.replace(zpath, zdest)  # replaces a planted symlink itself, never its target
+        # a ZIP from an earlier export would no longer match the folder: replace it or remove it
+        if include_zip:
+            os.replace(zpath, zdest)  # replaces a planted symlink itself, never its target
+        elif zdest.is_symlink() or zdest.is_file():
+            zdest.unlink()
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
-    return {"ok": True, "folder": str(folder), "zip": str(zdest), "size_check": manifest["size_check"],
+    return {"ok": True, "folder": str(folder), "zip": str(zdest) if include_zip else None,
+            "manifest_path": str(folder / "manifest.json"), "guide_path": str(folder / "PRINT_GUIDE_ja.txt"),
+            "handoff_path": str(folder / "AI_HANDOFF.txt"), "handoff": handoff_text,
+            "files": {"parts": {p["name"]: {"stl": str(folder / p["stl"]), "step": str(folder / p["step"])}
+                                for p in manifest_parts},
+                      "source": str(folder / "source" / "model.py")},
+            "manifest": manifest, "size_check": manifest["size_check"],
             "unconfirmed": unconfirmed, "warnings": warnings,
             "parts": [{k: p[k] for k in ("name", "stl", "quantity", "quantity_confirmed", "print_size_mm",
-                                         "orientation", "fit")} for p in manifest_parts]}
+                                         "orientation", "fit")} for p in manifest_parts],
+            "next_steps": NEXT_STEPS}
+
+
+NEXT_STEPS = [
+    "Show the user the conditions (printer, material, each part's quantity / pose / size, hardware, "
+    "notes). Reuse information already given; resolve `unconfirmed` and any missing slicer/printer "
+    "profile details, asking the user only for information you still need. Re-export updated conditions.",
+    "This MCP does not slice or print. If you have a slicer or printer integration, continue preparing "
+    "with the STL files and these conditions; otherwise tell the user it stops here.",
+    "When you do slice, show the user what was actually chosen and computed (printer/material profile, "
+    "orientation and copies, supports, time and filament estimates). Do not state estimates you did not get.",
+    "To hand over to another AI, give it `handoff` (also in AI_HANDOFF.txt).",
+]
 
 
 def _mm(v):
@@ -254,7 +283,7 @@ FIT_JA = {"fits": "入る", "printer_not_set": "未確認（プリンター未�
 def guide(m: dict) -> str:
     pr = m["printer"]
     L = [f"印刷案内 — {m['project']} v{m['version']:03d}", f"作成: {m['created_at']}",
-         "単位: mm（STL は mm。スライサーで単位を聞かれたら mm を選んでください）", ""]
+         "単位: mm（STL は mm）", ""]
     if m["size_check"] == "unconfirmed":
         L += ["※ まだ確認できていない項目があります（下の「未確認」）。印刷できるかは確定していません。", ""]
     L += ["■ プリンター",
@@ -266,7 +295,7 @@ def guide(m: dict) -> str:
         qty = f"{p['quantity']} 個" + ("" if p["quantity_confirmed"] else "（個数は未確認）")
         pose = (f"指定あり（組付け姿勢から X{p['rotate_xyz_deg'][0]:g}° Y{p['rotate_xyz_deg'][1]:g}° "
                 f"Z{p['rotate_xyz_deg'][2]:g}° 回して床に置いた向き）" if p["orientation"] == "specified"
-                else "未確認（組付けたときの向きのまま床に置いただけ。スライサーで向きを決めてください）")
+                else "未確認（組付けたときの向きのまま床に置いただけ。印刷前に向きを決める必要があります）")
         fit_ja = FIT_JA[p["fit"]]
         if p["fit"] == "fits":
             fit_ja += f"（余裕 {_mm(p['margin_mm'])} mm）"
@@ -285,17 +314,46 @@ def guide(m: dict) -> str:
     if m["notes"] or m["warnings"]:
         L += ["", "■ 注意点"] + [f"  - {n}" for n in m["notes"] + m["warnings"]]
     if m["unconfirmed"]:
-        ja = {"printer": "プリンター（造形範囲）", "material": "材料", "hardware": "金具"}
-        items = [ja.get(u) or (f"{u.split(':', 1)[1]} の印刷姿勢" if u.startswith("orientation:")
-                               else f"{u.split(':', 1)[1]} の個数") for u in m["unconfirmed"]]
-        L += ["", "■ 未確認", *[f"  - {x}" for x in items]]
+        L += ["", "■ 未確認", *[f"  - {x}" for x in unconfirmed_ja(m)]]
     L += ["", "■ ファイル",
           "  stl/              印刷用（印刷姿勢に回し、床 z=0 に置いたもの）",
           "  step/             編集用（組付けたときの向きのまま）",
           "  source/model.py   この版の build123d スクリプト",
-          "  manifest.json     機械で読める一覧",
+          "  manifest.json     この案内と同じ条件の、AI・機械向けの一覧",
+          "  AI_HANDOFF.txt    別の AI に続きを頼むときに渡す短い文",
           "  周囲の物（パイプ・箱など）は印刷しないので入れていません。", "",
+          "■ このあと",
+          "  ここまでで印刷用ファイルと条件を用意しました。造形範囲・印刷姿勢の確認状況は上記をご覧ください。",
+          "  スライス（サポート・充填など）、印刷時間や材料量の見積り、印刷はまだしていません。",
+          "  AI がスライサーやプリンターと連携できる場合は、この条件で準備を続け、",
+          "  選んだ設定や見積りが出た時点でお知らせします。連携がなければここまでです。", "",
           "■ 限界",
-          "  外形サイズと向きの確認だけで、強度や取り付けの保証ではありません。",
-          "  サポート・充填率などのスライス設定と印刷はご自身のスライサーで行ってください。", ""]
+          "  外形サイズと向きの確認だけで、強度や取り付けの保証ではありません。", ""]
     return "\n".join(L)
+
+
+def unconfirmed_ja(m: dict) -> list:
+    ja = {"printer": "プリンター（造形範囲）", "material": "材料", "hardware": "金具"}
+    return [ja.get(u) or (f"{u.split(':', 1)[1]} の印刷姿勢" if u.startswith("orientation:")
+                          else f"{u.split(':', 1)[1]} の個数") for u in m["unconfirmed"]]
+
+
+def handoff(m: dict, folder: Path) -> str:
+    """Short text another AI can act on; the conditions themselves live only in manifest.json."""
+    pr = m["printer"]
+    parts = ", ".join(f"{p['name']} ×{p['quantity']}{'' if p['quantity_confirmed'] else '(個数未確認)'}"
+                      f" {_mm(p['print_size_mm'])} mm 姿勢{'指定済' if p['orientation'] == 'specified' else '未確認'}"
+                      for p in m["parts"])
+    L = [f"3D プリント準備の引き継ぎ: {m['project']} v{m['version']:03d}",
+         f"元の保存場所: {folder}",
+         "条件は同梱の manifest.json が正です（単位 mm）。移動した場合は、この文と同じフォルダを基準に参照してください。人向けの説明は PRINT_GUIDE_ja.txt。",
+         f"プリンター: {(pr['name'] + ' ' + _mm(pr['build_volume_mm']) + ' mm') if pr else '未設定'}",
+         f"材料: {m['material'] or '未指定'}",
+         f"部品: {parts}（stl/<部品名>.stl は印刷姿勢で z=0 に接地済み）",
+         f"未確認: {'、'.join(unconfirmed_ja(m)) if m['unconfirmed'] else 'なし'}",
+         "済んでいること: STL/STEP と条件データの作成。造形範囲・印刷姿勢の確認状況は manifest.json と未確認項目を参照してください。",
+         "まだのこと: スライス、サポート、印刷時間・材料量の見積り、印刷。",
+         "お願い: 既に得ている情報を再利用し、未確認項目と不足する機種・スライサー設定のうち、なお必要な情報だけ人に確認してください。造形サイズだけでは機種やプロファイルは特定できません。スライサーや印刷の連携が使えるなら、この条件で準備を続け、"
+         "選んだ機種・材料プロファイル、向きと個数、サポート、見積り時間と材料量を、実際に得られた値だけ人に示してください。"
+         "得ていない見積りは書かないでください。"]
+    return "\n".join(L) + "\n"

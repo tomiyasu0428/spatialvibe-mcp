@@ -165,17 +165,17 @@ class PrintTests(unittest.TestCase):
         out = server.export_print("t-bundle", quantities={"peg": 4}, material="PETG",
                                   hardware=["M3x10 ボルト 2 本"], notes=["屋外用"], part_notes={"plate": "上面が見える面"})
         self.assertTrue(out["ok"], out)
-        names = zip_names(out["zip"])
-        root = "t-bundle_v001_print/"
-        self.assertTrue(all(n.startswith(root) and ".." not in n and not n.startswith("/") for n in names))
-        self.assertTrue(all(re.fullmatch(r"[A-Za-z0-9_./-]+", n) for n in names), names)
-        for f in ("stl/plate.stl", "stl/peg.stl", "step/plate.step", "step/peg.step",
-                  "source/model.py", "manifest.json", "PRINT_GUIDE_ja.txt"):
-            self.assertIn(root + f, names)
-        self.assertFalse(any("wall" in n or "ctx" in n for n in names))
+        # no ZIP unless asked: the folder is the deliverable
+        self.assertIsNone(out["zip"])
+        self.assertFalse(list((TMP / "home/t-bundle/v001").glob("*.zip")))
         folder = Path(out["folder"])
-        self.assertEqual(sorted(p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file()),
-                         sorted(n[len(root):] for n in names))
+        names = sorted(p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file())
+        self.assertTrue(all(re.fullmatch(r"[A-Za-z0-9_./-]+", n) for n in names), names)
+        self.assertEqual(names, sorted(["stl/plate.stl", "stl/peg.stl", "step/plate.step", "step/peg.step",
+                                        "source/model.py", "manifest.json", "PRINT_GUIDE_ja.txt", "AI_HANDOFF.txt"]))
+        self.assertFalse(any("wall" in n or "ctx" in n for n in names))
+        import trimesh  # the context mesh is not hiding inside a part file either
+        self.assertLess(max(trimesh.load(folder / "stl/plate.stl").extents), 25)
         man = json.loads((folder / "manifest.json").read_text(encoding="utf-8"))
         self.assertFalse(man["context_included"])
         self.assertEqual(man["units"], "mm")
@@ -191,9 +191,69 @@ class PrintTests(unittest.TestCase):
         for s in ("PETG", "M3x10", "屋外用", "上面が見える面", "4 個", "個数は未確認", "印刷姿勢: 未確認",
                   "印刷できるかは確定していません"):
             self.assertIn(s, g)
+        self.assertNotIn("ご自身のスライサー", g)
+        self.assertIn("スライス（サポート・充填など）、印刷時間や材料量の見積り、印刷はまだしていません", g)
         self.assertEqual((folder / "source/model.py").read_text(encoding="utf-8"), TWO)
         # re-export overwrites cleanly
         self.assertTrue(server.export_print("t-bundle", material="PLA")["ok"])
+
+    def test_handoff_return_for_ai(self):
+        server.build_model("t-handoff", TWO, printer="a1mini")
+        out = server.export_print("t-handoff", quantities={"peg": 4}, material="PETG", hardware=[],
+                                  notes=["屋外用"])
+        folder = Path(out["folder"])
+        # the returned manifest is exactly the file: one source of the conditions
+        self.assertEqual(out["manifest"], json.loads(Path(out["manifest_path"]).read_text(encoding="utf-8")))
+        man = out["manifest"]
+        self.assertEqual(man["printer"]["build_volume_mm"], [180.0] * 3)
+        self.assertEqual((man["material"], man["hardware"], man["notes"]), ("PETG", [], ["屋外用"]))
+        self.assertEqual(man["unconfirmed"], ["orientation:peg", "quantity:plate"])
+        self.assertEqual(out["unconfirmed"], man["unconfirmed"])
+        for step in ("slicing", "supports", "print time estimate", "filament estimate", "printing"):
+            self.assertIn(step, man["not_done"])
+        # every file reachable by absolute path, and the same files the manifest names
+        for p in man["parts"]:
+            paths = out["files"]["parts"][p["name"]]
+            self.assertEqual(Path(paths["stl"]), folder / p["stl"])
+            self.assertEqual(Path(paths["step"]), folder / p["step"])
+            self.assertTrue(Path(paths["stl"]).is_file() and Path(paths["step"]).is_file())
+        self.assertEqual(Path(out["files"]["source"]).read_text(encoding="utf-8"), TWO)
+        self.assertEqual(Path(out["guide_path"]).parent, folder)
+        # hand-off text: what another AI needs, consistent with the guide the human reads
+        h = out["handoff"]
+        self.assertEqual(Path(out["handoff_path"]).read_text(encoding="utf-8"), h)
+        for s in (str(folder), "manifest.json", "Bambu Lab A1 mini", "PETG", "peg ×4", "plate ×1(個数未確認)",
+                  "peg の印刷姿勢", "plate の個数", "スライス", "得ていない見積りは書かないでください"):
+            self.assertIn(s, h)
+        g = Path(out["guide_path"]).read_text(encoding="utf-8")
+        for s in ("peg の印刷姿勢", "plate の個数", "PETG", "Bambu Lab A1 mini"):
+            self.assertIn(s, g)
+        self.assertTrue(any("does not slice or print" in s for s in out["next_steps"]))
+        # nothing pretends estimates exist
+        self.assertFalse(any(k in json.dumps(man) for k in ("print_time_min", "filament_g")))
+
+    def test_zip_only_when_asked_and_never_stale(self):
+        server.build_model("t-zip", TWO, printer="a1mini")
+        out = server.export_print("t-zip", include_zip=True)
+        z = Path(out["zip"])
+        self.assertTrue(z.is_file())
+        names = zip_names(z)
+        root = "t-zip_v001_print/"
+        self.assertTrue(all(n.startswith(root) and ".." not in n and not n.startswith("/") for n in names))
+        folder = Path(out["folder"])
+        self.assertEqual(sorted(n[len(root):] for n in names),
+                         sorted(p.relative_to(folder).as_posix() for p in folder.rglob("*") if p.is_file()))
+        self.assertFalse(any("wall" in n or "ctx" in n for n in names))
+        # re-export without a ZIP: the old one would no longer match, so it is removed
+        out = server.export_print("t-zip", material="PLA")
+        self.assertIsNone(out["zip"])
+        self.assertFalse(z.exists())
+        self.assertEqual(out["manifest"]["material"], "PLA")
+        # and asking again rebuilds it from the current folder
+        out = server.export_print("t-zip", material="ASA", include_zip=True)
+        import zipfile
+        with zipfile.ZipFile(out["zip"]) as zf:
+            self.assertEqual(json.loads(zf.read(root + "manifest.json"))["material"], "ASA")
 
     def test_bundle_names_never_collide(self):
         # used to map both parts to stl/block__orientation-unconfirmed.stl
@@ -203,8 +263,7 @@ class PrintTests(unittest.TestCase):
         server.build_model("t-collide", code, printer="a1mini")
         out = server.export_print("t-collide")
         self.assertTrue(out["ok"], out)
-        stls = [n for n in zip_names(out["zip"]) if "/stl/" in n]
-        self.assertEqual(len(stls), 2)
+        self.assertEqual(len(list((Path(out["folder"]) / "stl").iterdir())), 2)
         man = json.loads((Path(out["folder"]) / "manifest.json").read_text(encoding="utf-8"))
         self.assertEqual(len({p["stl"] for p in man["parts"]}), 2)
         sizes = {p["name"]: p["print_size_mm"] for p in man["parts"]}
@@ -321,10 +380,17 @@ class PrintTests(unittest.TestCase):
         (vdir / "print_peg.stl").unlink()
         server.build_model("t-link", TWO)
         v2 = TMP / "home/t-link/v002"
-        (v2 / "t-link_v002_print.zip").symlink_to(secret)
-        self.assertTrue(server.export_print("t-link")["ok"])
+        zp = v2 / "t-link_v002_print.zip"
+        zp.symlink_to(secret)
+        self.assertTrue(server.export_print("t-link", include_zip=True)["ok"])
         self.assertEqual(secret.read_text(), "secret")
-        self.assertFalse((v2 / "t-link_v002_print.zip").is_symlink())
+        self.assertFalse(zp.is_symlink())
+        # without a ZIP the planted link is removed, again without touching its target
+        zp.unlink()
+        zp.symlink_to(secret)
+        self.assertTrue(server.export_print("t-link")["ok"])
+        self.assertFalse(zp.exists() or zp.is_symlink())
+        self.assertEqual(secret.read_text(), "secret")
 
     def test_example_model(self):
         code = (ROOT / "examples/aio_mount/model.py").read_text(encoding="utf-8")

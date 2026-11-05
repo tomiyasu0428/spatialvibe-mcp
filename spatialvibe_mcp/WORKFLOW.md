@@ -51,15 +51,23 @@ dimensions are best — finding that out with them is the main job. Reply in the
   move, then change parameters, rebuild, preview, republish. Each build is a new version;
   `get_code` retrieves earlier scripts.
 
-## 5. Print files
+## 5. Hand over to printing
 - When the design is settled, `export_print` with only what you actually know: quantities
   per part, material, hardware (`[]` = none), notes. Omitted values are written as
   unconfirmed — never fill them in to look complete. It refuses failed builds and parts that
-  exceed the build volume. Output is one local folder + ZIP (print-pose STL in mm, STEP,
-  script, Japanese guide, manifest; no context). Tell the user the path and what is still
-  unconfirmed; slicing and printing are theirs. Versions built before this feature need one
-  rebuild (`get_code` → `build_model`).
+  exceed the build volume, and writes one local folder (print-pose STL in mm, STEP, script,
+  manifest.json = the conditions, Japanese guide, AI_HANDOFF.txt; no context). No ZIP unless
+  the user wants one to share (`include_zip=true`).
+- Show the user the conditions in a few lines. Reuse information already given and resolve
+  `unconfirmed` plus any missing machine/slicer profile details (build volume alone does not
+  identify a printer). Ask only for information still needed; re-export updated conditions.
+  Then keep going yourself: this MCP does not slice or print, but if you
+  have a slicer/printer integration, use the STL paths and manifest. Tell the user what was
+  actually chosen and computed (profile, orientation/copies, supports, time, filament) —
+  never estimates you did not get. Without such an integration, say this is where it stops.
+  For another AI, pass `handoff`. Versions built before this feature need one rebuild
+  (`get_code` → `build_model`).
 
 ## Limits to state honestly
 - A photo alone does not give accurate dimensions. AR is a visual check, not proof of
-  strength or fit. Slicing/printing is up to the user's printer (suggest PETG/ASA outdoors).
+  strength or fit. Suggest PETG/ASA outdoors.
