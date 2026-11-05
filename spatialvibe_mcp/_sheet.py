@@ -78,8 +78,20 @@ T = {  # label text, Japanese when a font exists
 
 
 def wrap(text, width=26):
-    """Split into lines that fit the left column (Japanese has no spaces to break on)."""
-    return [text[i:i + width] for i in range(0, len(text), width)] or [""]
+    """Split into lines that fit the left column. Japanese has few spaces, so break at a space, 、 or
+    （ near the limit when there is one, never inside a number."""
+    out = []
+    while len(text) > width:
+        cut = max(text.rfind(ch, width // 2, width + 1) for ch in " 、（→")
+        if cut <= 0:
+            cut = width
+            while cut > width // 2 and (text[cut - 1].isdigit() or text[cut - 1] in ".×") and \
+                    (text[cut].isdigit() or text[cut] in ".×"):
+                cut -= 1
+        out.append(text[:cut].rstrip())
+        text = text[cut:].lstrip()
+    out.append(text)
+    return [ln for ln in out if ln] or [""]
 
 
 def t(key, **kw):
@@ -473,8 +485,6 @@ def main():
     for d in keys:
         unit = "°" if d.get("unit") == "°" else " mm"
         txt = f"{d['label']}  {fmt(d['value'])}{unit}"
-        if "expect" in d and d.get("tol") and unit != "°":
-            txt += f"   （{fmt(d['expect'] - d['tol'])}〜{fmt(d['expect'] + d['tol'])} なら OK）"
         if "vs" in d:
             diff = d["value"] - d["vs"]
             txt += f"   {d['vs_label']} {fmt(d['vs'])} に対して {'+' if diff >= 0 else ''}{fmt(diff)}"
@@ -491,8 +501,7 @@ def main():
     fig.text(0.04, y(0.95), t("parts", n=n) + ("   " + t("overall" if n == 1 else "overall_n", s=size_text(overall))
                                                 if overall else ""), fontsize=13)
     fig.text(0.04, y(1.3), t("conv"), fontsize=9.5, color="0.4")
-    fig.text(0.04, y(1.58), t("origin", o=res["origin"]) if res.get("origin") else t("noorigin"),
-             fontsize=9.5, color="0.15" if res.get("origin") else "0.5")
+
     if glob_w:
         fig.text(0.04, y(2.02), t("warn"), fontsize=12, fontweight="bold", color="#c0392b")
         for k, w in enumerate(glob_w):
@@ -546,11 +555,13 @@ def main():
     plt.close(fig)
 
     # page 2: every part with all its fit dimensions, panels and details
-    H = 0.9 + sum(b[3] for b in blocks) + axes_h
+    H = 1.1 + sum(b[3] for b in blocks) + axes_h
     fig = plt.figure(figsize=(9, H), dpi=120)
     fig.text(0.04, y(0.5), t("detail_title", p=vdir.parent.name, v=vdir.name), fontsize=16, fontweight="bold")
+    fig.text(0.04, y(0.8), t("origin", o=res["origin"]) if res.get("origin") else t("noorigin"),
+             fontsize=9.5, color="0.3")
     VIEWS = (((0, 1), "top", 2), ((0, 2), "front", 1), ((1, 2), "side", 0))  # (plane axes, label, normal axis)
-    top = 0.9
+    top = 1.1
     for i, (f, info, (fl, det, il, block_h)) in enumerate(zip(files, infos, blocks)):
         name = info["_name"]
         if fl is None:   # same shape as an earlier part: one line, no drawings
