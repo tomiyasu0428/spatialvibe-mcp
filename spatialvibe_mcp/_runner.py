@@ -13,6 +13,8 @@ import re
 import runpy
 import sys
 import traceback
+
+import numpy as np
 from pathlib import Path
 
 NAME = re.compile(r"[A-Za-z0-9_-]{1,40}")
@@ -929,6 +931,12 @@ def main():
             result["near_contact"].append({"a": a, "b": b, "overlap_mm3": round(v, 3)})
     _check_poses(ns.get("poses"), parts, context, result, warn, out)
     _loads(ns.get("loads"), context, result, warn)
+    _print_settings(ns.get("print_settings"), parts, result)
+    _steps(ns.get("steps"), parts, context, result)
+    try:
+        _plate_3mf(parts, result, out, bed)
+    except Exception as e:   # the STLs are still there; the plate is a convenience
+        warn.append(f"print_plate.3mf を作れなかった: {type(e).__name__}: {str(e)[:80]}")
     if result.get("ar_floor_z") is not None:   # the AR floor must be below everything that is not the floor
         fz = result["ar_floor_z"]
         for n_, shp_ in list(parts.items()) + list(context.items()):
@@ -940,6 +948,118 @@ def main():
         if names_:
             m["to_names"] = names_
     write_result(result)
+
+
+def _print_settings(ps, parts, result):
+    """print_settings = {"material": "PETG", "infill": 30, "layer": 0.2, "supports": ["case"],
+    "note": "..."}: shown on the build page next to the 3MF, so any slicer can be set the same way."""
+    if not ps:
+        return
+    if not isinstance(ps, dict):
+        fail("print_settings must be a dict: {'material': 'PETG', 'infill': 30, 'supports': ['part'], ...}")
+    sup = ps.get("supports") or []
+    if isinstance(sup, str):
+        sup = [sup]
+    bad = [n for n in sup if n not in parts]
+    if bad:
+        fail(f"print_settings supports: no part named {bad}")
+    out = {"material": str(ps.get("material", "PETG"))[:20], "supports": [str(n) for n in sup]}
+    for k, typ in (("infill", int), ("layer", float), ("walls", int)):
+        if ps.get(k) is not None:
+            out[k] = typ(ps[k])
+    if ps.get("note"):
+        out["note"] = str(ps["note"])[:80]
+    result["print_settings"] = out
+
+
+def _steps(steps, parts, context, result):
+    """steps = [{"text": "レールを柱にボルト2本で留める", "add": ["base", "hw_m6_top"],
+    "from": {"base": (0, -40, 0)}}, ...]: the assembly in order. Each step shows what is already in
+    place plus the newly added things (highlighted). "from" draws a thing moved by that offset with
+    an arrow to where it goes (also for things added earlier: 「上から差し込む」); "at" puts a thing
+    somewhere else for this step only (the Pi screwed into the case on the bench, away from the
+    pillar). Context not named in any step (the pillar) is always shown."""
+    if not steps:
+        return
+    if not isinstance(steps, (list, tuple)):
+        fail("steps must be a list of {'text': ..., 'add': [names], 'from': {name: (dx, dy, dz)}}")
+    out = []
+    for k, st in enumerate(steps[:8]):
+        if not isinstance(st, dict) or not st.get("text"):
+            fail(f"steps[{k}] needs 'text'")
+        add = st.get("add") or []
+        add = [add] if isinstance(add, str) else list(add)
+        frm, at = st.get("from") or {}, st.get("at") or {}
+        bad = [n for n in list(add) + list(frm) + list(at) if n not in parts and n not in context]
+        if bad:
+            fail(f"steps[{k}]: no part or context named {bad}")
+        out.append({"text": str(st["text"])[:80], "add": add,
+                    "from": {n: [float(c) for c in v] for n, v in frm.items()},
+                    "at": {n: [float(c) for c in v] for n, v in at.items()}})
+    result["steps"] = out
+
+
+def _plate_3mf(parts, result, out, bed):
+    """All printed parts in their print pose, laid out on one bed, in print_plate.3mf (named by
+    labels), so the user opens one file in any slicer instead of placing STLs by hand."""
+    import trimesh
+    labels = result.get("labels") or {}
+    meshes = []
+    for name in parts:
+        f = out / f"print_{name}.stl"
+        f = f if f.exists() else out / f"part_{name}.stl"
+        m = trimesh.load(str(f))
+        m.apply_translation(-m.bounds[0])        # on the bed, corner at 0
+        meshes.append((name, m))
+    gap, x, y, row_h = 10.0, 0.0, 0.0, 0.0
+    placed, overflow = [], False
+    for name, m in sorted(meshes, key=lambda nm: -nm[1].extents[1]):
+        w, d = m.extents[0], m.extents[1]
+        if x > 0 and x + w > bed[0]:
+            x, y, row_h = 0.0, y + row_h + gap, 0.0
+        m = m.copy()
+        m.apply_translation([x, y, 0])
+        placed.append((name, m))
+        x, row_h = x + w + gap, max(row_h, d)
+        overflow |= y + d > bed[1]
+    lo = np.min([m.bounds[0] for _, m in placed], axis=0)
+    hi = np.max([m.bounds[1] for _, m in placed], axis=0)
+    shift = [bed[0] / 2 - (lo[0] + hi[0]) / 2, bed[1] / 2 - (lo[1] + hi[1]) / 2, 0]
+    for _, m in placed:
+        m.apply_translation(shift)
+    _write_3mf(out / "print_plate.3mf", [(labels.get(n, n), m) for n, m in placed])
+    result["plate"] = {"file": "print_plate.3mf", "parts": [n for n, _ in placed],
+                       "fits_one_bed": not overflow}
+
+
+def _write_3mf(path, named_meshes):
+    """A plain 3MF (core spec, mm): one named object per part, all on one build plate."""
+    import zipfile
+    from xml.sax.saxutils import quoteattr
+    objs, items = [], []
+    for k, (name, m) in enumerate(named_meshes, 1):
+        v = "".join(f'<vertex x="{x:.4f}" y="{y:.4f}" z="{z:.4f}"/>' for x, y, z in m.vertices)
+        t = "".join(f'<triangle v1="{a}" v2="{b}" v3="{c}"/>' for a, b, c in m.faces)
+        objs.append(f'<object id="{k}" type="model" name={quoteattr(name)}><mesh><vertices>{v}</vertices>'
+                    f'<triangles>{t}</triangles></mesh></object>')
+        items.append(f'<item objectid="{k}"/>')
+    model = ('<?xml version="1.0" encoding="UTF-8"?>'
+             '<model unit="millimeter" xml:lang="ja-JP" '
+             'xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02">'
+             f'<resources>{"".join(objs)}</resources><build>{"".join(items)}</build></model>')
+    ctypes = ('<?xml version="1.0" encoding="UTF-8"?>'
+              '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+              '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+              '<Default Extension="model" ContentType="application/vnd.ms-package.3dmanufacturing-3dmodel+xml"/>'
+              '</Types>')
+    rels = ('<?xml version="1.0" encoding="UTF-8"?>'
+            '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+            '<Relationship Target="/3D/3dmodel.model" Id="rel0" '
+            'Type="http://schemas.microsoft.com/3dmanufacturing/2013/01/3dmodel"/></Relationships>')
+    with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+        z.writestr("[Content_Types].xml", ctypes)
+        z.writestr("_rels/.rels", rels)
+        z.writestr("3D/3dmodel.model", model)
 
 
 def _loads(loads, context, result, warn):

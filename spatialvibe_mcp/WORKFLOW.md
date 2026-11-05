@@ -164,6 +164,15 @@ short enough to read on one phone screen: no long paragraphs, no jargon, numbers
 - `print_pose = {"bracket": "-X"}` (that face goes on the bed) or `{"wedge": Rot(7, 0, 0)}` for parts
   modelled tilted/standing as installed:
   the tool also writes `print_<name>.stl` in that pose and reports its size (bed check uses it).
+  Every build also writes `print_plate.3mf`: all parts in their print pose on one bed, named by
+  `labels` — the one file to open in any slicer.
+- When the design is settled, add `print_settings = {"material": "PETG", "infill": 35, "layer": 0.2,
+  "walls": 3, "supports": ["case"], "note": "..."}` and `steps` (3–5 assembly steps in order):
+  `{"text": "レールを柱にボルト2本で留める", "add": ["base", "hw_m6_top"], "from": {"base": (0, -45, 0)}}`
+  — "add" = what this step puts on (orange), "from" = drawn that far away with an arrow to where
+  it goes (works for things added earlier too: 「上から差し込む」), "at" = where a thing sits for
+  this step only (on the bench). preview then draws sheet_build.png (page 3: how to print + one
+  picture per step). Write steps as the user does them, from their side, one action each.
 - Also define `hardware` (what to buy, one line per size: "M5×30 ボルト・ナット・ワッシャー 6組")
   and `checks` (2–3 things to measure or look at before printing, each with the target value:
   "パイプの周長 7.0 cm（Ø22.2）→ 8.0 cm なら Ø25.4 なので作り直し"). Check bolt lengths against
@@ -218,6 +227,7 @@ clamp_in; explain a term once in brackets (PETG（熱と日光に強い材料）
    the size that must not be exceeded first (「蝶ボルトは 15 mm 以下」).
 4. Send sheet.png (one page: what to buy, what to check, the key dims, a picture of the parts in
    place) and mention sheet_detail.png for whoever prints it; quote the key dims in the reply too.
+   Once the user says the AR fits: send print_plate.3mf and sheet_build.png (印刷と取り付け).
 5. Material and print orientation in one line; which values are still guesses in one line.
 6. AR in one line (see below). Anything longer goes only if the user asks.
 Aim for ≤ 12 lines. Call each thing by ONE name throughout (not ふち/垂れ/板); give positions in

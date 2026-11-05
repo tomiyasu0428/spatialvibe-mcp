@@ -91,7 +91,8 @@ def wrap(text, width=26):
     （ near the limit when there is one, never inside a number."""
     out = []
     while len(text) > width:
-        cut = max(text.rfind(ch, width // 2, width + 1) for ch in " 、（→")
+        cut = max(max(text.rfind(ch, width // 2, width) + 1 for ch in " 、。・"),   # after these
+                  max(text.rfind(ch, width // 2, width + 1) for ch in "（→"))           # before these
         if cut <= 0:
             cut = width
             while cut > width // 2 and (text[cut - 1].isdigit() or text[cut - 1] in ".×") and \

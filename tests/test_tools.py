@@ -549,6 +549,35 @@ class FlowRoundGTests(unittest.TestCase):
         _, sheet, _, _ = server.preview("g-labels")
         self.assertTrue(Path(sheet.path).exists())
 
+    def test_print_plate_and_assembly_steps(self):
+        import zipfile
+        code = ("from build123d import *\n"
+                "parts = {'rail': Box(20, 10, 80), 'case': Pos(0, -20, 0) * Box(40, 20, 60)}\n"
+                "context = {'wall': Pos(0, 20, 0) * Box(100, 20, 300), 'hw_bolt': Pos(0, 0, 30) * Box(4, 20, 4)}\n"
+                "labels = {'rail': 'レール'}\n"
+                "print_pose = {'rail': '+Y', 'case': '+Y'}\n"
+                "print_settings = {'material': 'PETG', 'infill': 30, 'supports': ['case']}\n"
+                "steps = [{'text': 'レールを壁に留める', 'add': ['rail', 'hw_bolt'], 'from': {'rail': (0, -40, 0)}},\n"
+                "         {'text': '手元でケースを用意', 'add': ['case'], 'at': {'case': (-80, 0, 0)}},\n"
+                "         {'text': 'ケースを上から差す', 'from': {'case': (0, 0, 60)}}]\n")
+        r = server.build_model("g-plate", code)
+        self.assertTrue(r["ok"], r)
+        self.assertTrue(r["plate"]["fits_one_bed"])
+        z = zipfile.ZipFile(Path(r["folder"]) / "print_plate.3mf")
+        model = z.read("3D/3dmodel.model").decode()
+        self.assertIn('name="レール"', model)
+        self.assertEqual(model.count("<object "), 2)
+        out = server.preview("g-plate")
+        self.assertEqual(len(out), 5)
+        self.assertTrue((Path(r["folder"]) / "sheet_build.png").exists())
+
+    def test_bad_step_name_fails(self):
+        code = ("from build123d import *\nparts = {'a': Box(10, 10, 10)}\n"
+                "steps = [{'text': 'x', 'add': ['nope']}]\n")
+        r = server.build_model("g-badstep", code)
+        self.assertFalse(r["ok"])
+        self.assertIn("nope", r["error"])
+
 class StdioTests(unittest.TestCase):
     """Over a real MCP stdio connection the server's own error text must reach the client."""
 

@@ -246,6 +246,8 @@ def preview(project: str, version: int | None = None) -> list:
        on a dim, else the first three — and the parts in place); sheet_detail.png has every part's
        fit dimensions with zoomed panels. Look at all of them; send the user sheet.png (and
        sheet_detail.png for whoever prints or wants detail).
+    4) When the script sets `print_settings` or `steps`, also sheet_build.png: how to print
+       (print_plate.3mf + settings + time) and one numbered picture per assembly step.
     """
     vdir = _built_version_dir(project, version)
     out = []
@@ -257,8 +259,18 @@ def preview(project: str, version: int | None = None) -> list:
             raise SpatialVibeError(f"drawing the {name} failed: {p.stderr.strip()[-1500:] or 'no output'}")
         out.append(png)
     detail = vdir / "sheet_detail.png"
-    return [Image(path=str(out[0])), Image(path=str(out[1])), Image(path=str(detail)),
-            f"{project} {vdir.name}: views {out[0]} / summary sheet {out[1]} / detailed sheet {detail}"]
+    imgs = [Image(path=str(out[0])), Image(path=str(out[1])), Image(path=str(detail))]
+    text = f"{project} {vdir.name}: views {out[0]} / summary sheet {out[1]} / detailed sheet {detail}"
+    build = vdir / "sheet_build.png"   # page 3 (print plate + assembly steps), when the script has them
+    build.unlink(missing_ok=True)
+    argv = [sys.executable, "-m", "spatialvibe_mcp._steps", str(vdir)]
+    p = subprocess.run(argv, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=TIMEOUT, env=_child_env())
+    if p.returncode != 0:
+        raise SpatialVibeError(f"drawing sheet_build.png failed: {p.stderr.strip()[-1500:] or 'no output'}")
+    if build.exists():
+        imgs.append(Image(path=str(build)))
+        text += f" / print and assembly {build}"
+    return imgs + [text]
 
 
 @mcp.tool()
