@@ -451,6 +451,28 @@ class UseCaseRoundTests(unittest.TestCase):
         self.assertEqual(ch["since_version"], 1)
         self.assertTrue(any("size 20 × 20 × 5 → 30 × 20 × 5" in c and "holes moved" in c for c in ch["changed"]), ch)
 
+    def test_poses_find_a_collision_when_flipped_up(self):
+        code = ("from build123d import *\n"
+                "arm = Pos(100, 0, 0) * Box(200, 20, 10)\n"
+                "holder = Pos(180, 0, 20) * Box(30, 30, 30)\n"
+                "parts = {'holder': holder}\n"
+                "context = {'arm': arm, 'backrest': Pos(15, 0, 150) * Box(10, 100, 100)}\n"
+                "up = Rot(0, -80, 0)\n"
+                "poses = {'flipped_up': {'holder': up, 'arm': up}}\n")
+        r = server.build_model("uc-pose", code)
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(r["interference"], [])
+        self.assertTrue(any(h["b"] == "context:backrest" for h in r["poses"]["flipped_up"]), r["poses"])
+        self.assertTrue(any("flipped_up" in w for w in r["warnings"]))
+
+    def test_clearance_to_another_part(self):
+        code = ("from build123d import *\n"
+                "parts = {'a': Box(10, 10, 10), 'b': Pos(13, 0, 0) * Box(10, 10, 10)}\n"
+                "dims = [{'label': 'すき間', 'part': 'a', 'kind': 'clearance', 'to': 'b', 'expect': 3}]\n")
+        r = server.build_model("uc-pp", code)
+        self.assertTrue(r["ok"], r)
+        self.assertAlmostEqual(r["dims"][0]["value"], 3.0, places=2)
+
     def test_part_wildcard_and_hardware_context(self):
         self.assertEqual(sorted(d["part"] for d in self.r["dims"]), ["hook_L", "hook_R"])
         self.assertFalse(any("hw_bolt" in w for w in self.r["warnings"]), self.r["warnings"])

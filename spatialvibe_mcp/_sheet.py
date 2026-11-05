@@ -43,6 +43,8 @@ T = {  # label text, Japanese when a font exists
     "mirror": ("{a} の左右反転（鏡写し）の形です。寸法は {a} の欄と同じ。print_{a}.stl と print_{b}.stl を 1 個ずつ印刷（同じ方を 2 個にしない）。",
                "mirror image of {a}; print print_{a}.stl and print_{b}.stl once each."),
     "ptime": ("印刷の目安：全部で約 {t}（部品ごと: {each}）", "print time, rough: {t} in total ({each})"),
+    "motion": ("動かしたとき（灰色は周り。赤は当たるところ）", "When it moves (grey: surroundings; red: collides)"),
+    "pose0": ("取り付けたところ", "installed"),
     "details": ("詳しい情報（印刷する人・CAD 用。現場では見なくてよい）", "Details (for whoever prints or edits it)"),
     "holes": ("穴", "holes"), "half": ("円弧", "arc"), "none": ("なし", "none"), "slot": ("長穴", "slot"),
     "bed_ok": ("ベッドに入る ✓", "fits bed ✓"), "bed_ng": ("ベッドに入らない ✗", "too big for bed ✗"),
@@ -530,7 +532,9 @@ def main():
             txt += f"   {d['vs_label']} {fmt(d['vs'])} に対して {'+' if diff >= 0 else ''}{fmt(diff)}"
         key_lines += [(ln, i_ == 0) for i_, ln in enumerate(wrap(txt, 40))]
     KEY_H = (0.45 + 0.34 * len(key_lines)) if key_lines else 0
-    H = head_h + memo_h + KEY_H + ASM_H + 0.6
+    pose_names = list((res.get("poses") or {}).keys())
+    MOT_H = 3.0 if pose_names else 0.0
+    H = head_h + memo_h + KEY_H + ASM_H + MOT_H + 0.6
     fig = plt.figure(figsize=(9, H), dpi=120)
 
     def y(inch):  # figure fraction from top, in inches
@@ -596,7 +600,56 @@ def main():
             sp_.set_color("0.8")
         if ttl:
             ax.set_title(ttl, fontsize=9, color="0.4")
-    fig.text(0.04, y(a0 + ASM_H + 0.35), t("more_pg"), fontsize=9.5, color="0.4")
+    if pose_names:   # one small frame per declared pose: how the moving parts go
+        import numpy as np
+        m0 = a0 + ASM_H
+        fig.text(0.04, y(m0 + 0.3), t("motion"), fontsize=12, fontweight="bold")
+        base_p = {f.stem[5:]: trimesh.load(f) for f in files}
+        base_c = {f.stem[4:]: trimesh.load(f) for f in sorted(vdir.glob("ctx_*.stl"))}
+        shown = [None] + pose_names[:3] if len(pose_names) <= 3 else \
+            [None] + [pose_names[int(i)] for i in np.linspace(0, len(pose_names) - 1, 3)]
+        frames = []
+        for pn in shown:
+            P_, C_ = dict(base_p), dict(base_c)
+            if pn is not None:
+                k_ = pose_names.index(pn)
+                for f in vdir.glob(f"pose{k_}_part_*.stl"):
+                    P_[f.stem.split("_part_", 1)[1]] = trimesh.load(f)
+                for f in vdir.glob(f"pose{k_}_ctx_*.stl"):
+                    C_[f.stem.split("_ctx_", 1)[1]] = trimesh.load(f)
+            frames.append((pn, P_, C_))
+        # look along the axis the moving parts move least: the motion shows best across it
+        mv = np.zeros(3)
+        for pn, P_, _ in frames[1:]:
+            for nm, msh in P_.items():
+                mv += np.abs(msh.centroid - base_p[nm].centroid)
+        k_ax = int(np.argmin(mv)) if mv.any() else 0
+        a_, b_ = [i for i in range(3) if i != k_ax]
+        allm = [m for _, P_, C_ in frames for m in list(P_.values())]
+        lo_ = np.min([m.bounds[0] for m in allm], axis=0)
+        hi_ = np.max([m.bounds[1] for m in allm], axis=0)
+        cu, cv = (lo_[a_] + hi_[a_]) / 2, (lo_[b_] + hi_[b_]) / 2
+        half = max(hi_[a_] - lo_[a_], hi_[b_] - lo_[b_]) * 0.65 + 15
+        hits = {pn: {h["a"] for h in (res.get("poses") or {}).get(pn, [])} for pn in pose_names}
+        w_ = 0.92 / len(frames)
+        for col, (pn, P_, C_) in enumerate(frames):
+            ax = fig.add_axes((0.04 + col * w_, y(m0 + MOT_H - 0.1), w_ - 0.02, (MOT_H - 0.75) / H))
+            for cm in C_.values():
+                ax.add_collection(PolyCollection(cm.triangles[:, :, [a_, b_]], facecolors=[(0.84, 0.86, 0.89)],
+                                                 edgecolors="none", antialiased=False, zorder=0))
+            for i_, (nm, msh) in enumerate(P_.items()):
+                col_ = "#c0392b" if pn is not None and nm in hits.get(pn, set()) else part_color(i_)
+                ax.add_collection(PolyCollection(msh.triangles[:, :, [a_, b_]], facecolors=[col_],
+                                                 edgecolors=[col_], linewidths=0.3, zorder=2))
+            ax.set_xlim(cu - half, cu + half)
+            ax.set_ylim(cv - half, cv + half)
+            ax.set_aspect("equal")
+            ax.set_xticks([])
+            ax.set_yticks([])
+            for sp_ in ax.spines.values():
+                sp_.set_color("0.8")
+            ax.set_title(f"{col + 1}. " + (t("pose0") if pn is None else str(pn)), fontsize=9.5, color="0.2")
+    fig.text(0.04, y(a0 + ASM_H + MOT_H + 0.35), t("more_pg"), fontsize=9.5, color="0.4")
     fig.savefig(vdir / "sheet.png")
     plt.close(fig)
 

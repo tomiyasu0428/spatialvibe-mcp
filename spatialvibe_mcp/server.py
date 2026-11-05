@@ -157,7 +157,7 @@ def build_model(project: str, code: str, note: str = "") -> dict:
             res = {"ok": False, "error": f"the build process exited with code {p.returncode} before finishing. {tail}"}
     if res.get("ok") is True:
         for f in stage.iterdir():
-            if f.name.startswith(("part_", "ctx_", "print_")):
+            if f.name.startswith(("part_", "ctx_", "print_", "pose")):
                 f.replace(vdir / f.name)
     shutil.rmtree(stage, ignore_errors=True)
     (vdir / "result.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")

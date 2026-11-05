@@ -416,7 +416,7 @@ def _ctx_names(to, context):
             raise ValueError("to must be a context name, a list of names or a pattern like 'wire*'")
         hit = [c for c in context if fnmatch.fnmatch(c, it)]
         if not hit:
-            raise ValueError(f"context {it!r} not found")
+            raise ValueError(f"context or part {it!r} not found")
         names += [c for c in hit if c not in names]
     return names
 
@@ -632,12 +632,13 @@ def measure_dims(spec, parts, context, holes_by_part):
                          n_a=[ns[0].X, ns[0].Y, ns[0].Z], n_b=[ns[1].X, ns[1].Y, ns[1].Z],
                          ref=d.get("ref") if isinstance(d.get("ref"), str) else None)
             elif kind == "clearance":
-                names = _ctx_names(d.get("to"), context)
+                pool = {**context, **{k_: v_ for k_, v_ in parts.items() if k_ != name}}   # other parts count too
+                names = _ctx_names(d.get("to"), pool)
                 if d.get("at") is not None:   # the gap along an axis at a point (cell to side wall)
                     at, ax = _vec(d.get("at"), "at"), _axis(d.get("axis"))
                     both = shp
                     for c in names:
-                        both = both + context[c]
+                        both = both + pool[c]
                     spans = _crossings(both, at, ax)
                     if any(s_[0] < 0 < s_[1] for s_ in spans):
                         raise ValueError(f"{at} is inside the part or {names}: put it in the gap")
@@ -651,7 +652,7 @@ def measure_dims(spec, parts, context, holes_by_part):
                 else:
                     best = None
                     for c in names:
-                        dist, pa, pb = shp.distance_to_with_closest_points(context[c])
+                        dist, pa, pb = shp.distance_to_with_closest_points(pool[c])
                         if best is None or dist < best[0]:
                             best = (dist, pa, pb, c)
                     dist, pa, pb, c = best
@@ -916,11 +917,66 @@ def main():
             result["interference"].append({"a": a, "b": b, "overlap_cm3": round(v / 1000, 3)})
         elif v > 1e-6:
             result["near_contact"].append({"a": a, "b": b, "overlap_mm3": round(v, 3)})
+    _check_poses(ns.get("poses"), parts, context, result, warn, out)
+    if result.get("ar_floor_z") is not None:   # the AR floor must be below everything that is not the floor
+        fz = result["ar_floor_z"]
+        for n_, shp_ in list(parts.items()) + list(context.items()):
+            b_ = shp_.bounding_box()
+            if b_.max.Z > fz + 0.5 and b_.min.Z < fz - 0.01:
+                warn.append(f"{n_} が ar_floor（{fz:g}）より下に出ている：AR 公開できない。ar_floor を下げるか {n_} を床で切る")
     for m in result["dims"]:
         names_ = m.pop("_names", None)
         if names_:
             m["to_names"] = names_
     write_result(result)
+
+
+def _check_poses(poses, parts, context, result, warn, out=None):
+    """Moving things checked in other positions. poses = {"pose name": {"part or context name":
+    Location / Rot / Pos, ...}, ...}: the named shapes are moved (others stay) and every part is
+    checked against every other part and context in that pose — a door half open, a cradle turned
+    to landscape, an armrest flipped up. A sweep is just several poses (e.g. every 10°)."""
+    out_dir = out
+    if not poses:
+        return
+    if not isinstance(poses, dict):
+        fail("poses must be a dict: {'name': {'part or context name': Rot(...) or Location(...)}}")
+    out = {}
+    for pname, moves in list(poses.items())[:24]:
+        if not isinstance(moves, dict):
+            fail(f"poses[{pname!r}] must be a dict of name -> Location")
+        unknown = [k for k in moves if k not in parts and k not in context]
+        if unknown:
+            fail(f"poses[{pname!r}]: no part or context named {unknown}")
+        P = {k: (moves[k] * v if k in moves else v) for k, v in parts.items()}
+        C = {k: (moves[k] * v if k in moves else v) for k, v in context.items()}
+        hits = []
+        names = list(P)
+        pairs = [(a, b, P[b]) for i, a in enumerate(names) for b in names[i + 1:]]
+        pairs += [(a, f"context:{c}", C[c]) for a in names for c in C]
+        for a, b, other in pairs:
+            try:
+                common = P[a] & other
+                v = 0.0 if common is None else common.volume
+            except Exception:
+                hits.append({"a": a, "b": b, "overlap_cm3": None})
+                continue
+            if v > 1.0:
+                hits.append({"a": a, "b": b, "overlap_cm3": round(v / 1000, 3)})
+        out[str(pname)] = hits
+        if out_dir is not None:   # the moved shapes, so the sheet can draw each pose
+            from build123d import export_stl
+            k_ = len(out) - 1
+            for nm in moves:
+                kind_ = "part" if nm in parts else "ctx"
+                try:
+                    export_stl(P[nm] if nm in parts else C[nm], str(out_dir / f"pose{k_}_{kind_}_{nm}.stl"))
+                except Exception:
+                    pass
+        for h in hits:
+            what = "重なる" if h["overlap_cm3"] is not None else "重なりを計算できない（未判定）"
+            warn.append(f"姿勢「{pname}」で {h['a']} と {h['b']} が{what}")
+    result["poses"] = out
 
 
 if __name__ == "__main__":

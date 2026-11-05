@@ -71,6 +71,11 @@ short enough to read on one phone screen: no long paragraphs, no jargon, numbers
   touch are not reported as overlap. Each part must fit the print bed (`fits_bed` in the result).
   Name screws/bolts in the context `hw_…` (e.g. `hw_bolt1`): they may sit close to their holes
   without a warning. Identical copies (six hooks): declare dims once with `"part": "hook_*"`. A floor-standing part: put the floor's top at Z=0 and set `ar_floor = 0`.
+- Things that move (a door, a flip-up armrest, a cradle that turns, a latch bar): declare
+  `poses = {"半分開けた": {"door": Rot(0, 0, -45), "catch": Rot(0, 0, -45)}, ...}` (several poses
+  = a sweep). Each pose is checked for collisions (warning 「姿勢「…」で A と B が重なる」) and drawn
+  as a numbered frame on the summary sheet, so the user sees how it moves. `clearance` dims may
+  name another part in `to` (bar to slot).
 - Things put in by hand (rod, bottle, tool, phone with case) get a generous fit: +3–4 mm on a
   diameter, +2 mm per side, unless the user asks for a snug one. Tight fits only on what is
   clamped or screwed.
