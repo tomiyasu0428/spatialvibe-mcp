@@ -24,6 +24,9 @@ short enough to read on one phone screen: no long paragraphs, no jargon, numbers
 - Prefer designs that absorb uncertainty, so fewer numbers are needed: adjustable feet
   (bolt + nut), slotted holes, clamp gaps with rubber, V-grooves, straps.
 - Ask only for the 2–3 measurements that really decide fit; a rough tape-measure value is fine.
+- If the part hangs in the air (on a pipe, pillar, mirror stay, wall), add one question to the
+  same first batch: 「床（または台）から取付け場所まで何 cm？だいたいで OK」. It is only for AR
+  (`ar_floor`, see section 4), so do not ask it separately later.
   Say how to measure with a tape (pipe: wrap it, circumference ÷ 3.14 = diameter).
 - Keep track of where each number came from (datasheet / user note / measured / guess) and
   say which ones are still guesses.
