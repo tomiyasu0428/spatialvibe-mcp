@@ -52,9 +52,12 @@ def main():
     meshes = meshes[:n_parts] + [(_clip(m, lo, hi), c, n) for m, c, n in meshes[n_parts:]]
     meshes = [x for x in meshes if x[0] is not None and len(x[0].faces)]
 
-    views = [("斜め前から", 25, -60), ("斜め後ろから", 20, 120), ("真横（右）から", 0, 0), ("下から", -60, -60)]
+    # convention (WORKFLOW.md): the person stands at -Y looking toward +Y, +X is their right
+    views = [("斜め前から（使う人の側 −Y）", 25, -60), ("斜め後ろから（+Y側）", 20, 120),
+             ("右横から（+X側）", 0, 0), ("下から", -60, -60)]
     if FONT is None:
-        views = [(en, e, a) for en, (_, e, a) in zip(("front-oblique", "rear-oblique", "right side", "below"), views)]
+        views = [(en, e, a) for en, (_, e, a) in zip(("front-oblique (person's side, -Y)", "rear-oblique (+Y)",
+                                                      "right side (+X)", "below"), views)]
     fig = plt.figure(figsize=(13, 10.5))
     for i, (title, elev, azim) in enumerate(views, 1):
         ax = fig.add_subplot(2, 2, i, projection="3d")

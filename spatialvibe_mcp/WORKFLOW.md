@@ -31,6 +31,11 @@ short enough to read on one phone screen: no long paragraphs, no jargon, numbers
 ## 3. Model, check, show
 - Write a complete build123d script (mm, Z up; pick an origin on a fixed real feature such as
   the pipe axis). Put all key numbers in one parameter dict at the top with source comments.
+- **Orientation rule**: place the model so the person who uses it stands at **−Y looking toward
+  +Y**; then **+X is their right**, +Z is up. The sheet's 正面 and the preview's 斜め前 show
+  exactly what that person sees. Before using "left/right/front", ask where the user stands
+  (e.g. 「トラクターの後ろに立って前を見たとき」) and say it in the reply.
+- Part and context names: ASCII letters, digits, _ or - only (e.g. `spoon_front`).
 - Define `parts` (what is printed, split into printable pieces with sensible print
   orientation, no needless supports) and `context` (the real surroundings and the held object)
   so overlaps are detected and the user can align the AR model with reality. Faces that only
@@ -39,8 +44,18 @@ short enough to read on one phone screen: no long paragraphs, no jargon, numbers
   and `checks` (2–3 things to measure or look at before printing, each with the target value:
   "パイプの周長 7.0 cm（Ø22.2）→ 8.0 cm なら Ø25.4 なので作り直し"). Check bolt lengths against
   the clamped thickness + washer + nut.
-- `build_model` → read validity/interference/holes/fits_bed → `preview` → look at BOTH images
-  (views and dimension sheet) yourself and fix problems before showing the user.
+- `build_model` → read `warnings` first (a part split in pieces, an STL that is not closed,
+  a part too big for the bed, an overlap that could not be checked = 未判定), then
+  interference, `hole_list` (each hole's centre, so you can check positions and edge distances),
+  fits_bed → `preview` → look at BOTH images (views and dimension sheet) yourself. Fix every
+  warning, or tell the user why it is acceptable. Never call a version done while it has an
+  unexplained warning.
+- When the user asks for a change ("幅だけ10mm", "右側だけ"), say which reference you keep
+  (centre / which edge / hole centres) in one line, and after the build compare `hole_list`
+  with the previous version to confirm what stayed put. If the request has two readings that
+  lead to different parts, ask one short question first.
+- If your design departs from something the user said (e.g. "上から" became "下から押し上げる",
+  3 boxes became 6), say so and why in the reply and put it in `checks`.
 
 ## Reply after a build (phone format)
 1. One line: what it is and how it attaches.
@@ -54,8 +69,8 @@ short enough to read on one phone screen: no long paragraphs, no jargon, numbers
 ## 4. AR fit check
 - `publish_ar` (with context) and tell the user how to open it: iPhone「ファイル」→ tap the
   .usdz → AR → move the phone until the grey context (e.g. the pipe) sits on the real one; do not pinch
-  (pinching changes the scale; it must read 100 % to be real size). Quote `parts_size_m`, not `size_m` (that includes the
-  context). Ask what collides or should move, then change parameters, rebuild, preview, republish. Each build is a new version;
+  (pinching changes the scale; it must read 100 % to be real size). Quote `parts_size_m`, not `scene_size_m` (that includes the
+  context; both are labelled x_width / y_depth / z_height). Ask what collides or should move, then change parameters, rebuild, preview, republish. Each build is a new version;
   `get_code` retrieves earlier scripts.
 
 ## Limits to state honestly

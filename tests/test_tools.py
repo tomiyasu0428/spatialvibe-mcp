@@ -32,11 +32,11 @@ class ToolTests(unittest.TestCase):
         self.assertTrue(str(sheet.path).endswith("sheet.png"))
         pub = server.publish_ar("t-flow")
         self.assertTrue(Path(pub["published"]).exists())
-        # block is 20 mm wide along X; USDZ must be in metres
-        self.assertIn(0.02, pub["size_m"])
-        self.assertLess(max(pub["size_m"]), 1.0)
-        # parts-only size leaves out the 40 mm context pipe
-        self.assertEqual(pub["parts_size_m"], [0.02, 0.01, 0.005])
+        # block is 20 × 10 × 5 mm; reported in metres with labelled axes (x width, y depth, z height)
+        self.assertEqual(pub["parts_size_m"], {"x_width": 0.02, "y_depth": 0.01, "z_height": 0.005})
+        # the scene also holds the 40 mm tall context pipe (along Z, so it is the height)
+        self.assertEqual(pub["scene_size_m"]["z_height"], 0.04)
+        self.assertLess(max(pub["scene_size_m"].values()), 1.0)
 
     def test_holes_bed_and_lists(self):
         code = ("from build123d import *\n"
@@ -89,6 +89,137 @@ class ToolTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             server.build_model("../escape", BOX)
 
+
+
+PARTIAL = (BOX.replace("parts = {'block': Box(20, 10, 5)}", "parts = {'a': Box(10, 10, 10), 'b': Pos(30, 0, 0) * Box(10, 10, 10)}")
+           + "import build123d\n_orig = build123d.export_stl\n_n = [0]\n"
+           "def _boom(*a, **k):\n    _n[0] += 1\n    if _n[0] == 2:\n        raise RuntimeError('injected')\n"
+           "    return _orig(*a, **k)\nbuild123d.export_stl = _boom\n")
+
+
+class FailureTests(unittest.TestCase):
+    """A failed or odd build must never look finished (regressions from the verification rounds)."""
+
+    def test_partial_build_leaves_nothing_and_cannot_be_shown(self):
+        server.build_model("f-part", BOX)                       # v1 is fine
+        r = server.build_model("f-part", PARTIAL)               # v2 dies after exporting part a
+        self.assertFalse(r["ok"])
+        v2 = Path(r["folder"])
+        self.assertEqual(sorted(f.name for f in v2.iterdir()), ["model.py", "note.txt", "result.json"])
+        with self.assertRaises(server.SpatialVibeError) as e:
+            server.preview("f-part")
+        self.assertIn("did not build", str(e.exception))
+        with self.assertRaises(server.SpatialVibeError):
+            server.publish_ar("f-part")
+        self.assertEqual(server.list_projects("f-part")["versions"][1]["status"], "failed")
+        server.preview("f-part", 1)                             # the good version still works
+
+    def test_hard_crash_reports_exit_code(self):
+        r = server.build_model("f-crash", "import os\nos._exit(3)\n")
+        self.assertFalse(r["ok"])
+        self.assertIn("code 3", r["error"])
+
+    def test_script_output_cannot_fake_success(self):
+        r = server.build_model("f-fake", 'print(\'{"ok": true, "parts": {}}\')\nimport os\nos._exit(1)\n')
+        self.assertFalse(r["ok"])
+
+    def test_print_without_newline_does_not_break_build(self):
+        r = server.build_model("f-print", "import sys\nsys.stdout.write('building...')\n" + BOX)
+        self.assertTrue(r["ok"], r)
+
+    def test_interference_exception_is_unchecked_not_clear(self):
+        code = BOX + ("import build123d\nfrom build123d.topology.composite import Compound\n"
+                      "def _boom(*a, **k):\n    raise RuntimeError('injected boolean failure')\n"
+                      "Compound.__and__ = _boom\nbuild123d.Shape.__and__ = _boom\n")
+        r = server.build_model("f-int", code)
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(r["interference"], [])
+        self.assertEqual([(u["a"], u["b"]) for u in r["interference_unchecked"]], [("block", "context:pipe")])
+        self.assertTrue(any("未判定" in w for w in r["warnings"]))
+
+    def test_open_mesh_and_split_part_are_warned(self):
+        code = "from build123d import *\nparts = {'t': Box(20, 20, 10) + Pos(15, 0, 0) * Cylinder(5, 10)}\n"
+        r = server.build_model("f-mesh", code)
+        p = r["parts"]["t"]
+        self.assertFalse(p["watertight"])
+        self.assertEqual(p["solids"], 2)
+        self.assertTrue(any("閉じていない" in w for w in r["warnings"]))
+        self.assertTrue(any("塊に分かれている" in w for w in r["warnings"]))
+
+    def test_bad_names_are_rejected_with_a_message(self):
+        for bad in ("a\n", "../x", "", "日本語"):
+            with self.assertRaises(server.SpatialVibeError):
+                server.build_model(bad, BOX)
+        r = server.build_model("f-name", "from build123d import *\nparts = {'スプーン': Box(1, 1, 1)}\n")
+        self.assertIn("ASCII", r["error"])
+
+    def test_parallel_builds_get_their_own_versions(self):
+        import threading
+        out = []
+        ts = [threading.Thread(target=lambda: out.append(server.build_model("f-par", BOX)["version"])) for _ in range(5)]
+        [t.start() for t in ts]
+        [t.join() for t in ts]
+        self.assertEqual(sorted(out), [1, 2, 3, 4, 5])
+
+
+class HoleTests(unittest.TestCase):
+    def test_positions_slots_split_holes_and_separate_clamps(self):
+        code = ("from build123d import *\n"
+                "p = Box(80, 30, 10)\n"
+                "p -= Pos(-30, 0, 0) * Cylinder(2.75, 20)\n"                      # plain hole
+                "p -= Pos(-15, 0, 0) * Cylinder(2.75, 20)\n"
+                "p -= Pos(-15, 0, 0) * Box(9, 9, 3)\n"                            # nut pocket splits it
+                "p -= Pos(15, 0, 0) * extrude(Plane.XY.offset(-10) * SlotOverall(14, 6), 20)\n"  # slot
+                "bar = Box(200, 40, 30) - Rot(0, 90, 0) * Cylinder(10, 60)\n"
+                "bar -= Pos(90, 0, 0) * Rot(0, 90, 0) * Cylinder(10, 21)\n"       # 2nd bore, same axis, far away
+                "parts = {'plate': p, 'bar': bar}\n")
+        r = server.build_model("h-mix", code)
+        self.assertTrue(r["ok"], r)
+        hl = r["parts"]["plate"]["hole_list"]
+        holes = [h for h in hl if h.get("kind") != "slot"]
+        self.assertEqual(sorted(h["at"][0] for h in holes), [-30.0, -15.0])  # split hole counted once
+        self.assertTrue(all(not h["half"] and h["d"] == 5.5 and h["axis"] == "Z" for h in holes))
+        slots = [h for h in hl if h.get("kind") == "slot"]
+        self.assertEqual(len(slots), 1)
+        self.assertEqual((slots[0]["d"], slots[0]["length"], slots[0]["at"][0]), (6.0, 14.0, 15.0))
+        bores = [h for h in r["parts"]["bar"]["hole_list"] if h["d"] == 20.0]
+        self.assertEqual(len(bores), 2)                                      # two bores, not merged
+
+    def test_split_clamp_halves_both_report_the_bore(self):
+        code = ("from build123d import *\n"
+                "c = Box(20, 50, 40) - Rot(0, 90, 0) * Cylinder(13.8, 30)\n"
+                "parts = {'upper': split(c, Plane.XY), 'lower': split(c, Plane.XY, keep=Keep.BOTTOM)}\n")
+        r = server.build_model("h-clamp", code)
+        for p in ("upper", "lower"):
+            self.assertIn({"d": 27.6, "n": 1, "half": True}, r["parts"][p]["holes"], p)
+
+
+class StdioTests(unittest.TestCase):
+    """Over a real MCP stdio connection the server's own error text must reach the client."""
+
+    def test_error_text_reaches_client(self):
+        import anyio
+        from mcp.client.session import ClientSession
+        from mcp.client.stdio import StdioServerParameters, stdio_client
+
+        env = dict(os.environ, PYTHONPATH=str(ROOT), SPATIALVIBE_HOME=str(TMP / "stdio-home"))
+        params = StdioServerParameters(command=sys.executable, args=["-m", "spatialvibe_mcp"], env=env, cwd=str(ROOT))
+
+        async def go():
+            async with stdio_client(params) as (r, w):
+                async with ClientSession(r, w) as s:
+                    await s.initialize()
+                    res = await s.call_tool("preview", {"project": "nothing-here"})
+                    bad = await s.call_tool("build_model", {"project": "../x", "code": "x"})
+                    ok = await s.call_tool("list_projects", {})
+                    return res, bad, ok
+
+        res, bad, ok = anyio.run(go)
+        self.assertTrue(res.is_error)
+        self.assertIn("no versions yet", res.content[0].text)
+        self.assertTrue(bad.is_error)
+        self.assertIn("ASCII", bad.content[0].text)
+        self.assertFalse(ok.is_error)                                     # the session keeps working
 
 class ReelTests(unittest.TestCase):
     def test_existing_reels_are_valid(self):
