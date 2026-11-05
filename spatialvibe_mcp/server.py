@@ -164,7 +164,60 @@ def build_model(project: str, code: str, note: str = "") -> dict:
     res.update(project=project, version=int(vdir.name[1:]), folder=str(vdir))
     if res.get("ok") is True:
         res["files"] = sorted(str(f) for f in vdir.iterdir() if f.name.startswith(("part_", "print_", "ctx_")))
+        prev = next((v for v in reversed(_versions(vdir.parent)) if v.name < vdir.name
+                     and _read_result(v).get("ok") is True), None)
+        if prev is not None:
+            res["changes"] = _diff(_read_result(prev), res, int(prev.name[1:]))
     return res
+
+
+def _diff(old: dict, new: dict, old_version: int) -> dict:
+    """What changed since the previous good version: parts, sizes, holes and fit dims, so an edit
+    ("幅だけ10mm", a corrected number) can be checked and the user told which parts to reprint."""
+    lines, same = [], []
+    op, np_ = old.get("parts", {}), new.get("parts", {})
+    for n in sorted(set(op) | set(np_)):
+        if n not in np_:
+            lines.append(f"{n}: removed")
+            continue
+        if n not in op:
+            lines.append(f"{n}: new part")
+            continue
+        a, b = op[n], np_[n]
+        sa, sb = a.get("bbox_mm", {}).get("size"), b.get("bbox_mm", {}).get("size")
+        ch = []
+        if sa and sb and any(abs(x - y) > 0.05 for x, y in zip(sa, sb)):
+            ch.append("size " + " × ".join(f"{x:g}" for x in sa) + " → " + " × ".join(f"{y:g}" for y in sb))
+        if abs((a.get("volume_cm3") or 0) - (b.get("volume_cm3") or 0)) > 0.01 and not ch:
+            ch.append("shape changed (same outer size)")
+        ha, hb = list(a.get("hole_list") or []), list(b.get("hole_list") or [])
+        moved, gone = [], []
+        for h in ha:
+            same_d = [g for g in hb if abs(g["d"] - h["d"]) < 0.05 and g["axis"] == h["axis"]]
+            if not same_d:
+                gone.append(h)
+                continue
+            g = min(same_d, key=lambda g: sum((g["at"][i] - h["at"][i]) ** 2 for i in range(3)))
+            hb.remove(g)
+            if any(abs(g["at"][i] - h["at"][i]) > 0.05 for i in range(3)):
+                moved.append(f"Ø{h['d']:g} {tuple(h['at'])} → {tuple(g['at'])}")
+        if moved:
+            ch.append("holes moved: " + "; ".join(moved[:6]))
+        if gone:
+            ch.append("holes removed: " + ", ".join(f"Ø{h['d']:g} {tuple(h['at'])}" for h in gone[:6]))
+        if hb:
+            ch.append("holes added: " + ", ".join(f"Ø{h['d']:g} {tuple(h['at'])}" for h in hb[:6]))
+        if ch:
+            lines.append(f"{n}: " + " / ".join(ch) + " → reprint")
+        else:
+            same.append(n)
+    od = {(d.get("part"), d.get("label")): d.get("value") for d in old.get("dims") or []}
+    for d in new.get("dims") or []:
+        k = (d.get("part"), d.get("label"))
+        if k in od and od[k] is not None and d.get("value") is not None and abs(od[k] - d["value"]) > 0.05:
+            lines.append(f"dim {d.get('label')}: {od[k]:g} → {d['value']:g}")
+    return {"since_version": old_version, "changed": lines,
+            "unchanged_parts": same, "note": "unchanged parts need not be reprinted if already printed"}
 
 
 @mcp.tool()

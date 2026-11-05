@@ -38,6 +38,11 @@ T = {  # label text, Japanese when a font exists
     "more_pg": ("細かい図と全部の寸法は 2 枚目（sheet_detail.png）。印刷する人や、詳しく確かめたいときに。",
                 "All drawings and dimensions: page 2 (sheet_detail.png)."),
     "detail_title": ("{p}  {v}  詳しい寸法図（2 枚目）", "{p}  {v}  detailed sheet (page 2)"),
+    "same_many": ("{l} は {a} と同じ形です（全部で {n} 個）。寸法は {a} の欄を見てください。",
+                  "{l}: same shape as {a} ({n} in total)."),
+    "mirror": ("{a} の左右反転（鏡写し）の形です。寸法は {a} の欄と同じ。print_{a}.stl と print_{b}.stl を 1 個ずつ印刷（同じ方を 2 個にしない）。",
+               "mirror image of {a}; print print_{a}.stl and print_{b}.stl once each."),
+    "ptime": ("印刷の目安：全部で約 {t}（部品ごと: {each}）", "print time, rough: {t} in total ({each})"),
     "details": ("詳しい情報（印刷する人・CAD 用。現場では見なくてよい）", "Details (for whoever prints or edits it)"),
     "holes": ("穴", "holes"), "half": ("円弧", "arc"), "none": ("なし", "none"), "slot": ("長穴", "slot"),
     "bed_ok": ("ベッドに入る ✓", "fits bed ✓"), "bed_ng": ("ベッドに入らない ✗", "too big for bed ✗"),
@@ -420,18 +425,38 @@ def main():
             L += D
         return L
 
+    def _shape_key(f, flip=None):
+        import numpy as np
+        v = trimesh.load(f).vertices.copy()
+        if flip is not None:
+            v[:, flip] *= -1
+        v -= v.min(axis=0)
+        v = np.round(v / 0.05).astype(np.int64)
+        return v[np.lexsort(v.T[::-1])]
+
     def same_as(k):
-        """Index of an earlier part with the same shape (copies, mirrored twins), or None."""
+        """(index of an earlier part with the same shape, "copy" or "mirror"), or None. Copies are equal
+        after a shift; mirrored twins are equal after flipping one axis — they must both be printed."""
+        import numpy as np
         a = infos[k]
         for j in range(k):
             b = infos[j]
             va, vb = a.get("volume_cm3"), b.get("volume_cm3")
-            sa = sorted((a.get("bbox_mm", {}).get("size") or [])[:3])
-            sb = sorted((b.get("bbox_mm", {}).get("size") or [])[:3])
-            if va and vb and abs(va - vb) <= 0.002 * max(va, vb) + 0.01 and len(sa) == 3 and \
-                    all(abs(x - y_) < 0.2 for x, y_ in zip(sa, sb)) and \
-                    len(a.get("hole_list") or []) == len(b.get("hole_list") or []):
-                return j
+            sa = (a.get("bbox_mm", {}).get("size") or [])[:3]
+            sb = (b.get("bbox_mm", {}).get("size") or [])[:3]
+            if not (va and vb and abs(va - vb) <= 0.002 * max(va, vb) + 0.01 and len(sa) == 3 and
+                    all(abs(x - y_) < 0.2 for x, y_ in zip(sa, sb))):
+                continue
+            try:
+                ka = _shape_key(files[k])
+                if ka.shape == _shape_key(files[j]).shape and np.array_equal(ka, _shape_key(files[j])):
+                    return j, "copy"
+                for ax in range(3):
+                    kb = _shape_key(files[j], ax)
+                    if ka.shape == kb.shape and np.array_equal(ka, kb):
+                        return j, "mirror"
+            except Exception:
+                pass
         return None
 
     for f, info in zip(files, infos):
@@ -446,8 +471,12 @@ def main():
     def ndims(k_):
         return len([d for d in dims_all if d.get("part") == infos[k_]["_name"] and d.get("_tag")])
     groups = {}
+    kinds = {}
     for k in range(len(infos)):   # same-shape groups; the member with the dims is drawn, the rest are one line
-        j = same_as(k)
+        r_ = same_as(k)
+        j = None if r_ is None else r_[0]
+        if r_ is not None:
+            kinds[k] = r_[1]
         root = k if j is None else next(r for r, ms in groups.items() if j in ms)
         groups.setdefault(root, []).append(k)
     copies = {}
@@ -456,12 +485,23 @@ def main():
         for m in ms:
             if m != keep and ndims(m) == 0:
                 copies[m] = keep
+                if kinds.get(keep) == "mirror" or kinds.get(m) == "mirror":
+                    kinds[m] = "mirror"
     blocks = []
     for k, info in enumerate(infos):
         if k in copies:
             root = copies[k]
             n_ = 1 + sorted(m for m, r in copies.items() if r == root).index(k) + 1
-            blocks.append((None, [], [(t("same", a=infos[root]["_name"], n=n_), 11, "0.2", True, 0)], 1.2))
+            sibs = sorted(m for m, r in copies.items() if r == root and kinds.get(m) != "mirror")
+            if kinds.get(k) != "mirror" and k != sibs[0]:
+                blocks.append((None, [], [], 0.0))   # already named on the first copy's line
+                continue
+            msg = (t("mirror", a=infos[root]["_name"], b=info["_name"]) if kinds.get(k) == "mirror"
+                   else t("same", a=infos[root]["_name"], n=n_) if len(sibs) == 1
+                   else t("same_many", l="・".join(infos[m]["_name"] for m in sibs), a=infos[root]["_name"],
+                          n=len(sibs) + 1))
+            ls_ = wrap(msg, 46)
+            blocks.append((None, [], [(ln, 11, "0.2", True, 0) for ln in ls_], 0.95 + 0.32 * len(ls_)))
             continue
         name = info["_name"]
         fl = fit_lines(name)
@@ -480,7 +520,7 @@ def main():
     ASM_H = 3.2   # one picture of the parts in place, before any detail
     axes_h = 0.35
     tagged = [d for d in dims_all if d.get("_tag") and d.get("value") is not None]
-    keys = [d for d in tagged if d.get("key")] or tagged[:3]
+    keys = [d for d in tagged if d.get("key")][:5] or tagged[:3]
     key_lines = []
     for d in keys:
         unit = "°" if d.get("unit") == "°" else " mm"
@@ -501,6 +541,12 @@ def main():
     fig.text(0.04, y(0.95), t("parts", n=n) + ("   " + t("overall" if n == 1 else "overall_n", s=size_text(overall))
                                                 if overall else ""), fontsize=13)
     fig.text(0.04, y(1.3), t("conv"), fontsize=9.5, color="0.4")
+    mins = [(i_["_name"], i_.get("print_minutes")) for i_ in infos if i_.get("print_minutes")]
+    if mins:
+        def hm(m):
+            return f"{m // 60}時間{m % 60:02d}分" if m >= 60 else f"{m}分"
+        fig.text(0.04, y(1.6), t("ptime", t=hm(sum(m for _, m in mins)),
+                                 each="・".join(f"{n_} {hm(m)}" for n_, m in mins[:4])), fontsize=10, color="0.25")
 
     if glob_w:
         fig.text(0.04, y(2.02), t("warn"), fontsize=12, fontweight="bold", color="#c0392b")
@@ -564,12 +610,15 @@ def main():
     top = 1.1
     for i, (f, info, (fl, det, il, block_h)) in enumerate(zip(files, infos, blocks)):
         name = info["_name"]
+        if fl is None and not il:
+            continue
         if fl is None:   # same shape as an earlier part: one line, no drawings
             fig.add_artist(plt.Line2D([0.03, 0.97], [y(top + 0.05)] * 2, color="0.85", lw=1))
             fig.add_artist(plt.Rectangle((0.04, y(top + 0.55)), 0.03, 0.18 / H * 2, color=part_color(i),
                                          transform=fig.transFigure))
             fig.text(0.085, y(top + 0.45), name, fontsize=14, fontweight="bold")
-            fig.text(0.05, y(top + 0.9), il[0][0], fontsize=11, color="0.2")
+            for q, (ln, *_r) in enumerate(il):
+                fig.text(0.05, y(top + 0.9 + 0.32 * q), ln, fontsize=11, color="0.2")
             top += block_h
             continue
         mesh = trimesh.load(f)

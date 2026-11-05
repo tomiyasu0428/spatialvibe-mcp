@@ -70,7 +70,9 @@ def main():
     if f:
         plt.rcParams["font.family"] = [f, "DejaVu Sans"]
     from matplotlib.collections import LineCollection, PolyCollection
-    centre = np.array([(lo[0] + hi[0]) / 2, (origin[1] - floor_y) * 0.6, (lo[2] + hi[2]) / 2])
+    top = hi[1]
+    centre = np.array([(lo[0] + hi[0]) / 2, floor_y + (top - floor_y) / 2, (lo[2] + hi[2]) / 2])
+    back = max(back, 1.3 * (top - floor_y), 1.1 * (hi[0] - lo[0]))   # step back until it all fits
     cam = np.array([centre[0], eye, hi[2] + back])
     fwd = centre - cam
     fwd /= np.linalg.norm(fwd)
@@ -111,11 +113,19 @@ def main():
     order = np.argsort(-np.array(depth))
     ax.add_collection(PolyCollection([polys[i] for i in order], facecolors=[cols[i] for i in order],
                                      edgecolors="none"))
-    ax.set_xlim(-0.6, 0.6)
-    ax.set_ylim(-0.75, 0.75)
+    if polys:   # frame on everything that is drawn (with a margin), keeping the aspect
+        allq = np.vstack(polys)
+        (x0, y0), (x1, y1) = allq.min(0), allq.max(0)
+        cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
+        half = max((x1 - x0) / 1.2, (y1 - y0) / 1.5) * 0.6 + 0.02
+        ax.set_xlim(cx - half * 1.2 / 1.5 * 1.25, cx + half * 1.2 / 1.5 * 1.25)
+        ax.set_ylim(cy - half, cy + half)
+    else:
+        ax.set_xlim(-0.6, 0.6)
+        ax.set_ylim(-0.75, 0.75)
     ax.set_aspect("equal")
     ax.axis("off")
-    ax.set_title(f"AR 見え方の模擬（目の高さ {eye} m・{back} m 手前から）\n"
+    ax.set_title(f"AR 見え方の模擬（目の高さ {eye} m・{back:.1f} m 手前から）\n"
                  f"取付け点は置いた面から {summary['origin_above_resting_surface_cm']} cm 上 / "
                  f"置かれるのは {summary['rests_on']}", fontsize=9)
     fig.savefig(out, bbox_inches="tight")

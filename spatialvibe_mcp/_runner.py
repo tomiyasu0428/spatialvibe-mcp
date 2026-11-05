@@ -502,6 +502,8 @@ def measure_dims(spec, parts, context, holes_by_part):
                 raise ValueError(f"part {name!r} not in parts")
             shp, hl = parts[name], holes_by_part[name]
             m = {"label": label, "part": name, "kind": kind, "measured": True}
+            if d.get("key"):   # one of the 2–3 dims that decide fit: shown on the summary page
+                m["key"] = True
             if d.get("view") in ("X", "Y", "Z"):   # the script can choose the panel's viewing direction
                 m["view_normal"] = d["view"]
             if kind == "distance":
@@ -771,10 +773,41 @@ def text_list(obj, label):
     return [str(x) for x in obj][:20]
 
 
+def _watch_cuts(script):
+    """Record cuts (a - b) in the user's script that remove nothing: usually a tool extruded the wrong
+    way (Plane.YZ winding) or placed beside the part. Returns the list it fills: [line numbers]."""
+    import build123d as bd
+    found, count = [], [0]
+
+    def wrap(orig):
+        def sub(self, other):
+            res = orig(self, other)
+            count[0] += 1
+            if count[0] > 300:
+                return res
+            try:
+                v0 = getattr(self, "volume", 0) or 0
+                tools = other if isinstance(other, (list, tuple)) else [other]
+                vt = sum((getattr(o, "volume", 0) or 0) for o in tools)
+                if v0 > 1e-6 and vt > 1e-3 and abs(v0 - (getattr(res, "volume", 0) or 0)) < 1e-6 * max(1.0, v0):
+                    line = next((f.lineno for f in reversed(traceback.extract_stack()) if f.filename == script), None)
+                    if line and line not in found:
+                        found.append(line)
+            except Exception:
+                pass
+            return res
+        return sub
+    for cls in (bd.Shape, bd.Compound):
+        if "__sub__" in cls.__dict__:
+            cls.__sub__ = wrap(cls.__dict__["__sub__"])
+    return found
+
+
 def main():
     global RESULT
     code_path, out, RESULT = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
     sys.argv = [str(code_path)]  # the script must not see the runner's arguments
+    noop_cuts = _watch_cuts(str(code_path))
     try:
         ns = runpy.run_path(str(code_path), run_name="__main__")
     except SystemExit:
@@ -804,6 +837,8 @@ def main():
             fail("ar_floor must be a number: the Z (mm) of the floor/table the user puts the AR model on")
         result["ar_floor_z"] = float(ar_floor)
     warn = result["warnings"]
+    for line in noop_cuts[:5]:
+        warn.append(f"model.py {line} 行目: 切り取りが何も削っていない（向きが逆に押し出されたか、位置がずれている）")
     for name, shp in parts.items():
         stl = out / f"part_{name}.stl"
         export_stl(shp, str(stl))
@@ -813,6 +848,8 @@ def main():
             "valid": bool(shp.is_valid),
             "solids": len(shp.solids()),
             "volume_cm3": round(shp.volume / 1000, 2),
+            # rough: 0.2 mm layers, ~40 % infill, ordinary speed; a hint for "how long to reprint"
+            "print_minutes": int(round(8 + 1.6 * shp.volume / 1000)),
             "bbox_mm": bbox(shp),
             "holes": summarize(hl),
             "hole_list": hl,

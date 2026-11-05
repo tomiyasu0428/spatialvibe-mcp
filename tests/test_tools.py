@@ -435,6 +435,22 @@ class UseCaseRoundTests(unittest.TestCase):
         self.assertEqual([h.get("through") for h in hl], [False], hl)
         self.assertTrue(self.r["parts"]["hook_L"]["hole_list"][0]["through"])
 
+    def test_cut_that_removes_nothing_is_warned(self):
+        code = ("from build123d import *\n"
+                "blk = Box(20, 20, 20)\n"
+                "blk = blk - Pos(100, 0, 0) * Cylinder(3, 30)\n"      # misses the part entirely
+                "parts = {'blk': blk}\n")
+        r = server.build_model("uc-noop", code)
+        self.assertTrue(r["ok"], r)
+        self.assertTrue(any("3 行目" in w and "削っていない" in w for w in r["warnings"]), r["warnings"])
+
+    def test_changes_since_previous_version(self):
+        server.build_model("uc-diff", "from build123d import *\nparts = {'p': Box(20, 20, 5) - Pos(5, 0, 0) * Cylinder(2, 10)}\n")
+        r = server.build_model("uc-diff", "from build123d import *\nparts = {'p': Box(30, 20, 5) - Pos(8, 0, 0) * Cylinder(2, 10)}\n")
+        ch = r["changes"]
+        self.assertEqual(ch["since_version"], 1)
+        self.assertTrue(any("size 20 × 20 × 5 → 30 × 20 × 5" in c and "holes moved" in c for c in ch["changed"]), ch)
+
     def test_part_wildcard_and_hardware_context(self):
         self.assertEqual(sorted(d["part"] for d in self.r["dims"]), ["hook_L", "hook_R"])
         self.assertFalse(any("hw_bolt" in w for w in self.r["warnings"]), self.r["warnings"])
