@@ -240,7 +240,8 @@ numbered list (「1. 裏返して出っぱりに印 2. 印の間にフック 3. 
 so the sheet states the same viewpoint as the reply.
 
 ## 4. AR fit check
-- `publish_ar` (with context) and pass on its `how_to_open` in plain words: where to aim the
+- `publish_ar` (with context). If it returns `link`, send that link (open in Safari, tap the picture).
+  Otherwise pass on its `how_to_open` in plain words: where to aim the
   phone (「肘掛けの手前の床」), what to line up, 1本指でずらす・2本指で回すのは OK・つまむのは NG
   (100 % が実物大), the model cannot be moved up or down. For parts under a desk or counter add
   「しゃがんで下から見る」. Quote `parts_size_m`, not `scene_size_m` (that includes the

@@ -1,6 +1,7 @@
 """End-to-end checks of the MCP tools and the reel validator. Run: .venv/bin/python -m unittest -v"""
 import json
 import os
+import shutil
 import sys
 import tempfile
 import unittest
@@ -587,6 +588,54 @@ class FlowRoundGTests(unittest.TestCase):
         r = server.build_model("g-badstep", code)
         self.assertFalse(r["ok"])
         self.assertIn("nope", r["error"])
+
+
+@unittest.skipUnless(shutil.which("node"), "node is needed to run the AR host locally")
+class CloudflareArTests(unittest.TestCase):
+    """publish_ar uploads to the real Worker code (run locally with an in-memory bucket)."""
+
+    def test_publish_gives_a_link_page(self):
+        import socket
+        import subprocess
+        import urllib.request
+        with socket.socket() as s_:
+            s_.bind(("127.0.0.1", 0))
+            port = s_.getsockname()[1]
+        proc = subprocess.Popen(["node", str(ROOT / "cloudflare" / "dev_server.mjs"), str(port), "tok-123"],
+                                stdout=subprocess.PIPE, text=True)
+        try:
+            self.assertIn("ready", proc.stdout.readline())
+            r = server.build_model("cf-ar", "from build123d import *\nparts = {'a': Box(20, 30, 10)}\n"
+                                            "context = {'pipe': Pos(0, 0, -20) * Box(80, 10, 10)}\nar_floor = -500\n")
+            self.assertTrue(r["ok"], r)
+            server.preview("cf-ar")
+            old = server.PUBLISH
+            server.PUBLISH = f"cloudflare:http://127.0.0.1:{port}"
+            os.environ["SPATIALVIBE_UPLOAD_TOKEN"] = "tok-123"
+            try:
+                out = server.publish_ar("cf-ar")
+            finally:
+                server.PUBLISH = old
+            self.assertTrue(out["link"].startswith(f"http://127.0.0.1:{port}/ar/"))
+            page = urllib.request.urlopen(out["link"]).read().decode()
+            self.assertIn("#allowsContentScaling=0", page)
+            self.assertIn("床から 50 cm", page)
+            usdz_url = out["link"].replace("/ar/", "/f/") + "/model.usdz"
+            with urllib.request.urlopen(usdz_url) as f:
+                self.assertEqual(f.headers["Content-Type"], "model/vnd.usdz+zip")
+                self.assertEqual(f.read(), Path(out["usdz"]).read_bytes())
+            os.environ["SPATIALVIBE_UPLOAD_TOKEN"] = "wrong"
+            server.PUBLISH = f"cloudflare:http://127.0.0.1:{port}"
+            try:
+                with self.assertRaises(server.SpatialVibeError):
+                    server.publish_ar("cf-ar")
+            finally:
+                server.PUBLISH = old
+        finally:
+            os.environ.pop("SPATIALVIBE_UPLOAD_TOKEN", None)
+            proc.terminate()
+            proc.wait(timeout=10)
+            proc.stdout.close()
 
 class StdioTests(unittest.TestCase):
     """Over a real MCP stdio connection the server's own error text must reach the client."""

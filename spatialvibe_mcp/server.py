@@ -20,7 +20,7 @@ from .usdz import build_usdz, usdz_size_m
 REPO = Path(__file__).resolve().parent.parent
 HOME = Path(os.environ.get("SPATIALVIBE_HOME", REPO / "data" / "mcp_projects")).expanduser()
 ICLOUD = Path.home() / "Library/Mobile Documents/com~apple~CloudDocs"
-PUBLISH = os.environ.get("SPATIALVIBE_PUBLISH", "icloud")   # "icloud" | "dir:/some/path"
+PUBLISH = os.environ.get("SPATIALVIBE_PUBLISH", "icloud")   # "icloud" | "dir:/some/path" | "cloudflare:https://host"
 TIMEOUT = int(os.environ.get("SPATIALVIBE_TIMEOUT", "180"))
 PROJECT = re.compile(r"[A-Za-z0-9_-]{1,60}")
 
@@ -329,7 +329,9 @@ def publish_ar(project: str, version: int | None = None, include_context: bool =
 
     With include_context the surroundings are included translucent, so the user can line the
     model up with the real object (e.g. the pipe). Default target is iCloud Drive
-    (Files app → iCloud Drive → SpatialVibe), which works on any network.
+    (Files app → iCloud Drive → SpatialVibe), which works on any network. With
+    SPATIALVIBE_PUBLISH=cloudflare:<https://host> it is uploaded to the AR host (cloudflare/) and
+    `link` is a page the user opens on the iPhone (Safari) — one tap starts AR; links expire.
     If the script set ar_floor, the model gets a floor plate at that height: tell the user to aim
     the phone at that floor before tapping AR, then slide it until the grey context lines up.
     """
@@ -341,7 +343,11 @@ def publish_ar(project: str, version: int | None = None, include_context: bool =
     except ValueError as e:
         raise SpatialVibeError(str(e)) from e
     fname = f"{project}_{vdir.name}{'' if include_context else '_parts-only'}.usdz"
-    if PUBLISH == "icloud":
+    link = None
+    if PUBLISH.startswith("cloudflare:"):
+        dest_dir = None
+        how = "このリンクを iPhone の Safari で開いて、絵をタップ（または「AR で開く」）"
+    elif PUBLISH == "icloud":
         if not ICLOUD.exists():
             raise SpatialVibeError("iCloud Drive not found on this Mac; set SPATIALVIBE_PUBLISH=dir:/path")
         dest_dir = ICLOUD / "SpatialVibe"
@@ -354,21 +360,63 @@ def publish_ar(project: str, version: int | None = None, include_context: bool =
     where = f"（{res['origin']}）" if res.get("origin") else ""
     moves = "1本指でずらす・2本指でひねって回すのは OK、つまんで広げる/縮めるのは NG（100% が実物大）。上下には動かせない"
     if floor_z is not None and floor_z < -5:
+        ar_steps = ["取付け場所の手前の床にスマホを向けてから AR",
+                    f"黄色い板が床に出て、細い柱の先＝取付け点{where}が床から {abs(floor_z) / 10:g} cm の高さに出る",
+                    "灰色の周囲が本物に重なるまで、1本指でずらす・2本指でひねって回す（上下には動かせない）",
+                    "つまんで大きさを変えない（100% が実物大）"]
         how += (f"。取付け場所の手前の床にスマホを向けてから AR。黄色い板が床に出て、細い柱の先＝取付け点{where}が"
                 f"床から {abs(floor_z) / 10:g} cm の高さに出る。灰色の周囲が本物に重なるまで動かす（{moves}）")
     else:
+        ar_steps = ["置きたい床や台にスマホを向けてから AR",
+                    "灰色の周囲が本物に重なるまで、1本指でずらす・2本指でひねって回す",
+                    "つまんで大きさを変えない（100% が実物大）"]
         how += f"。置きたい床や台にスマホを向けてから AR。灰色の周囲が本物に重なるまで動かす（{moves}）"
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(usdz, dest_dir / fname)
     pm = [round(v / 1000, 4) for v in res.get("parts_size_mm", [0, 0, 0])]
+    if dest_dir is None:
+        link = _upload_ar(project, vdir, usdz, ar_steps, pm)
+        published = link
+    else:
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(usdz, dest_dir / fname)
+        published = str(dest_dir / fname)
     sx, sy_up, sz = usdz_size_m(usdz)
-    return {"usdz": str(usdz), "published": str(dest_dir / fname), "how_to_open": how,
+    return {"usdz": str(usdz), "published": published, "link": link, "how_to_open": how,
             "parts_size_m": {"x_width": pm[0], "y_depth": pm[1], "z_height": pm[2]},
             "scene_size_m": {"x_width": sx, "y_depth": sz, "z_height": sy_up},
             "include_context": include_context,
             "ar_floor_mm": floor_z,
             "note": "quote parts_size_m (what is printed); scene_size_m also contains the context. "
                     "Both use the script's axes: x = width, y = depth, z = height."}
+
+
+def _upload_ar(project: str, vdir: Path, usdz: Path, steps: list, parts_m: list) -> str:
+    """Put the USDZ, a picture and the instructions on the Cloudflare AR host (cloudflare/worker.js)
+    under a long random id, and return the page link. The token is SPATIALVIBE_UPLOAD_TOKEN."""
+    import secrets
+    import urllib.request
+    base = PUBLISH[len("cloudflare:"):].rstrip("/")
+    token = os.environ.get("SPATIALVIBE_UPLOAD_TOKEN")
+    if not base.startswith(("https://", "http://127.0.0.1", "http://localhost")):
+        raise SpatialVibeError("SPATIALVIBE_PUBLISH=cloudflare:<https://your-worker-host> is needed")
+    if not token:
+        raise SpatialVibeError("SPATIALVIBE_UPLOAD_TOKEN is not set (the Worker's UPLOAD_TOKEN secret)")
+    rid = secrets.token_urlsafe(18)
+    meta = {"title": f"{project} {vdir.name}", "steps": steps,
+            "parts_size_cm": [round(v * 100, 1) for v in parts_m], "has_thumb": (vdir / "preview.png").exists()}
+    files = [("model.usdz", usdz.read_bytes(), "model/vnd.usdz+zip")]
+    if meta["has_thumb"]:
+        files.append(("thumb.png", (vdir / "preview.png").read_bytes(), "image/png"))
+    files.append(("meta.json", json.dumps(meta, ensure_ascii=False).encode(), "application/json"))
+    url = None
+    for name, body, ctype in files:   # meta last: the page exists only once everything is up
+        req = urllib.request.Request(f"{base}/api/ar/{rid}/{name}", data=body, method="PUT",
+                                     headers={"Authorization": f"Bearer {token}", "Content-Type": ctype})
+        try:
+            with urllib.request.urlopen(req, timeout=60) as r:
+                url = json.loads(r.read().decode()).get("url", url)
+        except Exception as e:
+            raise SpatialVibeError(f"uploading {name} to the AR host failed: {e}") from e
+    return url or f"{base}/ar/{rid}"
 
 
 @mcp.tool()

@@ -1,0 +1,14 @@
+# AR link host for spatialvibe-mcp: publish_ar uploads a USDZ here and hands the user a link.
+# Deploy: npx wrangler r2 bucket create spatialvibe-ar
+#         npx wrangler secret put UPLOAD_TOKEN      (the same value as SPATIALVIBE_UPLOAD_TOKEN)
+#         npx wrangler deploy
+name = "spatialvibe-ar"
+main = "worker.js"
+compatibility_date = "2025-06-01"
+
+[vars]
+TTL_DAYS = "30"   # links stop working after this many days
+
+[[r2_buckets]]
+binding = "BUCKET"
+bucket_name = "spatialvibe-ar"

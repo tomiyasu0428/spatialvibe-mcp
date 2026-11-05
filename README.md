@@ -41,7 +41,8 @@ Claude Desktop では `claude_desktop_config.json` の `mcpServers` に同じコ
 | 環境変数 | 既定 | 意味 |
 | --- | --- | --- |
 | `SPATIALVIBE_HOME` | `./data/mcp_projects` | プロジェクトと版の保存先 |
-| `SPATIALVIBE_PUBLISH` | `icloud` | AR ファイルの置き場所（`icloud` / `dir:/path`） |
+| `SPATIALVIBE_PUBLISH` | `icloud` | AR ファイルの置き場所（`icloud` / `dir:/path` / `cloudflare:https://…`。cloudflare は iPhone の Safari で開くリンクを返す。[cloudflare/README.md](cloudflare/README.md)） |
+| `SPATIALVIBE_UPLOAD_TOKEN` | なし | cloudflare に上げるときの合言葉（Worker の `UPLOAD_TOKEN` と同じ値） |
 | `SPATIALVIBE_TIMEOUT` | `180` | 1 回の実行の制限秒数 |
 | `SPATIALVIBE_BED` | `256,256,256` | プリンタの造形範囲 mm（`fits_bed` の判定） |
 
