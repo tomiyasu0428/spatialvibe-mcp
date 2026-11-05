@@ -32,6 +32,8 @@ T = {  # label text, Japanese when a font exists
     "overall_n": ("組み立てた全体 {s} mm（部品ごとの大きさは各部品の欄）", "assembled {s} mm (each part below)"),
     "same": ("{a} と同じ形です（{n} 個目）。寸法も同じなので、図は {a} の欄を見てください。",
              "same shape as {a} (copy {n}); see {a} for the drawings."),
+    "assembled": ("取り付けたところ（正面から・灰色は周りの物）", "Installed (front view; grey = surroundings)"),
+    "assembled_side": ("横から", "from the side"),
     "details": ("詳しい情報（印刷する人・CAD 用。現場では見なくてよい）", "Details (for whoever prints or edits it)"),
     "holes": ("穴", "holes"), "half": ("円弧", "arc"), "none": ("なし", "none"), "slot": ("長穴", "slot"),
     "bed_ok": ("ベッドに入る ✓", "fits bed ✓"), "bed_ng": ("ベッドに入らない ✗", "too big for bed ✗"),
@@ -425,14 +427,24 @@ def main():
                 d["_tag"] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[k % 26]
                 k += 1
     LINE, PANEL, VIEW_H = 0.3, 2.75, 2.6
-    blocks = []
-    copies = {}
-    for k, info in enumerate(infos):
+    def ndims(k_):
+        return len([d for d in dims_all if d.get("part") == infos[k_]["_name"] and d.get("_tag")])
+    groups = {}
+    for k in range(len(infos)):   # same-shape groups; the member with the dims is drawn, the rest are one line
         j = same_as(k)
-        if j is not None and not [d for d in dims_all if d.get("part") == info["_name"] and d.get("_tag")]:
-            root = copies.get(j, j)
-            copies[k] = root
-            n_ = 1 + sum(1 for v in copies.values() if v == root)
+        root = k if j is None else next(r for r, ms in groups.items() if j in ms)
+        groups.setdefault(root, []).append(k)
+    copies = {}
+    for ms in groups.values():
+        keep = max(ms, key=ndims)
+        for m in ms:
+            if m != keep and ndims(m) == 0:
+                copies[m] = keep
+    blocks = []
+    for k, info in enumerate(infos):
+        if k in copies:
+            root = copies[k]
+            n_ = 1 + sorted(m for m, r in copies.items() if r == root).index(k) + 1
             blocks.append((None, [], [(t("same", a=infos[root]["_name"], n=n_), 11, "0.2", True, 0)], 1.2))
             continue
         name = info["_name"]
@@ -449,8 +461,9 @@ def main():
                    for i_, ln in enumerate(wrap(item, 44))])
             for key, key2 in (("buy", "hardware"), ("check", "checks"))]
     memo_h = sum(0.42 + 0.3 * len(items) for _, items in memo) + 0.3
+    ASM_H = 3.2   # one picture of the parts in place, before any detail
     axes_h = 0.35
-    H = head_h + memo_h + sum(b[3] for b in blocks) + axes_h
+    H = head_h + memo_h + ASM_H + sum(b[3] for b in blocks) + axes_h
     fig = plt.figure(figsize=(9, H), dpi=120)
 
     def y(inch):  # figure fraction from top, in inches
@@ -477,8 +490,33 @@ def main():
         for line, first in items:
             fig.text(0.07, y(ym + 0.22), (("・" if JA else "- ") if first else "　") + line, fontsize=11)
             ym += 0.3
+    # installed: all parts in colour with the surroundings close to them, from the front and the side
+    part_meshes = [trimesh.load(f) for f in files]
+    import numpy as np
+    plo = np.min([m.bounds[0] for m in part_meshes], axis=0)
+    phi = np.max([m.bounds[1] for m in part_meshes], axis=0)
+    fig.text(0.04, y(head_h + memo_h + 0.3), t("assembled"), fontsize=12, fontweight="bold")
+    for col, (a_, b_, ttl) in enumerate(((0, 2, ""), (1, 2, t("assembled_side")))):
+        ax = fig.add_axes((0.04 + col * 0.47, y(head_h + memo_h + ASM_H - 0.1), 0.44, (ASM_H - 0.55) / H))
+        cu, cv = (plo[a_] + phi[a_]) / 2, (plo[b_] + phi[b_]) / 2
+        half = max(phi[a_] - plo[a_], phi[b_] - plo[b_]) * 0.9 + 25
+        for cm in ctx_meshes:
+            ax.add_collection(PolyCollection(cm.triangles[:, :, [a_, b_]], facecolors=[(0.72, 0.74, 0.78, 0.5)],
+                                             edgecolors="none", antialiased=False, zorder=0))
+        for k_, pm in enumerate(part_meshes):
+            ax.add_collection(PolyCollection(pm.triangles[:, :, [a_, b_]], facecolors=[part_color(k_)],
+                                             edgecolors=[part_color(k_)], linewidths=0.3, zorder=2))
+        ax.set_xlim(cu - half, cu + half)
+        ax.set_ylim(cv - half * 0.75, cv + half * 0.75)
+        ax.set_aspect("equal")
+        ax.set_xticks([])
+        ax.set_yticks([])
+        for sp_ in ax.spines.values():
+            sp_.set_color("0.8")
+        if ttl:
+            ax.set_title(ttl, fontsize=9, color="0.4")
     VIEWS = (((0, 1), "top", 2), ((0, 2), "front", 1), ((1, 2), "side", 0))  # (plane axes, label, normal axis)
-    top = head_h + memo_h
+    top = head_h + memo_h + ASM_H
     for i, (f, info, (fl, det, il, block_h)) in enumerate(zip(files, infos, blocks)):
         name = info["_name"]
         if fl is None:   # same shape as an earlier part: one line, no drawings

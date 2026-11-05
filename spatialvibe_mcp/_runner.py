@@ -166,7 +166,10 @@ def _countersinks(shape):
     out = []
     for f in shape.faces().filter_by(GeomType.CONE):
         try:
-            ax = BRepAdaptor_Surface(f.wrapped).Cone().Axis()
+            cone = BRepAdaptor_Surface(f.wrapped).Cone()
+            if not 25.0 <= math.degrees(abs(cone.SemiAngle())) <= 65.0:
+                continue  # a funnel or taper, not a countersink (those are 82–100° cones)
+            ax = cone.Axis()
             o = (ax.Location().X(), ax.Location().Y(), ax.Location().Z())
             d = [ax.Direction().X(), ax.Direction().Y(), ax.Direction().Z()]
             k = next(i for i in range(3) if abs(d[i]) > 1e-9)
@@ -216,7 +219,7 @@ def _merge_counterbores(hl, csks):
         for foot, d, dmax, lo, hi in csks:
             near = lo <= h["_hi"] + 0.5 and hi >= h["_lo"] - 0.5      # the cone touches the hole
             if (d == tuple(h["_dir"]) and all(abs(x - y) < 0.15 for x, y in zip(foot, h["_foot"]))
-                    and near and dmax <= 2.6 * h["d"]):
+                    and near and 1.3 * h["d"] <= dmax <= 2.6 * h["d"]):
                 h["countersink"] = {"d": dmax}
                 break
     return [h for h in hl if id(h) not in absorbed]
