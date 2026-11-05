@@ -16,6 +16,9 @@ short enough to read on one phone screen: no long paragraphs, no jargon, numbers
   object is held; what must not be blocked (view, door, connectors, hands, folding, transfers); weather/vibration;
   must it stay level; how heavy the load is. Let the user add free text — their extra remarks are often the key
   constraint (e.g. "must stay level because of the IMU", "little room behind").
+- Ask only choices the user can judge (how it is used, what must stay free, how often it comes
+  off). Construction details (which clamp, how many bolts, a back plate) are yours to decide —
+  do not offer an option you may later drop.
 - Questions + measurements together must fit one phone screen: prefer 3 questions when 4 are
   not needed. Do not spend a question on where the user stands: state the view you assume in
   one line (「〜に座って前を見たとき」「壁に向かって」) and let them correct it.
@@ -117,7 +120,9 @@ short enough to read on one phone screen: no long paragraphs, no jargon, numbers
   seats (comb slots, clip mouths) also count as holes for `snap: "hole"`. Hole-centre distances are
   shown with the caliper values (edge to edge) automatically. Each dim gets a panel; add
   `"view": "Z"` to choose the direction it is seen from if the automatic one hides the feature.
-  Choose 3–7 dims per part: the ones the user can actually measure on the real thing.
+  Choose 3–7 dims per part: the ones the user can actually measure on the real thing. Mark the
+  2–3 that decide fit with `"key": True`: they go on the one-page summary (sheet.png); all dims
+  and panels are on page 2 (sheet_detail.png).
   `print_pose` is the inverse of the rotation you used to install the part (modelled with
   Rot(-7, 0, 0) → print_pose Rot(7, 0, 0)).
 - `origin = "壁の面・ブラケットの底・ネジの中間"`: say in words where (0,0,0) is, so the user knows
@@ -139,9 +144,11 @@ short enough to read on one phone screen: no long paragraphs, no jargon, numbers
   (centre / which edge / hole centres) in one line, and after the build compare `hole_list`
   with the previous version to confirm what stayed put. If the request has two readings that
   lead to different parts, ask one short question first.
-- If your design departs from something the user said or chose (an option they picked, "上から"
-  became "下から押し上げる", 2 bolts became 4), say so and why in the first lines of the reply —
-  also when the user asked for no more questions.
+- Keep what the user chose. If a choice turns out unworkable, ask one yes/no line before building
+  (「立てて入れると足に当たるので、平らに重ねる形でいい？」); if they asked for no more questions,
+  build it and say the departure and why in the first lines of the reply.
+- Fasteners are tightened from the safe side: never make the user reach over a balcony rail,
+  under a moving wheel or into a machine to hold a nut.
 - `checks` are only things the user can check with what they have (tape → no 0.1 mm values,
   no "measure the wire"). Never ask in `checks` for a number they said they cannot get, or that
   the model number should give: absorb it with a generous fit instead. If a deciding size is
@@ -157,8 +164,8 @@ clamp_in; explain a term once in brackets (PETG（熱と日光に強い材料）
    numbers (「縁 8 mm → みぞ 9 mm（+1）」), and the answer to their main worry.
 3. 「買うもの」 and 「印刷前に確認」 copied from `hardware` / `checks`: the fewest kinds of screws,
    the size that must not be exceeded first (「蝶ボルトは 15 mm 以下」).
-4. Point to the dimension sheet (sheet.png): its blue 「合わせる寸法」 are what to measure on the real
-   thing; quote the 2–3 most important ones in the reply too.
+4. Send sheet.png (one page: what to buy, what to check, the key dims, a picture of the parts in
+   place) and mention sheet_detail.png for whoever prints it; quote the key dims in the reply too.
 5. Material and print orientation in one line; which values are still guesses in one line.
 6. AR in one line (see below). Anything longer goes only if the user asks.
 

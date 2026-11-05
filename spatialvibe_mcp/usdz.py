@@ -49,6 +49,18 @@ def build_usdz(vdir: Path, include_context: bool = True, floor_z: float | None =
         items += [(extra[0], "ar_floor", FLOOR_COLOR, 0.30)]
         items += [(m, f"ar_floor_post{k}", FLOOR_COLOR, 0.6) for k, m in enumerate(extra[1:])]
 
+    parts_only = [m for m, stem, *_ in items if stem.startswith("part_")]
+    if parts_only:   # small parts are hard to find in AR: a yellow arrow points down at them
+        import numpy as np
+        plo = np.min([m.bounds[0] for m in parts_only], axis=0)
+        phi = np.max([m.bounds[1] for m in parts_only], axis=0)
+        if max(phi - plo) < 80.0:
+            arrow = trimesh.creation.cone(radius=12.0, height=35.0)
+            arrow.apply_transform(trimesh.transformations.rotation_matrix(np.pi, [1, 0, 0]))  # tip down
+            c = (plo + phi) / 2
+            arrow.apply_translation((c[0], c[1], phi[2] + 15.0 + 35.0))
+            items.append((arrow, "ar_pointer", FLOOR_COLOR, 0.9))
+
     usdc = vdir / "model.usdc"
     stage = Usd.Stage.CreateNew(str(usdc))
     UsdGeom.SetStageUpAxis(stage, UsdGeom.Tokens.y)
@@ -82,7 +94,13 @@ def build_usdz(vdir: Path, include_context: bool = True, floor_z: float | None =
 
 
 def usdz_size_m(usdz: Path):
+    """Size of the real things in the USDZ (parts and context), without the AR helpers (floor plate,
+    post, pointer arrow)."""
     stage = Usd.Stage.Open(str(usdz))
-    r = UsdGeom.BBoxCache(0, ["default"]).ComputeWorldBound(stage.GetDefaultPrim()).ComputeAlignedRange()
-    s = r.GetSize()
+    cache = UsdGeom.BBoxCache(0, ["default"])
+    rng = Gf.Range3d()
+    for prim in stage.Traverse():
+        if prim.IsA(UsdGeom.Mesh) and not prim.GetName().startswith("m_ar_"):
+            rng.UnionWith(cache.ComputeWorldBound(prim).ComputeAlignedRange())
+    s = rng.GetSize()
     return [round(s[0], 4), round(s[1], 4), round(s[2], 4)]

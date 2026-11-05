@@ -34,6 +34,10 @@ T = {  # label text, Japanese when a font exists
              "same shape as {a} (copy {n}); see {a} for the drawings."),
     "assembled": ("取り付けたところ（正面から・灰色は周りの物）", "Installed (front view; grey = surroundings)"),
     "assembled_side": ("横から", "from the side"),
+    "keyfit": ("合わせる寸法（大事なもの）", "Key fit dimensions"),
+    "more_pg": ("細かい図と全部の寸法は 2 枚目（sheet_detail.png）。印刷する人や、詳しく確かめたいときに。",
+                "All drawings and dimensions: page 2 (sheet_detail.png)."),
+    "detail_title": ("{p}  {v}  詳しい寸法図（2 枚目）", "{p}  {v}  detailed sheet (page 2)"),
     "details": ("詳しい情報（印刷する人・CAD 用。現場では見なくてよい）", "Details (for whoever prints or edits it)"),
     "holes": ("穴", "holes"), "half": ("円弧", "arc"), "none": ("なし", "none"), "slot": ("長穴", "slot"),
     "bed_ok": ("ベッドに入る ✓", "fits bed ✓"), "bed_ng": ("ベッドに入らない ✗", "too big for bed ✗"),
@@ -463,7 +467,20 @@ def main():
     memo_h = sum(0.42 + 0.3 * len(items) for _, items in memo) + 0.3
     ASM_H = 3.2   # one picture of the parts in place, before any detail
     axes_h = 0.35
-    H = head_h + memo_h + ASM_H + sum(b[3] for b in blocks) + axes_h
+    tagged = [d for d in dims_all if d.get("_tag") and d.get("value") is not None]
+    keys = [d for d in tagged if d.get("key")] or tagged[:3]
+    key_lines = []
+    for d in keys:
+        unit = "°" if d.get("unit") == "°" else " mm"
+        txt = f"{d['label']}  {fmt(d['value'])}{unit}"
+        if "expect" in d and d.get("tol") and unit != "°":
+            txt += f"   （{fmt(d['expect'] - d['tol'])}〜{fmt(d['expect'] + d['tol'])} なら OK）"
+        if "vs" in d:
+            diff = d["value"] - d["vs"]
+            txt += f"   {d['vs_label']} {fmt(d['vs'])} に対して {'+' if diff >= 0 else ''}{fmt(diff)}"
+        key_lines += [(ln, i_ == 0) for i_, ln in enumerate(wrap(txt, 40))]
+    KEY_H = (0.45 + 0.34 * len(key_lines)) if key_lines else 0
+    H = head_h + memo_h + KEY_H + ASM_H + 0.6
     fig = plt.figure(figsize=(9, H), dpi=120)
 
     def y(inch):  # figure fraction from top, in inches
@@ -495,13 +512,22 @@ def main():
     import numpy as np
     plo = np.min([m.bounds[0] for m in part_meshes], axis=0)
     phi = np.max([m.bounds[1] for m in part_meshes], axis=0)
-    fig.text(0.04, y(head_h + memo_h + 0.3), t("assembled"), fontsize=12, fontweight="bold")
+    yk = head_h + memo_h
+    if key_lines:
+        fig.text(0.04, y(yk + 0.35), t("keyfit"), fontsize=12, fontweight="bold", color="#1f4fe0")
+        yk += 0.45
+        for line, first in key_lines:
+            fig.text(0.06, y(yk + 0.25), (("・" if JA else "- ") if first else "　") + line, fontsize=12,
+                     color="#1f4fe0", fontweight="bold" if first else "normal")
+            yk += 0.34
+    a0 = head_h + memo_h + KEY_H
+    fig.text(0.04, y(a0 + 0.3), t("assembled"), fontsize=12, fontweight="bold")
     for col, (a_, b_, ttl) in enumerate(((0, 2, ""), (1, 2, t("assembled_side")))):
-        ax = fig.add_axes((0.04 + col * 0.47, y(head_h + memo_h + ASM_H - 0.1), 0.44, (ASM_H - 0.55) / H))
+        ax = fig.add_axes((0.04 + col * 0.47, y(a0 + ASM_H - 0.1), 0.44, (ASM_H - 0.55) / H))
         cu, cv = (plo[a_] + phi[a_]) / 2, (plo[b_] + phi[b_]) / 2
         half = max(phi[a_] - plo[a_], phi[b_] - plo[b_]) * 0.9 + 25
         for cm in ctx_meshes:
-            ax.add_collection(PolyCollection(cm.triangles[:, :, [a_, b_]], facecolors=[(0.72, 0.74, 0.78, 0.5)],
+            ax.add_collection(PolyCollection(cm.triangles[:, :, [a_, b_]], facecolors=[(0.84, 0.86, 0.89)],
                                              edgecolors="none", antialiased=False, zorder=0))
         for k_, pm in enumerate(part_meshes):
             ax.add_collection(PolyCollection(pm.triangles[:, :, [a_, b_]], facecolors=[part_color(k_)],
@@ -515,8 +541,16 @@ def main():
             sp_.set_color("0.8")
         if ttl:
             ax.set_title(ttl, fontsize=9, color="0.4")
+    fig.text(0.04, y(a0 + ASM_H + 0.35), t("more_pg"), fontsize=9.5, color="0.4")
+    fig.savefig(vdir / "sheet.png")
+    plt.close(fig)
+
+    # page 2: every part with all its fit dimensions, panels and details
+    H = 0.9 + sum(b[3] for b in blocks) + axes_h
+    fig = plt.figure(figsize=(9, H), dpi=120)
+    fig.text(0.04, y(0.5), t("detail_title", p=vdir.parent.name, v=vdir.name), fontsize=16, fontweight="bold")
     VIEWS = (((0, 1), "top", 2), ((0, 2), "front", 1), ((1, 2), "side", 0))  # (plane axes, label, normal axis)
-    top = head_h + memo_h + ASM_H
+    top = 0.9
     for i, (f, info, (fl, det, il, block_h)) in enumerate(zip(files, infos, blocks)):
         name = info["_name"]
         if fl is None:   # same shape as an earlier part: one line, no drawings
@@ -577,7 +611,7 @@ def main():
 
     fig.add_artist(plt.Line2D([0.03, 0.97], [y(top + 0.05)] * 2, color="0.85", lw=1))
     fig.text(0.04, y(top + 0.3), t("axes"), fontsize=8.5, color="0.5")
-    fig.savefig(vdir / "sheet.png")
+    fig.savefig(vdir / "sheet_detail.png")
     plt.close(fig)
 
 

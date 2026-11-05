@@ -176,7 +176,10 @@ def preview(project: str, version: int | None = None) -> list:
     2) Dimension sheet for the user's phone: part count, overall size, and per part the size
        W×D×H mm, round holes, whether it fits the print bed, top/front views with dimension lines,
        then the script's `hardware` and `checks` lists.
-    Look at both yourself before replying; send the user the sheet (sheet.png) with your reply.
+    3) sheet.png is one summary page (what to buy, what to check, the key fit dimensions — `"key": True`
+       on a dim, else the first three — and the parts in place); sheet_detail.png has every part's
+       fit dimensions with zoomed panels. Look at all of them; send the user sheet.png (and
+       sheet_detail.png for whoever prints or wants detail).
     """
     vdir = _built_version_dir(project, version)
     out = []
@@ -187,8 +190,9 @@ def preview(project: str, version: int | None = None) -> list:
         if p.returncode != 0 or not png.exists():
             raise SpatialVibeError(f"drawing the {name} failed: {p.stderr.strip()[-1500:] or 'no output'}")
         out.append(png)
-    return [Image(path=str(out[0])), Image(path=str(out[1])),
-            f"{project} {vdir.name}: views {out[0]} / dimension sheet {out[1]}"]
+    detail = vdir / "sheet_detail.png"
+    return [Image(path=str(out[0])), Image(path=str(out[1])), Image(path=str(detail)),
+            f"{project} {vdir.name}: views {out[0]} / summary sheet {out[1]} / detailed sheet {detail}"]
 
 
 @mcp.tool()

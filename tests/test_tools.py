@@ -26,9 +26,10 @@ class ToolTests(unittest.TestCase):
         self.assertEqual(r["parts"]["block"]["bbox_mm"]["size"], [20.0, 10.0, 5.0])
         self.assertTrue(r["parts"]["block"]["valid"])
         self.assertEqual(r["interference"], [])
-        views, sheet, text = server.preview("t-flow")
+        views, sheet, detail, text = server.preview("t-flow")
         self.assertTrue(Path(views.path).exists())
         self.assertTrue(Path(sheet.path).exists())
+        self.assertTrue(Path(detail.path).exists() and str(detail.path).endswith("sheet_detail.png"))
         self.assertTrue(str(sheet.path).endswith("sheet.png"))
         pub = server.publish_ar("t-flow")
         self.assertTrue(Path(pub["published"]).exists())
@@ -255,7 +256,7 @@ class DimsTests(unittest.TestCase):
         w = self.r["parts"]["wedge"]
         self.assertEqual(w["print_size_mm"][:2], [40.0, 60.0])           # turned 90° for printing
         self.assertTrue((Path(self.r["folder"]) / "print_wedge.stl").exists())
-        _, sheet, _ = server.preview("d-dims")
+        _, sheet, _, _ = server.preview("d-dims")
         self.assertTrue(Path(sheet.path).exists())
 
 
@@ -315,7 +316,7 @@ class FaceSnapTests(unittest.TestCase):
 
     def test_print_pose_by_face(self):
         self.assertEqual(self.r["parts"]["br"]["print_down"], "-X")
-        _, sheet, _ = server.preview("d-face")
+        _, sheet, _, _ = server.preview("d-face")
         self.assertTrue(Path(sheet.path).exists())
 
 ROUND_CODE = """
@@ -382,7 +383,9 @@ class ArFloorTests(unittest.TestCase):
         stage = Usd.Stage.Open(out["usdz"])
         rng = UsdGeom.BBoxCache(0, ["default"]).ComputeWorldBound(stage.GetDefaultPrim()).ComputeAlignedRange()
         self.assertAlmostEqual(rng.GetMin()[1], -0.801, places=3)     # floor plate bottom (Y up, metres)
-        self.assertAlmostEqual(rng.GetMax()[1], 0.025, places=3)      # clip top stays at its real height
+        clip = UsdGeom.BBoxCache(0, ["default"]).ComputeWorldBound(
+            stage.GetPrimAtPath("/Root/m_part_clip")).ComputeAlignedRange()
+        self.assertAlmostEqual(clip.GetMax()[1], 0.025, places=3)     # clip top stays at its real height
 
     def test_floor_standing_part_rests_on_the_real_floor(self):
         from pxr import Usd, UsdGeom
@@ -435,7 +438,7 @@ class UseCaseRoundTests(unittest.TestCase):
     def test_part_wildcard_and_hardware_context(self):
         self.assertEqual(sorted(d["part"] for d in self.r["dims"]), ["hook_L", "hook_R"])
         self.assertFalse(any("hw_bolt" in w for w in self.r["warnings"]), self.r["warnings"])
-        _, sheet, _ = server.preview("uc-round")
+        _, sheet, _, _ = server.preview("uc-round")
         self.assertTrue(Path(sheet.path).exists())
 
 
