@@ -227,7 +227,10 @@ clamp_in; explain a term once in brackets (PETG（熱と日光に強い材料）
    the size that must not be exceeded first (「蝶ボルトは 15 mm 以下」).
 4. Send sheet.png (one page: what to buy, what to check, the key dims, a picture of the parts in
    place) and mention sheet_detail.png for whoever prints it; quote the key dims in the reply too.
-   Once the user says the AR fits: send print_plate.3mf and sheet_build.png (印刷と取り付け).
+   Once the user says the AR fits: send sheet_build.png (印刷と取り付け) and hand printing over
+   as data: `get_print_job` (print_job.json — files in print pose, settings, fits that must hold,
+   hardware, steps) is what you, or the AI that drives their slicer/printer, works from. If you
+   have slicer or printer tools, use it directly; never start a print without the user's go-ahead.
 5. Material and print orientation in one line; which values are still guesses in one line.
 6. AR in one line (see below). Anything longer goes only if the user asks.
 Aim for ≤ 12 lines. Call each thing by ONE name throughout (not ふち/垂れ/板); give positions in

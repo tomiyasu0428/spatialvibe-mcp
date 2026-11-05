@@ -165,6 +165,7 @@ def build_model(project: str, code: str, note: str = "", compare_to: int | None 
     (vdir / "result.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
     res.update(project=project, version=int(vdir.name[1:]), folder=str(vdir))
     if res.get("ok") is True:
+        _write_print_job(project, vdir, res)
         res["files"] = sorted(str(f) for f in vdir.iterdir() if f.name.startswith(("part_", "print_", "ctx_")))
         if compare_to is not None:   # e.g. the version the user actually printed, not the last draft
             prev = _built_version_dir(project, compare_to)
@@ -178,6 +179,55 @@ def build_model(project: str, code: str, note: str = "", compare_to: int | None 
             saved["changes"] = res["changes"]
             (vdir / "result.json").write_text(json.dumps(saved, ensure_ascii=False, indent=1), encoding="utf-8")
     return res
+
+
+PRINT_JOB_SCHEMA = "spatialvibe.print_job/1"
+
+
+def _write_print_job(project: str, vdir: Path, res: dict) -> None:
+    """print_job.json: everything an AI (or a person) needs to slice and print this version
+    without reading the sheets — files, pose, settings, the fits that must hold, what to buy."""
+    labels = res.get("labels") or {}
+    ps = res.get("print_settings") or {}
+    sup = set(ps.get("supports") or [])
+    parts = []
+    for name, info in (res.get("parts") or {}).items():
+        stl = f"print_{name}.stl" if (vdir / f"print_{name}.stl").exists() else f"part_{name}.stl"
+        fits = [{k: d[k] for k in ("label", "kind", "value", "unit", "expect", "tol", "min", "max", "vs", "vs_label")
+                 if d.get(k) is not None}
+                for d in res.get("dims") or [] if d.get("part") == name and d.get("value") is not None]
+        parts.append({
+            "name": name, "label": labels.get(name, name), "quantity": 1,
+            "stl": stl, "step": f"part_{name}.step",
+            "down_face": info.get("print_down", "as modelled"),
+            "size_mm": info.get("print_size_mm") or (info.get("bbox_mm") or {}).get("size"),
+            "volume_cm3": info.get("volume_cm3"),
+            "supports": (name in sup) if ps else None,
+            "estimated_minutes": info.get("print_minutes"),
+            "holes": [{"d": h["d"], "through": h.get("through")} for h in info.get("hole_list") or []],
+            "fits": fits,
+        })
+    job = {
+        "schema": PRINT_JOB_SCHEMA, "project": project, "version": int(vdir.name[1:]),
+        "plate": dict(res.get("plate") or {}, bed_mm=res.get("bed_mm")),
+        "settings": {"material": ps.get("material"), "infill_percent": ps.get("infill"),
+                     "layer_mm": ps.get("layer"), "walls": ps.get("walls"), "note": ps.get("note")} if ps else None,
+        "parts": parts,
+        "keep_already_printed": ((res.get("changes") or {}).get("unchanged_parts")
+                                 if (res.get("changes") or {}).get("vs_printed") else []),
+        "hardware": res.get("hardware") or [], "checks_before_print": res.get("checks") or [],
+        "assembly_steps": [st["text"] for st in res.get("steps") or []],
+        "notes_for_ai": [
+            "Units mm. Each STL/3MF is already in print pose: do not rotate or scale.",
+            "settings null = not decided yet: ask the user (material for sun/heat, printer).",
+            "estimated_minutes is a rough volume formula; quote the slicer's time instead once sliced.",
+            "fits are what must hold after printing (hole Ø, slot widths). Do not scale the model to "
+            "fix them; use the slicer's hole/XY compensation if this printer is known to print tight.",
+            "Start a print only after the user confirms. Parts in keep_already_printed are not reprinted.",
+        ],
+    }
+    (vdir / "print_job.json").write_text(json.dumps(job, ensure_ascii=False, indent=1), encoding="utf-8")
+    res["print_job"] = str(vdir / "print_job.json")
 
 
 def _diff(old: dict, new: dict, old_version: int) -> dict:
@@ -319,6 +369,25 @@ def publish_ar(project: str, version: int | None = None, include_context: bool =
             "ar_floor_mm": floor_z,
             "note": "quote parts_size_m (what is printed); scene_size_m also contains the context. "
                     "Both use the script's axes: x = width, y = depth, z = height."}
+
+
+@mcp.tool()
+def get_print_job(project: str, version: int | None = None) -> dict:
+    """The print job of a version (latest by default), for whoever prints it — usually an AI with
+    a slicer or printer tool. Contains absolute file paths (print_plate.3mf, each part's STL and
+    STEP in print pose), settings, the fit dimensions that must hold, hardware, checks and the
+    assembly steps. Never start a print without the user's go-ahead."""
+    vdir = _built_version_dir(project, version)
+    f = vdir / "print_job.json"
+    if not f.exists():
+        _write_print_job(project, vdir, _read_result(vdir))
+    job = json.loads(f.read_text(encoding="utf-8"))
+    job["folder"] = str(vdir)
+    if job.get("plate", {}).get("file"):
+        job["plate"]["path"] = str(vdir / job["plate"]["file"])
+    for p_ in job["parts"]:
+        p_["stl_path"], p_["step_path"] = str(vdir / p_["stl"]), str(vdir / p_["step"])
+    return job
 
 
 @mcp.tool()

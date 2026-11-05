@@ -74,32 +74,25 @@ def main():
     always = [n for n in ctx if n not in named and not n.startswith("hw_")]
 
     # header: printing
-    lines = []
-    if plate:
-        lines.append((f"① {plate['file']} をスライサー（Bambu Studio・PrusaSlicer・OrcaSlicer など）で開く。"
-                      "全部品が刷る向きで1枚に並んでいます", 10.5, "0.1"))
-        if not plate.get("fits_one_bed", True):
-            lines.append(("  ※ 1枚に入りきらないので、はみ出した部品は別に刷る", 10, "#c0392b"))
-    if ps:
-        s_ = f"② 設定：{ps.get('material', 'PETG')}"
-        if ps.get("infill") is not None:
-            s_ += f"・充填 {ps['infill']}%"
-        if ps.get("layer") is not None:
-            s_ += f"・積層 {ps['layer']:g} mm"
-        if ps.get("walls") is not None:
-            s_ += f"・外壁 {ps['walls']} 周"
-        sup = ps.get("supports") or []
-        s_ += "・サポート：" + ("「" + "」「".join(disp(n) for n in sup) + "」だけ" if sup else "なし")
-        lines.append((s_, 10.5, "0.1"))
-        if ps.get("note"):
-            lines.append(("   " + ps["note"], 10, "0.3"))
+    lines = [("印刷：印刷を担当する AI に「print_job.json を読んで印刷を準備して」と頼む"
+              "（ファイル・向き・設定・合わせる寸法が全部入っています）。始める前に確認が来ます", 10.5, "0.1")]
+    if plate and not plate.get("fits_one_bed", True):
+        lines.append(("  ※ 1枚に入りきらないので、はみ出した部品は別に刷る", 10, "#c0392b"))
     mins = [(disp(n), (res["parts"].get(n) or {}).get("print_minutes")) for n in order]
     mins = [(n, m) for n, m in mins if m]
-    if mins:
+    if ps or mins:
         def hm(m):
             return f"{m // 60}時間{m % 60:02d}分" if m >= 60 else f"{m}分"
-        lines.append((f"③ 印刷の目安：約 {hm(sum(m for _, m in mins))}（" +
-                      "・".join(f"{n} {hm(m)}" for n, m in mins) + "）", 10.5, "0.1"))
+        s_ = "手で刷るとき："
+        if ps:
+            s_ += f"{plate['file'] if plate else 'STL'} を開く・{ps.get('material', 'PETG')}"
+            if ps.get("infill") is not None:
+                s_ += f"・充填 {ps['infill']}%"
+            sup = ps.get("supports") or []
+            s_ += "・サポート " + ("「" + "」「".join(disp(n) for n in sup) + "」だけ" if sup else "なし")
+        if mins:
+            s_ += f"・目安 約 {hm(sum(m for _, m in mins))}"
+        lines.append((s_, 10, "0.35"))
     wrapped = [(ln, fs, c) for txt, fs, c in lines for ln in wrap(txt, 44)]
 
     cols_n = 2
