@@ -53,6 +53,10 @@ T = {  # label text, Japanese when a font exists
     "caliper1": ("ノギスで: {f} から穴の縁まで {e} mm（中心までは +{r}）", "caliper: {f} to hole edge {e} (+{r} to centre)"),
     "level": ("取り付けた向きで 水平から {v}°（スマホの水準器で）", "{v}° from level (phone level app)"),
     "plumb": ("垂直から {v}°", "{v}° from vertical"),
+    "atleast": ("{a} 以上なら OK", "OK if {a} or more"),
+    "atmost": ("{b} 以下なら OK", "OK if {b} or less"),
+    "twoface": ("太線の片方の面を机に置き、もう片方の面にスマホの水準器を当てると {v}°",
+                "put one thick-line face on the desk; a phone level on the other reads {v}°"),
     "range": ("この範囲なら OK: {a}〜{b}", "OK if {a}–{b}"),
     "intended": ("意図したすき間（測らなくてよい）: {l}", "intended gaps (no need to measure): {l}"),
     "zoom": ("拡大", "zoom"),
@@ -333,14 +337,21 @@ def main():
                 dh = ed[0] or ed[1]
                 f_ = ends[1] if ed[0] else ends[0]
                 L.append((t("caliper1", f=f_ or "", e=fmt(d["value"] - dh / 2), r=fmt(dh / 2)), 10, "0.2", False, 1))
+            if d.get("unit") == "°" and not d.get("ref"):
+                L.append((t("twoface", v=fmt(d["value"])), 10, "0.2", False, 1))
             if d.get("unit") == "°" and d.get("ref"):
                 L.append((t("level" if d["ref"] == "Z" else "plumb", v=fmt(d["value"])), 10, "0.2", False, 1))
             if "expect" in d and d.get("tol") and d.get("unit") != "°":
                 L.append((t("range", a=fmt(d["expect"] - d["tol"]), b=fmt(d["expect"] + d["tol"])),
                           10, "0.2", False, 1))
             elif d.get("min") is not None or d.get("max") is not None:
-                L.append((t("range", a=fmt(d["min"]) if d.get("min") is not None else "",
-                            b=fmt(d["max"]) if d.get("max") is not None else ""), 10, "0.2", False, 1))
+                if d.get("min") is not None and d.get("max") is not None:
+                    txt_ = t("range", a=fmt(d["min"]), b=fmt(d["max"]))
+                elif d.get("min") is not None:
+                    txt_ = t("atleast", a=fmt(d["min"]))
+                else:
+                    txt_ = t("atmost", b=fmt(d["max"]))
+                L.append((txt_, 10, "0.2", False, 1))
             if "vs" in d:
                 diff = d["value"] - d["vs"]
                 L.append((t("vs", l=d["vs_label"], v=fmt(d["vs"]), d=f"{d['label']} {fmt(d['value'])}"
