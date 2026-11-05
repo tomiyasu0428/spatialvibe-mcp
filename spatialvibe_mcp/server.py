@@ -198,6 +198,8 @@ def publish_ar(project: str, version: int | None = None, include_context: bool =
     With include_context the surroundings are included translucent, so the user can line the
     model up with the real object (e.g. the pipe). Default target is iCloud Drive
     (Files app → iCloud Drive → SpatialVibe), which works on any network.
+    If the script set ar_floor, the model gets a floor plate at that height: tell the user to aim
+    the phone at that floor before tapping AR, then slide it until the grey context lines up.
     """
     vdir = _built_version_dir(project, version)
     res = _read_result(vdir)
@@ -217,6 +219,8 @@ def publish_ar(project: str, version: int | None = None, include_context: bool =
         how = f"{dest_dir / fname} を iPhone で開く"
     else:
         raise SpatialVibeError(f"unknown SPATIALVIBE_PUBLISH={PUBLISH!r}")
+    if floor_z is not None:
+        how += f"。スマホを床に向けてから AR（床から {abs(floor_z) / 10:g} cm の高さに出る。黄色い板を床に置き、灰色の周囲を本物に重ねる）"
     dest_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(usdz, dest_dir / fname)
     pm = [round(v / 1000, 4) for v in res.get("parts_size_mm", [0, 0, 0])]
