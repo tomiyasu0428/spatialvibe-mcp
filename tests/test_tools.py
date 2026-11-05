@@ -364,6 +364,36 @@ class RoundDimsTests(unittest.TestCase):
         self.assertEqual(self.r["interference_unchecked"], [], self.r["warnings"])
 
 
+
+class ArFloorTests(unittest.TestCase):
+    """A part on a pipe must open in AR at its real height above the floor the user aims at."""
+
+    def test_floor_plate_puts_origin_at_real_height(self):
+        from pxr import Usd, UsdGeom
+        code = ("from build123d import *\n"
+                "parts = {'clip': Pos(0, 0, 20) * Box(30, 30, 10)}\n"
+                "context = {'pipe': Rot(0, 90, 0) * Cylinder(12.7, 200)}\n"
+                "ar_floor = -800\n")
+        r = server.build_model("ar-floor", code)
+        self.assertTrue(r["ok"], r)
+        self.assertEqual(r["ar_floor_z"], -800.0)
+        out = server.publish_ar("ar-floor")
+        self.assertEqual(out["ar_floor_mm"], -800.0)
+        stage = Usd.Stage.Open(out["usdz"])
+        rng = UsdGeom.BBoxCache(0, ["default"]).ComputeWorldBound(stage.GetDefaultPrim()).ComputeAlignedRange()
+        self.assertAlmostEqual(rng.GetMin()[1], -0.801, places=3)     # floor plate bottom (Y up, metres)
+        self.assertAlmostEqual(rng.GetMax()[1], 0.025, places=3)      # clip top stays at its real height
+
+    def test_floor_above_model_is_refused_with_text(self):
+        code = ("from build123d import *\n"
+                "parts = {'a': Box(10, 10, 10)}\n"
+                "ar_floor = 0\n")
+        server.build_model("ar-floor-bad", code)
+        with self.assertRaises(server.SpatialVibeError) as cm:
+            server.publish_ar("ar-floor-bad")
+        self.assertIn("ar_floor", str(cm.exception))
+
+
 class StdioTests(unittest.TestCase):
     """Over a real MCP stdio connection the server's own error text must reach the client."""
 

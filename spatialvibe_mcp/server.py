@@ -200,7 +200,12 @@ def publish_ar(project: str, version: int | None = None, include_context: bool =
     (Files app → iCloud Drive → SpatialVibe), which works on any network.
     """
     vdir = _built_version_dir(project, version)
-    usdz = build_usdz(vdir, include_context)
+    res = _read_result(vdir)
+    floor_z = res.get("ar_floor_z") if include_context else None
+    try:
+        usdz = build_usdz(vdir, include_context, floor_z)
+    except ValueError as e:
+        raise SpatialVibeError(str(e)) from e
     fname = f"{project}_{vdir.name}{'' if include_context else '_parts-only'}.usdz"
     if PUBLISH == "icloud":
         if not ICLOUD.exists():
@@ -214,13 +219,13 @@ def publish_ar(project: str, version: int | None = None, include_context: bool =
         raise SpatialVibeError(f"unknown SPATIALVIBE_PUBLISH={PUBLISH!r}")
     dest_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(usdz, dest_dir / fname)
-    res = _read_result(vdir)
     pm = [round(v / 1000, 4) for v in res.get("parts_size_mm", [0, 0, 0])]
     sx, sy_up, sz = usdz_size_m(usdz)
     return {"usdz": str(usdz), "published": str(dest_dir / fname), "how_to_open": how,
             "parts_size_m": {"x_width": pm[0], "y_depth": pm[1], "z_height": pm[2]},
             "scene_size_m": {"x_width": sx, "y_depth": sz, "z_height": sy_up},
             "include_context": include_context,
+            "ar_floor_mm": floor_z,
             "note": "quote parts_size_m (what is printed); scene_size_m also contains the context. "
                     "Both use the script's axes: x = width, y = depth, z = height."}
 

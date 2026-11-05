@@ -126,7 +126,12 @@ short enough to read on one phone screen: no long paragraphs, no jargon, numbers
 - `publish_ar` (with context) and tell the user how to open it: iPhone「ファイル」→ tap the
   .usdz → AR → move the phone until the grey context (e.g. the pipe) sits on the real one; do not pinch
   (pinching changes the scale; it must read 100 % to be real size). Quote `parts_size_m`, not `scene_size_m` (that includes the
-  context; both are labelled x_width / y_depth / z_height). Ask what collides or should move, then change parameters, rebuild, preview, republish. Each build is a new version;
+  context; both are labelled x_width / y_depth / z_height).
+  AR Quick Look can only rest a model on a floor or table, so a part that hangs in the air (on a
+  pipe, a pillar) appears far away on the ground. Set `ar_floor = -850` (Z in mm of the floor or
+  table the user will stand the phone over, e.g. cab floor; ask "床からパイプまで何 cm？") and the
+  USDZ gets a thin yellow floor plate and a post up to the origin: the user aims at that floor,
+  the model sits at its real height, and they slide it until the grey context lines up. Ask what collides or should move, then change parameters, rebuild, preview, republish. Each build is a new version;
   `get_code` retrieves earlier scripts.
 
 ## Limits to state honestly

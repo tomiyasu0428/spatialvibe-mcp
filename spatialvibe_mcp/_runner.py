@@ -775,6 +775,11 @@ def main():
               "near_contact": [], "warnings": [], "origin": str(origin)[:120] if origin else None,
               "hardware": text_list(ns.get("hardware"), "hardware"),
               "checks": text_list(ns.get("checks"), "checks"), "bed_mm": bed}
+    ar_floor = ns.get("ar_floor")
+    if ar_floor is not None:
+        if not isinstance(ar_floor, (int, float)) or isinstance(ar_floor, bool):
+            fail("ar_floor must be a number: the Z (mm) of the floor/table the user puts the AR model on")
+        result["ar_floor_z"] = float(ar_floor)
     warn = result["warnings"]
     for name, shp in parts.items():
         stl = out / f"part_{name}.stl"
