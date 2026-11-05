@@ -48,11 +48,12 @@ T = {  # label text, Japanese when a font exists
     "vs": ("{l} {v} → {d}", "{l} {v} → {d}"), "detail": ("{t}  {l}", "{t}  {l}"),
     "seen": ("{v}から見た断面", "section, seen from {v}"), "overview": ("全体（記号の場所）", "overview (where each letter is)"),
     "touchmany": ("接する: {l}", "touches: {l}"),
+    "touchmeant": ("接する（意図どおり・測らなくてよい）: {l}", "touches as intended: {l}"),
     "caliper2": ("ノギスで: 穴の縁から縁 {i} mm（内側）／ {o} mm（外側）", "caliper: hole edge to edge {i} (inside) / {o} (outside)"),
     "caliper1": ("ノギスで: {f} から穴の縁まで {e} mm（中心までは +{r}）", "caliper: {f} to hole edge {e} (+{r} to centre)"),
-    "level": ("水平から {v}°（机に置いて水準器で）", "{v}° from level (phone level app)"),
+    "level": ("取り付けた向きで 水平から {v}°（スマホの水準器で）", "{v}° from level (phone level app)"),
     "plumb": ("垂直から {v}°", "{v}° from vertical"),
-    "range": ("範囲 {a}〜{b}", "range {a}–{b}"),
+    "range": ("この範囲なら OK: {a}〜{b}", "OK if {a}–{b}"),
     "intended": ("意図したすき間（測らなくてよい）: {l}", "intended gaps (no need to measure): {l}"),
     "zoom": ("拡大", "zoom"),
     "installed": ("取り付けた向きの外形", "as installed"), "dirs": {"X": "+X側", "Y": "−Y側（正面）", "Z": "上"},
@@ -74,7 +75,7 @@ def t(key, **kw):
 
 
 def fmt(v):
-    txt = (f"{v:.2f}" if abs(v) < 10 else f"{v:.1f}").rstrip("0").rstrip(".")
+    txt = (f"{v:.2f}" if abs(v) < 2 else f"{v:.1f}").rstrip("0").rstrip(".")
     return "0" if txt in ("-0", "") else txt
 
 
@@ -158,25 +159,32 @@ def _detail(ax, mesh, ctx, d, color, title):
         return len(_section(mesh, nv, mid))
     if d.get("view_normal"):
         k = "XYZ".index(d["view_normal"])
+    elif d.get("axis_dir") and (d.get("partial") or (d.get("axial") or 1e9) < 0.6 * L):
+        k = int(np.argmax(np.abs(np.array(d["axis_dir"]))))   # a C-shaped seat or a short ring: look down the axis
     elif d.get("axis_dir") and L > 1e-6:   # a diameter: look from the side, square to the arrow and the axis
         cr = np.cross(seg / L, np.array(d["axis_dir"]))
         k = int(np.argmax(np.abs(cr))) if np.linalg.norm(cr) > 0.5 else 1
     else:
         cands = [k for k in range(3) if abs(seg[k]) <= 0.05 * max(L, 1e-9)] or [int(np.argmin(np.abs(seg)))]
+        if d.get("ext"):   # keep the extension line visible too (look square to both)
+            ev = np.array(d["ext"][1]) - np.array(d["ext"][0])
+            both = [k_ for k_ in cands if abs(ev[k_]) <= 0.05 * max(float(np.linalg.norm(ev)), 1e-9)]
+            if both:
+                cands = both
         ext = mesh.extents
 
         def area(k_):   # how big the whole part looks from that side; round parts look best from the side
             i, j = [x for x in range(3) if x != k_]
             return ext[i] * ext[j]
         best = max(area(k_) for k_ in cands)
-        cands = [k_ for k_ in cands if area(k_) >= 0.9 * best]
+        cands = [k_ for k_ in cands if area(k_) >= 0.6 * best]
         k = max(cands, key=nsec)
     a, b = [i for i in range(3) if i != k]
     nv = np.zeros(3)
     nv[k] = 1
 
     def draw(axx, zoom):
-        axx.add_collection(PolyCollection(mesh.triangles[:, :, [a, b]], facecolors=[(*color[:3], 0.30)],
+        axx.add_collection(PolyCollection(mesh.triangles[:, :, [a, b]], facecolors=[tuple(0.7 + 0.3 * c_ for c_ in color[:3])],
                                           edgecolors="none", antialiased=False, zorder=1))
         for cm in ctx:
             axx.add_collection(PolyCollection(cm.triangles[:, :, [a, b]], facecolors=[(0.6, 0.62, 0.66, 0.10)],
@@ -192,6 +200,10 @@ def _detail(ax, mesh, ctx, d, color, title):
             _angle_marks(axx, d, a, b, zoom)
         elif L > 1e-6:
             _arrow(axx, pa[a], pa[b], pb[a], pb[b], 2.4 if zoom else 2.0)
+        if d.get("ext"):   # extension line from the arrow to where the end really is (e.g. the rim)
+            (e0, e1) = np.array(d["ext"][0]), np.array(d["ext"][1])
+            axx.plot([e0[a], e1[a]], [e0[b], e1[b]], color="#1f4fe0", lw=0.9, linestyle="--", zorder=5)
+            axx.plot([e0[a]], [e0[b]], "o", color="#1f4fe0", ms=3.5, zorder=6)
         axx.set_aspect("equal")
         axx.set_xticks([])
         axx.set_yticks([])
@@ -323,7 +335,10 @@ def main():
                 L.append((t("caliper1", f=f_ or "", e=fmt(d["value"] - dh / 2), r=fmt(dh / 2)), 10, "0.2", False, 1))
             if d.get("unit") == "°" and d.get("ref"):
                 L.append((t("level" if d["ref"] == "Z" else "plumb", v=fmt(d["value"])), 10, "0.2", False, 1))
-            if d.get("min") is not None or d.get("max") is not None:
+            if "expect" in d and d.get("tol") and d.get("unit") != "°":
+                L.append((t("range", a=fmt(d["expect"] - d["tol"]), b=fmt(d["expect"] + d["tol"])),
+                          10, "0.2", False, 1))
+            elif d.get("min") is not None or d.get("max") is not None:
                 L.append((t("range", a=fmt(d["min"]) if d.get("min") is not None else "",
                             b=fmt(d["max"]) if d.get("max") is not None else ""), 10, "0.2", False, 1))
             if "vs" in d:
@@ -351,17 +366,21 @@ def main():
             L.append((t("pos"), 8.5, "0.45", False, 0))
             for k, h in enumerate(hl[:MAXPOS], 1):
                 ax_ = h["axis"]
-                where = ", ".join(f"{c} {fmt(h['at'][i])}" for i, c in enumerate("XYZ") if c != ax_)
+                where = ", ".join(f"{c} {fmt(h['at'][i])}" for i, c in enumerate("XYZ"))
                 L.append((f"{k}. {hole_label(h)}  ({where})", 9.5, "0.15", False, 1))
             if len(hl) > MAXPOS:
                 L.append((t("more", n=len(hl) - MAXPOS), 9, "0.45", False, 1))
         else:
             L.append((f"{t('holes')}: {t('none')}", 10, "0.15", False, 0))
+        meant = {n_ for d in dims_all if d.get("part") == name and d.get("kind") == "clearance" and d.get("ok")
+                 for n_ in d.get("to_names", [])}
         touching = [c["to"] for c in clear_all if c.get("part") == name and c.get("mm") == 0]
-        if touching:
-            L.append((t("touchmany", l=", ".join(touching)), 9.5, "0.25", False, 0))
+        if [c for c in touching if c not in meant]:
+            L.append((t("touchmany", l=", ".join(c for c in touching if c not in meant)), 9.5, "0.25", False, 0))
+        if [c for c in touching if c in meant]:
+            L.append((t("touchmeant", l=", ".join(c for c in touching if c in meant)), 9, "0.45", False, 0))
         for c in clear_all:
-            if c.get("part") == name and c.get("mm"):
+            if c.get("part") == name and c.get("mm") and c["to"] not in meant:
                 L.append((t("clear", to=c["to"], mm=fmt(c["mm"])), 9.5, "0.25", False, 0))
         if "fits_bed" in info:
             bed = res.get("bed_mm") or []

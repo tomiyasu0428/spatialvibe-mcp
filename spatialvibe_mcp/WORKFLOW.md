@@ -61,11 +61,14 @@ short enough to read on one phone screen: no long paragraphs, no jargon, numbers
     {"label": "口の幅", "part": "clip", "kind": "gap", "at": (0, 0, 10), "axis": "X", "narrowest": (0, 0, 6),
      "expect": 21.5},
     {"label": "パイプ穴", "part": "clip", "kind": "diameter", "at": (0, 0, 0), "vs": 25.4, "vs_label": "パイプ"},
+    # outer Ø needs a real cylinder face: build round parts from Cylinder/Cone, not revolve()
     {"label": "差し込み外径", "part": "adapter", "kind": "diameter", "outer": True, "at": (0, 0, 40), "expect": 15.6},
+    # a stepped bore: "at" inside the step picks that step (counterbore) instead of the small bore
+    {"label": "ポンプ側の内径", "part": "adapter", "kind": "diameter", "at": (0, 0, 10), "vs": 20.5},
     {"label": "壁の厚さ", "part": "tray", "kind": "thickness", "at": (19, 0, 10), "axis": "X"},
     {"label": "端の厚さ", "part": "wedge", "kind": "thickness", "at": (0, -19.9, 3), "axis": "normal"},  # square to the face
     {"label": "くさびの角度", "part": "wedge", "kind": "angle", "a": (0, 0, 8), "b": (0, 0, 0), "expect": 7},
-    # against level: the sheet says 「水平から 65°（机に置いて水準器で）」
+    # against level in the installed pose: the sheet says 「取り付けた向きで 水平から 65°」
     {"label": "背もたれ", "part": "stand", "kind": "angle", "a": (0, 20, 30), "ref": "Z", "expect": 65},
     {"label": "柱からのはみ出し", "part": "plate", "kind": "overhang", "to": "post", "axis": "X", "side": "+"},
     {"label": "全長", "part": "comb", "kind": "size", "axis": "X"},
@@ -82,11 +85,14 @@ short enough to read on one phone screen: no long paragraphs, no jargon, numbers
   next to the part's (パイプ 25.4 → 穴 25.6). `gap` needs a point in the empty space; `thickness` a
   point inside the material; `axis` may be "X"/"Y"/"Z", a direction (x, y, z) or "normal". Half-round
   seats (comb slots, clip mouths) also count as holes for `snap: "hole"`. Hole-centre distances are
-  shown with the caliper values (edge to edge) automatically. Choose 3–7 dims per part: the ones the
-  user can actually measure on the real thing.
+  shown with the caliper values (edge to edge) automatically. Each dim gets a panel; add
+  `"view": "Z"` to choose the direction it is seen from if the automatic one hides the feature.
+  Choose 3–7 dims per part: the ones the user can actually measure on the real thing.
+  `print_pose` is the inverse of the rotation you used to install the part (modelled with
+  Rot(-7, 0, 0) → print_pose Rot(7, 0, 0)).
 - `origin = "壁の面・ブラケットの底・ネジの中間"`: say in words where (0,0,0) is, so the user knows
   what the coordinates are measured from. Put the origin on a real surface the user can touch.
-- `print_pose = {"bracket": "-X"}` (that face goes on the bed) or `{"wedge": Rot(-7, 0, 0)}` for parts
+- `print_pose = {"bracket": "-X"}` (that face goes on the bed) or `{"wedge": Rot(7, 0, 0)}` for parts
   modelled tilted/standing as installed:
   the tool also writes `print_<name>.stl` in that pose and reports its size (bed check uses it).
 - Also define `hardware` (what to buy, one line per size: "M5×30 ボルト・ナット・ワッシャー 6組")

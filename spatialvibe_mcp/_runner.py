@@ -199,7 +199,7 @@ def _merge_counterbores(hl, csks):
                 continue
             if big["_lo"] > h["_hi"] + 0.5 or big["_hi"] < h["_lo"] - 0.5:
                 continue  # not touching: a separate hole on the same line
-            h["counterbore"] = {"d": big["d"], "depth": round(big["_hi"] - big["_lo"], 1)}
+            h["counterbore"] = {"d": big["d"], "depth": round(big["_hi"] - big["_lo"], 1), "at": big["at"]}
             absorbed.add(id(big))
             break
         for foot, d, dmax, lo, hi in csks:
@@ -312,7 +312,10 @@ def _snap_hole(p, hl):
     """The point on the nearest hole's axis line, level with p (so a point typed on a face snaps to
     the hole centre in that face). Returns (point, index in the hole list, hole)."""
     best = None
-    for k, h in enumerate(hl):
+    cands = [(k, h) for k, h in enumerate(hl)]
+    cands += [(k, {**h, "d": h["counterbore"]["d"], "at": h["counterbore"]["at"], "depth": h["counterbore"]["depth"],
+                   "_cb": True}) for k, h in enumerate(hl) if h.get("counterbore", {}).get("at")]
+    for k, h in cands:
         ax = AXES.get(h["axis"])
         c = h["at"]
         if ax:
@@ -350,6 +353,24 @@ def _snap_face(p, shp, facing=None):
     return (a.X, a.Y, a.Z)
 
 
+def _rim_dir(shp, c, ax, r):
+    """A direction across the bore whose both ends land on material (not through an open mouth),
+    so the caliper has something to touch."""
+    from build123d import Vector
+    perp = [v for v in AXES.values() if abs(sum(v[i] * ax[i] for i in range(3))) < 0.1]
+    perp += [tuple((p0[i] + p1[i]) / math.sqrt(2) for i in range(3)) for p0, p1 in [(perp[0], perp[1])]] \
+        if len(perp) == 2 else []
+    if len(perp) == 3:
+        perp.append(tuple((perp[0][i] - perp[1][i]) / math.sqrt(2) for i in range(3)))
+    for u in perp:
+        try:
+            if all(shp.is_inside(Vector(*(c[i] + s * u[i] * (r + 0.6) for i in range(3)))) for s in (-1, 1)):
+                return u
+        except Exception:
+            break
+    return perp[0] if perp else (1.0, 0.0, 0.0)
+
+
 def _end(d, key, shp, hl, ctx_shapes):
     """One end of a distance: a typed point, snapped to a hole centre or to a surface."""
     p = _vec(d.get(key), key)
@@ -359,7 +380,7 @@ def _end(d, key, shp, hl, ctx_shapes):
         return q, (f"穴{k + 1}", h["d"])
     if isinstance(how, str) and (how == "face" or how.startswith("face:")):
         facing = how.split(":", 1)[1] if ":" in how else None
-        return _snap_face(p, shp, facing), ("面", None)
+        return _snap_face(p, shp, facing), ({"-Z": "底面", "+Z": "上面"}.get(facing or "", "面"), None)
     if isinstance(how, str) and how.startswith("context:"):
         parts_ = how.split(":")
         c, facing = parts_[1], (parts_[2] if len(parts_) > 2 else None)
@@ -407,7 +428,8 @@ def _snap_outer(p, shp):
             foot = tuple(o[i] + d[i] * tp for i in range(3))
             off = math.dist(p, foot)
             bb = f.bounding_box()
-            inside_span = all(bb.min.to_tuple()[i] - 0.5 <= foot[i] <= bb.max.to_tuple()[i] + 0.5 for i in range(3))
+            lo_, hi_ = (bb.min.X, bb.min.Y, bb.min.Z), (bb.max.X, bb.max.Y, bb.max.Z)
+            inside_span = all(lo_[i] - 0.5 <= foot[i] <= hi_[i] + 0.5 for i in range(3))
             score = off + (0 if inside_span else 50)
             if best is None or score < best[0]:
                 best = (score, foot, 2 * cyl.Radius(), d)
@@ -457,12 +479,17 @@ def measure_dims(spec, parts, context, holes_by_part):
                 raise ValueError(f"part {name!r} not in parts")
             shp, hl = parts[name], holes_by_part[name]
             m = {"label": label, "part": name, "kind": kind, "measured": True}
+            if d.get("view") in ("X", "Y", "Z"):   # the script can choose the panel's viewing direction
+                m["view_normal"] = d["view"]
             if kind == "distance":
                 (a, fa), (b, fb) = _end(d, "a", shp, hl, context), _end(d, "b", shp, hl, context)
                 if d.get("axis") is not None:
                     ax = _axis(d["axis"])
                     t = sum((b[i] - a[i]) * ax[i] for i in range(3))
-                    val, b = abs(t), tuple(a[i] + ax[i] * t for i in range(3))
+                    b0, b = b, tuple(a[i] + ax[i] * t for i in range(3))
+                    val = abs(t)
+                    if math.dist(b0, b) > 0.5:   # the real end is off the arrow line: draw an extension line
+                        m["ext"] = [[round(x, 3) for x in b0], [round(x, 3) for x in b]]
                 else:
                     val = math.dist(a, b)
                 m.update(value=round(val, 2), unit="mm", p=[list(a), list(b)],
@@ -524,8 +551,10 @@ def measure_dims(spec, parts, context, holes_by_part):
             elif kind == "diameter":
                 _, idx, h = _snap_hole(_vec(d.get("at"), "at"), hl)
                 c, ax = h["at"], AXES.get(h["axis"], (0.0, 0.0, 1.0))
-                u = next(v for v in AXES.values() if v != ax)
                 r = h["d"] / 2
+                u = _rim_dir(shp, c, ax, r)
+                m["partial"] = bool(h.get("half")) or h.get("kind") == "slot"
+                m["axial"] = h.get("depth")
                 m.update(value=h["d"], unit="mm", ends=[f"穴{idx + 1}", f"穴{idx + 1}"], at=c, axis_dir=list(ax),
                          p=[[c[i] - u[i] * r for i in range(3)], [c[i] + u[i] * r for i in range(3)]])
             elif kind == "size":
@@ -604,7 +633,7 @@ def measure_dims(spec, parts, context, holes_by_part):
                     m.update(value=round(dist, 2), unit="mm", to=",".join(names),
                              p=[[pa.X, pa.Y, pa.Z], [pb.X, pb.Y, pb.Z]] if dist > 1e-6 else None)
                 m["_names"] = names
-                m["panel"] = bool(d.get("panel", d.get("at") is not None))
+                m["panel"] = bool(d.get("panel", False))   # the user can rarely measure a gap to a held object
             else:
                 raise ValueError('kind must be distance, gap, thickness, diameter, size, overhang, angle or clearance')
             if isinstance(d.get("vs"), (int, float)):  # the real object's size, shown next to the part's
@@ -613,7 +642,7 @@ def measure_dims(spec, parts, context, holes_by_part):
             exp = d.get("expect")
             if isinstance(exp, (int, float)):
                 tol = float(d.get("tol", 0.3))
-                m["expect"], m["ok"] = float(exp), abs(m["value"] - float(exp)) <= tol
+                m["expect"], m["tol"], m["ok"] = float(exp), tol, abs(m["value"] - float(exp)) <= tol
                 if not m["ok"]:
                     warns.append(f"{name}: 「{label}」を測ると {m['value']} {m['unit']}（予定 {exp}）")
             lo_, hi_ = d.get("min"), d.get("max")
@@ -811,7 +840,8 @@ def main():
     pairs += [(a, f"context:{c}", context[c]) for a in names for c in context]
     for a, b, other in pairs:
         try:
-            v = (parts[a] & other).volume
+            common = parts[a] & other   # a bare Solid gives None when nothing overlaps
+            v = 0.0 if common is None else common.volume
         except Exception as e:  # not knowing is not the same as "no overlap"
             result["interference_unchecked"].append({"a": a, "b": b, "error": f"{type(e).__name__}: {e}"[:200]})
             warn.append(f"{a} と {b} の重なりを計算できなかった（干渉 未判定）")
@@ -821,7 +851,9 @@ def main():
         elif v > 1e-6:
             result["near_contact"].append({"a": a, "b": b, "overlap_mm3": round(v, 3)})
     for m in result["dims"]:
-        m.pop("_names", None)
+        names_ = m.pop("_names", None)
+        if names_:
+            m["to_names"] = names_
     write_result(result)
 
 

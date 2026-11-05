@@ -318,6 +318,52 @@ class FaceSnapTests(unittest.TestCase):
         _, sheet, _ = server.preview("d-face")
         self.assertTrue(Path(sheet.path).exists())
 
+ROUND_CODE = """
+from build123d import *
+# stepped adapter: pump socket Ø20.8 depth 20, through bore Ø10, spigot Ø15.6 on top
+body = Pos(0, 0, 11) * Cylinder(13, 22) + Pos(0, 0, 34) * Cylinder(7.8, 24)
+body -= Pos(0, 0, 10) * Cylinder(10.4, 20) + Pos(0, 0, 23) * Cylinder(5, 46)
+# C clip: ring Ø25.8 bore, open toward -Y
+clip = Pos(60, 0, 0) * Cylinder(16, 15)
+clip -= Pos(60, 0, 0) * Cylinder(12.9, 15) + Pos(60, -16, 0) * Box(21, 16, 15)
+plate = Pos(0, 60, 3) * Box(40, 30, 6)
+plate = plate.fillet(1, plate.edges().filter_by(Axis.Z))   # a bare Solid: & gives None when apart
+parts = {"adapter": body, "clip": clip, "plate": plate}
+context = {"block": Pos(0, 60, -5) * Box(40, 30, 10)}       # touches the plate's underside
+dims = [
+    {"label": "外径", "part": "adapter", "kind": "diameter", "outer": True, "at": (0, 0, 40), "expect": 15.6},
+    {"label": "ソケット", "part": "adapter", "kind": "diameter", "at": (0, 0, 10), "expect": 20.8},
+    {"label": "中の穴", "part": "adapter", "kind": "diameter", "at": (0, 0, 40), "expect": 10},
+    {"label": "クリップ穴", "part": "clip", "kind": "diameter", "at": (60, 0, 0)},
+]
+"""
+
+
+class RoundDimsTests(unittest.TestCase):
+    """Fixes from dimension round D: outer Ø, stepped bores, clip bores, touching bare solids."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.r = server.build_model("d-round", ROUND_CODE)
+
+    def dim(self, label):
+        return next(d for d in self.r["dims"] if d["label"] == label)
+
+    def test_outer_and_stepped_diameters(self):
+        self.assertTrue(self.r["ok"], self.r)
+        self.assertAlmostEqual(self.dim("外径")["value"], 15.6, places=1)
+        self.assertAlmostEqual(self.dim("ソケット")["value"], 20.8, places=1)
+        self.assertAlmostEqual(self.dim("中の穴")["value"], 10.0, places=1)
+
+    def test_clip_diameter_arrow_avoids_the_mouth(self):
+        d = self.dim("クリップ穴")
+        a, b = d["p"]
+        self.assertLess(abs(a[1] - b[1]), 1e-6, d)       # drawn across X, not out through the -Y mouth
+
+    def test_touching_bare_solid_is_not_unchecked(self):
+        self.assertEqual(self.r["interference_unchecked"], [], self.r["warnings"])
+
+
 class StdioTests(unittest.TestCase):
     """Over a real MCP stdio connection the server's own error text must reach the client."""
 
