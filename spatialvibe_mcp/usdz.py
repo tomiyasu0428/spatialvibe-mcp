@@ -11,19 +11,26 @@ FLOOR_COLOR = (0.95, 0.75, 0.2)
 
 
 def _floor_meshes(meshes, floor_z):
-    """A thin plate at the floor height under the whole scene and a thin post from it up to the
-    origin, so AR Quick Look (which can only rest a model on a floor or table) puts the model at its
-    real height: place it on that floor, then slide it until the grey context lines up."""
-    lo = [min(m.bounds[0][i] for m in meshes) for i in range(2)]
-    hi = [max(m.bounds[1][i] for m in meshes) for i in range(2)]
-    pad = 20.0
-    w, d = hi[0] - lo[0] + 2 * pad, hi[1] - lo[1] + 2 * pad
+    """A yellow plate on the floor IN FRONT of the scene (the user's side, -Y), and a thin post from
+    it up to the origin height with an arm back to the origin. AR Quick Look can only rest a model on
+    a floor or table: the user puts the plate on free floor in front of the real thing, so it never
+    has to overlap a wheel, a chair or a boat side, and the model appears at its real height."""
+    lo = [min(m.bounds[0][i] for m in meshes) for i in range(3)]
+    hi = [max(m.bounds[1][i] for m in meshes) for i in range(3)]
+    w = max(hi[0] - lo[0], 160.0)
+    d = 120.0
+    y_edge = lo[1] - 20.0                      # plate's far edge: just in front of the whole scene
     plate = trimesh.creation.box((w, d, 1.0))
-    plate.apply_translation(((lo[0] + hi[0]) / 2, (lo[1] + hi[1]) / 2, floor_z - 0.5))
-    top = min(0.0, min(m.bounds[0][2] for m in meshes))
-    post = trimesh.creation.box((4.0, 4.0, max(top - floor_z, 1.0)))
-    post.apply_translation((0.0, 0.0, (floor_z + max(top, floor_z + 1.0)) / 2))
-    return plate, post
+    plate.apply_translation(((lo[0] + hi[0]) / 2, y_edge - d / 2, floor_z - 0.5))
+    out = [plate]
+    h = -floor_z
+    if h > 5.0:                               # post up to the origin height, then an arm back to it
+        post = trimesh.creation.box((4.0, 4.0, h))
+        post.apply_translation((0.0, y_edge, floor_z + h / 2))
+        arm = trimesh.creation.box((4.0, -y_edge, 4.0))
+        arm.apply_translation((0.0, y_edge / 2, 0.0))
+        out += [post, arm]
+    return out
 
 
 def build_usdz(vdir: Path, include_context: bool = True, floor_z: float | None = None) -> Path:
@@ -32,12 +39,15 @@ def build_usdz(vdir: Path, include_context: bool = True, floor_z: float | None =
         items += [(f, CONTEXT_COLOR, 0.35) for f in sorted(vdir.glob("ctx_*.stl"))]
     items = [(trimesh.load(f), f.stem, rgb, a) for f, rgb, a in items]
     if floor_z is not None:
+        # a context that only models the floor itself (a slab below it) is replaced by the plate
+        items = [it for it in items if not (it[1].startswith("ctx_") and it[0].bounds[1][2] <= floor_z + 0.5)]
         low = min(m.bounds[0][2] for m, *_ in items)
         if floor_z > low + 0.01:   # the model would sink into the floor
             raise ValueError(f"ar_floor {floor_z} mm is above the lowest point of the model ({low:.1f} mm); "
                              "make the floor context reach down to it or lower ar_floor")
-        plate, post = _floor_meshes([m for m, *_ in items], floor_z)
-        items += [(plate, "ar_floor", FLOOR_COLOR, 0.30), (post, "ar_floor_post", FLOOR_COLOR, 0.6)]
+        extra = _floor_meshes([m for m, *_ in items], floor_z)
+        items += [(extra[0], "ar_floor", FLOOR_COLOR, 0.30)]
+        items += [(m, f"ar_floor_post{k}", FLOOR_COLOR, 0.6) for k, m in enumerate(extra[1:])]
 
     usdc = vdir / "model.usdc"
     stage = Usd.Stage.CreateNew(str(usdc))

@@ -141,7 +141,18 @@ def hole_list(shape):
                         "_lo": r_["lo"], "_hi": r_["hi"]})
     out = _merge_counterbores(out, _countersinks(shape))
     out = _pair_slots(out)
-    for h in out:
+    from build123d import Vector
+    for h in out:   # blind or through: is there material just past either end, on the axis?
+        if "_foot" in h and not h["half"]:
+            ends = []
+            for t_ in (h["_lo"] - 0.6, h["_hi"] + 0.6):
+                q = Vector(*(h["_foot"][i] + h["_dir"][i] * t_ for i in range(3)))
+                try:
+                    ends.append(shape.is_inside(q))
+                except Exception:
+                    ends.append(None)
+            if None not in ends:
+                h["through"] = not any(ends)
         for k in ("_closed", "_dir", "_foot", "_lo", "_hi"):
             h.pop(k, None)
     out.sort(key=lambda h: (h.get("kind", "hole"), h["d"], h["axis"], h["at"]))
@@ -195,7 +206,7 @@ def _merge_counterbores(hl, csks):
         if id(h) in absorbed:
             continue
         for big in full[i + 1:]:
-            if id(big) in absorbed or big["d"] <= h["d"] or not same_axis(h, big):
+            if id(big) in absorbed or big["d"] <= h["d"] or big["d"] > 2.6 * h["d"] or not same_axis(h, big):
                 continue
             if big["_lo"] > h["_hi"] + 0.5 or big["_hi"] < h["_lo"] - 0.5:
                 continue  # not touching: a separate hole on the same line
@@ -469,6 +480,15 @@ def measure_dims(spec, parts, context, holes_by_part):
         return out, warns
     if not isinstance(spec, (list, tuple)):
         raise ValueError("dims must be a list of dicts")
+    import fnmatch
+    expanded = []
+    for d in spec:   # "part": "hook_*" repeats the entry for every matching part
+        if isinstance(d, dict) and isinstance(d.get("part"), str) and any(ch in d["part"] for ch in "*?["):
+            hits = [n for n in parts if fnmatch.fnmatchcase(n, d["part"])]
+            expanded += [{**d, "part": n} for n in hits] or [d]
+        else:
+            expanded.append(d)
+    spec = expanded
     for k, d in enumerate(spec[:30]):
         label = str(d.get("label", f"dim{k + 1}")) if isinstance(d, dict) else f"dim{k + 1}"
         try:
@@ -833,7 +853,8 @@ def main():
     intended = {(m["part"], c) for m in result["dims"] if m.get("kind") == "clearance" and m.get("ok")
                 for c in m.get("_names", [])}
     for c in result["clearance"]:
-        if c["mm"] is not None and 0 < c["mm"] < 1.0 and (c["part"], c["to"]) not in intended:
+        if c["mm"] is not None and 0 < c["mm"] < 1.0 and (c["part"], c["to"]) not in intended \
+                and not c["to"].startswith("hw_"):   # screws/bolts in their holes are meant to be close
             warn.append(f"{c['part']}: {c['to']} とのすき間が {c['mm']} mm しかない"
                         "（わざとなら dims に clearance と expect を書く）")
     lo = [min(p["bbox_mm"]["min"][i] for p in result["parts"].values()) for i in range(3)]

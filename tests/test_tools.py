@@ -384,6 +384,18 @@ class ArFloorTests(unittest.TestCase):
         self.assertAlmostEqual(rng.GetMin()[1], -0.801, places=3)     # floor plate bottom (Y up, metres)
         self.assertAlmostEqual(rng.GetMax()[1], 0.025, places=3)      # clip top stays at its real height
 
+    def test_floor_standing_part_rests_on_the_real_floor(self):
+        from pxr import Usd, UsdGeom
+        code = ("from build123d import *\n"
+                "parts = {'shim': Pos(0, 0, 2) * Box(50, 50, 4)}\n"
+                "context = {'floor': Pos(0, 0, -5) * Box(200, 200, 10), 'leg': Pos(0, 0, 24) * Box(40, 40, 40)}\n"
+                "ar_floor = 0\n")
+        server.build_model("ar-floor0", code)
+        out = server.publish_ar("ar-floor0")
+        stage = Usd.Stage.Open(out["usdz"])
+        rng = UsdGeom.BBoxCache(0, ["default"]).ComputeWorldBound(stage.GetDefaultPrim()).ComputeAlignedRange()
+        self.assertAlmostEqual(rng.GetMin()[1], -0.001, places=3)   # the floor slab is gone; the shim sits on 0
+
     def test_floor_above_model_is_refused_with_text(self):
         code = ("from build123d import *\n"
                 "parts = {'a': Box(10, 10, 10)}\n"
@@ -392,6 +404,39 @@ class ArFloorTests(unittest.TestCase):
         with self.assertRaises(server.SpatialVibeError) as cm:
             server.publish_ar("ar-floor-bad")
         self.assertIn("ar_floor", str(cm.exception))
+
+
+class UseCaseRoundTests(unittest.TestCase):
+    """Fixes from the 10-genre use-case round: sleeve is not a counterbore, blind holes are marked,
+    "part" wildcards in dims, screws in the context (hw_*) do not warn, copies are recognised."""
+
+    @classmethod
+    def setUpClass(cls):
+        code = (
+            "from build123d import *\n"
+            "cup = Cylinder(56, 80) - Pos(0, 0, 6) * Cylinder(52, 80) - Cylinder(4, 200)\n"   # Ø104 sleeve + Ø8 drain
+            "blk = Pos(150, 0, 0) * Box(30, 30, 20) - Pos(150, 0, 5) * Cylinder(3, 10)\n"     # blind Ø6 from the top
+            "hookL = Pos(0, 150, 0) * Box(20, 20, 20) - Pos(0, 150, 0) * Cylinder(3.3, 20)\n"
+            "hookR = Pos(80, 150, 0) * Box(20, 20, 20) - Pos(80, 150, 0) * Cylinder(3.3, 20)\n"
+            "parts = {'cup': cup, 'blk': blk, 'hook_L': hookL, 'hook_R': hookR}\n"
+            "context = {'hw_bolt': Pos(0, 150, 0) * Cylinder(3.0, 30)}\n"
+            "dims = [{'label': 'W', 'part': 'hook_*', 'kind': 'size', 'axis': 'X', 'expect': 20}]\n")
+        cls.r = server.build_model("uc-round", code)
+
+    def test_sleeve_is_not_a_counterbore(self):
+        hl = self.r["parts"]["cup"]["hole_list"]
+        self.assertTrue(all(not h.get("counterbore") for h in hl), hl)
+
+    def test_blind_hole_is_marked(self):
+        hl = self.r["parts"]["blk"]["hole_list"]
+        self.assertEqual([h.get("through") for h in hl], [False], hl)
+        self.assertTrue(self.r["parts"]["hook_L"]["hole_list"][0]["through"])
+
+    def test_part_wildcard_and_hardware_context(self):
+        self.assertEqual(sorted(d["part"] for d in self.r["dims"]), ["hook_L", "hook_R"])
+        self.assertFalse(any("hw_bolt" in w for w in self.r["warnings"]), self.r["warnings"])
+        _, sheet, _ = server.preview("uc-round")
+        self.assertTrue(Path(sheet.path).exists())
 
 
 class StdioTests(unittest.TestCase):

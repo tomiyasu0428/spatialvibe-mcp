@@ -219,8 +219,13 @@ def publish_ar(project: str, version: int | None = None, include_context: bool =
         how = f"{dest_dir / fname} を iPhone で開く"
     else:
         raise SpatialVibeError(f"unknown SPATIALVIBE_PUBLISH={PUBLISH!r}")
-    if floor_z is not None:
-        how += f"。スマホを床に向けてから AR（床から {abs(floor_z) / 10:g} cm の高さに出る。黄色い板を床に置き、灰色の周囲を本物に重ねる）"
+    where = f"（{res['origin']}）" if res.get("origin") else ""
+    moves = "1本指でずらす・2本指でひねって回すのは OK、つまんで広げる/縮めるのは NG（100% が実物大）。上下には動かせない"
+    if floor_z is not None and floor_z < -5:
+        how += (f"。取付け場所の手前の床にスマホを向けてから AR。黄色い板が床に出て、細い柱の先＝原点{where}が"
+                f"床から {abs(floor_z) / 10:g} cm の高さに出る。灰色の周囲が本物に重なるまで動かす（{moves}）")
+    else:
+        how += f"。置きたい床や台にスマホを向けてから AR。灰色の周囲が本物に重なるまで動かす（{moves}）"
     dest_dir.mkdir(parents=True, exist_ok=True)
     shutil.copy2(usdz, dest_dir / fname)
     pm = [round(v / 1000, 4) for v in res.get("parts_size_mm", [0, 0, 0])]

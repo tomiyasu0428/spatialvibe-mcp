@@ -29,16 +29,21 @@ JA = FONT is not None
 T = {  # label text, Japanese when a font exists
     "parts": ("部品 {n} 個", "{n} parts"),
     "overall": ("全体 {s} mm（印刷する部品だけ）", "overall {s} mm (printed parts only)"),
+    "overall_n": ("組み立てた全体 {s} mm（部品ごとの大きさは各部品の欄）", "assembled {s} mm (each part below)"),
+    "same": ("{a} と同じ形です（{n} 個目）。寸法も同じなので、図は {a} の欄を見てください。",
+             "same shape as {a} (copy {n}); see {a} for the drawings."),
+    "details": ("詳しい情報（印刷する人・CAD 用。現場では見なくてよい）", "Details (for whoever prints or edits it)"),
     "holes": ("穴", "holes"), "half": ("円弧", "arc"), "none": ("なし", "none"), "slot": ("長穴", "slot"),
     "bed_ok": ("ベッドに入る ✓", "fits bed ✓"), "bed_ng": ("ベッドに入らない ✗", "too big for bed ✗"),
-    "top": ("上から（+Z側）", "top (from +Z)"), "front": ("正面から（−Y側・右が+X）", "front (from −Y, +X right)"),
-    "side": ("右横から（+X側・右が+Y）", "right side (from +X, +Y right)"),
-    "conv": ("向き: 使う人は −Y 側に立って +Y を見る（右手が +X、上が +Z）", "View: person at −Y looking +Y (+X right, +Z up)"),
+    "top": ("上から", "top"), "front": ("正面から", "front"),
+    "side": ("右横から", "right side"),
+    "conv": ("「正面」は、使う人が立つ側から見た向きです（右手側が右）", "\"Front\" is what the user sees from where they stand"),
+    "axes": ("座標: 使う人は −Y 側に立って +Y を見る（右手が +X、上が +Z）", "axes: user at −Y looking +Y (+X right, +Z up)"),
     "warn": ("注意", "Warnings"), "mark": ("注意: ", "! "), "pos": ("穴の中心 (X, Y, Z mm)", "hole centres (X, Y, Z mm)"),
     "more": ("ほか {n} 個", "{n} more"),
     "fit": ("合わせる寸法（形から測った値）", "Fit dimensions (measured on the shape)"),
     "spacing": ("穴の間隔", "hole spacing"), "cbore": ("座ぐり", "c-bore"), "csk": ("皿", "csk"),
-    "depth": ("深さ", "depth"), "clear": ("{to} とのすき間 {mm} mm", "gap to {to}: {mm} mm"),
+    "depth": ("深さ", "depth"), "blind": ("（止まり穴）", "(blind)"), "clear": ("{to} とのすき間 {mm} mm", "gap to {to}: {mm} mm"),
     "touch": ("{to} に接する", "touches {to}"), "printpose": ("印刷の向きでは {s} mm（print_{n}.stl を使う）",
                                                      "printed as {s} mm (use print_{n}.stl)"),
     "origin": ("原点 (0,0,0): {o}", "origin (0,0,0): {o}"),
@@ -60,7 +65,7 @@ T = {  # label text, Japanese when a font exists
     "range": ("この範囲なら OK: {a}〜{b}", "OK if {a}–{b}"),
     "intended": ("意図したすき間（測らなくてよい）: {l}", "intended gaps (no need to measure): {l}"),
     "zoom": ("拡大", "zoom"),
-    "installed": ("取り付けた向きの外形", "as installed"), "dirs": {"X": "+X側", "Y": "−Y側（正面）", "Z": "上"},
+    "installed": ("取り付けた向きの外形", "as installed"), "dirs": {"X": "右横", "Y": "正面", "Z": "上"},
     "buy": ("買うもの", "Hardware"), "check": ("印刷前に確認", "Check before printing"),
     "missing": ("（スクリプトに書かれていません）", "(not given in the script)"),
 }
@@ -302,6 +307,8 @@ def main():
             txt += f" ＋{t('cbore')}Ø{fmt(cb['d'])} {t('depth')}{fmt(cb['depth'])}"
         if h.get("countersink"):
             txt += f" ＋{t('csk')}Ø{fmt(h['countersink']['d'])}"
+        if h.get("through") is False:
+            txt += " " + t("blind")
         return txt
 
     def fit_lines(name):
@@ -361,47 +368,53 @@ def main():
         return L
 
     def info_lines(name, info):
-        """[(text, fontsize, colour, bold, indent)] under the drawings of one part."""
+        """[(text, fontsize, colour, bold, indent)] under the drawings of one part: what the user needs
+        first (printed size, bed, warnings), then small grey details for whoever prints or edits it."""
         L = []
         size = info.get("bbox_mm", {}).get("size") or [0, 0, 0]
         if info.get("print_size_mm"):   # what the user holds on the table: the printed piece lying flat
             L.append((t("printpose", s=size_text(info["print_size_mm"]), n=name), 11, "0.15", True, 0))
-            L.append((f"{t('installed')} {size_text(size)} mm", 9, "0.4", False, 0))
         else:
-            L.append((f"{size_text(size)} mm   W×D×H (X×Y×Z)", 11, "0.15", False, 0))
-        for sp in info.get("hole_spacing") or []:
-            along = " / ".join(f"{ax} {'・'.join(fmt(v) for v in vals)}" for ax, vals in sp["along"].items())
-            L.append((f"{t('spacing')} Ø{fmt(sp['d'])}: {along} mm", 10, "0.15", True, 0))
-        hl = info.get("hole_list") or []
-        if hl:
-            L.append((t("pos"), 8.5, "0.45", False, 0))
-            for k, h in enumerate(hl[:MAXPOS], 1):
-                ax_ = h["axis"]
-                where = ", ".join(f"{c} {fmt(h['at'][i])}" for i, c in enumerate("XYZ"))
-                L.append((f"{k}. {hole_label(h)}  ({where})", 9.5, "0.15", False, 1))
-            if len(hl) > MAXPOS:
-                L.append((t("more", n=len(hl) - MAXPOS), 9, "0.45", False, 1))
-        else:
-            L.append((f"{t('holes')}: {t('none')}", 10, "0.15", False, 0))
-        meant = {n_ for d in dims_all if d.get("part") == name and d.get("kind") == "clearance" and d.get("ok")
-                 for n_ in d.get("to_names", [])}
-        touching = [c["to"] for c in clear_all if c.get("part") == name and c.get("mm") == 0]
-        if [c for c in touching if c not in meant]:
-            L.append((t("touchmany", l=", ".join(c for c in touching if c not in meant)), 9.5, "0.25", False, 0))
-        if [c for c in touching if c in meant]:
-            L.append((t("touchmeant", l=", ".join(c for c in touching if c in meant)), 9, "0.45", False, 0))
-        for c in clear_all:
-            if c.get("part") == name and c.get("mm") and c["to"] not in meant:
-                L.append((t("clear", to=c["to"], mm=fmt(c["mm"])), 9.5, "0.25", False, 0))
-        if "fits_bed" in info:
-            bed = res.get("bed_mm") or []
-            ok = info["fits_bed"]
-            L.append(((t("bed_ok") if ok else t("bed_ng")) + f"  ({size_text(bed)})", 9.5,
-                      "0.25" if ok else "#c0392b", False, 0))
+            L.append((f"{size_text(size)} mm", 11, "0.15", True, 0))
+        if "fits_bed" in info and not info["fits_bed"]:
+            L.append((t("bed_ng") + f"  ({size_text(res.get('bed_mm') or [])})", 10, "#c0392b", False, 0))
         for w in warnings:
             if w.startswith(f"{name}:"):
                 L += [(ln, 9.5, "#c0392b", False, 0) for ln in wrap(t("mark") + w[len(name) + 1:].strip(), 46)]
+        D = []   # details
+        if info.get("print_size_mm"):
+            D.append((f"{t('installed')} {size_text(size)} mm", 8.5, "0.45", False, 1))
+        for sp in info.get("hole_spacing") or []:
+            along = " / ".join(f"{ax} {'・'.join(fmt(v) for v in vals)}" for ax, vals in sp["along"].items())
+            D.append((f"{t('spacing')} Ø{fmt(sp['d'])}: {along} mm", 8.5, "0.45", False, 1))
+        hl = info.get("hole_list") or []
+        if hl:
+            D.append((t("pos"), 8, "0.5", False, 1))
+            for k, h in enumerate(hl[:MAXPOS], 1):
+                where = ", ".join(f"{c} {fmt(h['at'][i])}" for i, c in enumerate("XYZ"))
+                D.append((f"{k}. {hole_label(h)}  ({where})", 8.5, "0.45", False, 2))
+            if len(hl) > MAXPOS:
+                D.append((t("more", n=len(hl) - MAXPOS), 8, "0.5", False, 2))
+        if "fits_bed" in info and info["fits_bed"]:
+            D.append((t("bed_ok") + f"  ({size_text(res.get('bed_mm') or [])})", 8.5, "0.45", False, 1))
+        if D:
+            L.append((t("details"), 8.5, "0.5", False, 0))
+            L += D
         return L
+
+    def same_as(k):
+        """Index of an earlier part with the same shape (copies, mirrored twins), or None."""
+        a = infos[k]
+        for j in range(k):
+            b = infos[j]
+            va, vb = a.get("volume_cm3"), b.get("volume_cm3")
+            sa = sorted((a.get("bbox_mm", {}).get("size") or [])[:3])
+            sb = sorted((b.get("bbox_mm", {}).get("size") or [])[:3])
+            if va and vb and abs(va - vb) <= 0.002 * max(va, vb) + 0.01 and len(sa) == 3 and \
+                    all(abs(x - y_) < 0.2 for x, y_ in zip(sa, sb)) and \
+                    len(a.get("hole_list") or []) == len(b.get("hole_list") or []):
+                return j
+        return None
 
     for f, info in zip(files, infos):
         info["_name"] = f.stem[5:]
@@ -413,7 +426,15 @@ def main():
                 k += 1
     LINE, PANEL, VIEW_H = 0.3, 2.75, 2.6
     blocks = []
-    for info in infos:
+    copies = {}
+    for k, info in enumerate(infos):
+        j = same_as(k)
+        if j is not None and not [d for d in dims_all if d.get("part") == info["_name"] and d.get("_tag")]:
+            root = copies.get(j, j)
+            copies[k] = root
+            n_ = 1 + sum(1 for v in copies.values() if v == root)
+            blocks.append((None, [], [(t("same", a=infos[root]["_name"], n=n_), 11, "0.2", True, 0)], 1.2))
+            continue
         name = info["_name"]
         fl = fit_lines(name)
         det = [d for d in dims_all if d.get("part") == name and d.get("_tag")]
@@ -424,9 +445,12 @@ def main():
     glob_w = [ln for w in warnings if not any(w.startswith(f"{i['_name']}:") for i in infos)
               for ln in wrap(w, 52)]
     head_h = 1.85 + (0.3 + 0.27 * len(glob_w) if glob_w else 0)
-    lines = max(len(res.get("hardware", [])), 1) + max(len(res.get("checks", [])), 1) + 2
-    foot_h = 0.32 * lines + 0.4
-    H = head_h + sum(b[3] for b in blocks) + foot_h
+    memo = [(key, [(ln, i_ == 0) for item in (res.get(key2, []) or [t("missing")])
+                   for i_, ln in enumerate(wrap(item, 44))])
+            for key, key2 in (("buy", "hardware"), ("check", "checks"))]
+    memo_h = sum(0.42 + 0.3 * len(items) for _, items in memo) + 0.3
+    axes_h = 0.35
+    H = head_h + memo_h + sum(b[3] for b in blocks) + axes_h
     fig = plt.figure(figsize=(9, H), dpi=120)
 
     def y(inch):  # figure fraction from top, in inches
@@ -434,8 +458,8 @@ def main():
 
     fig.text(0.04, y(0.45), f"{vdir.parent.name}  {vdir.name}", fontsize=20, fontweight="bold")
     overall = res.get("parts_size_mm")
-    fig.text(0.04, y(0.95), t("parts", n=n) + ("   " + t("overall", s=size_text(overall)) if overall else ""),
-             fontsize=13)
+    fig.text(0.04, y(0.95), t("parts", n=n) + ("   " + t("overall" if n == 1 else "overall_n", s=size_text(overall))
+                                                if overall else ""), fontsize=13)
     fig.text(0.04, y(1.3), t("conv"), fontsize=9.5, color="0.4")
     fig.text(0.04, y(1.58), t("origin", o=res["origin"]) if res.get("origin") else t("noorigin"),
              fontsize=9.5, color="0.15" if res.get("origin") else "0.5")
@@ -444,10 +468,27 @@ def main():
         for k, w in enumerate(glob_w):
             fig.text(0.07, y(2.29 + 0.27 * k), w, fontsize=10, color="#c0392b")
 
+    # what to buy and what to check first: the short memo the user takes to the shop
+    ym = head_h + 0.05
+    fig.add_artist(plt.Line2D([0.03, 0.97], [y(ym)] * 2, color="0.85", lw=1))
+    for key, items in memo:
+        fig.text(0.04, y(ym + 0.38), t(key), fontsize=13, fontweight="bold")
+        ym += 0.42
+        for line, first in items:
+            fig.text(0.07, y(ym + 0.22), (("・" if JA else "- ") if first else "　") + line, fontsize=11)
+            ym += 0.3
     VIEWS = (((0, 1), "top", 2), ((0, 2), "front", 1), ((1, 2), "side", 0))  # (plane axes, label, normal axis)
-    top = head_h
+    top = head_h + memo_h
     for i, (f, info, (fl, det, il, block_h)) in enumerate(zip(files, infos, blocks)):
         name = info["_name"]
+        if fl is None:   # same shape as an earlier part: one line, no drawings
+            fig.add_artist(plt.Line2D([0.03, 0.97], [y(top + 0.05)] * 2, color="0.85", lw=1))
+            fig.add_artist(plt.Rectangle((0.04, y(top + 0.55)), 0.03, 0.18 / H * 2, color=part_color(i),
+                                         transform=fig.transFigure))
+            fig.text(0.085, y(top + 0.45), name, fontsize=14, fontweight="bold")
+            fig.text(0.05, y(top + 0.9), il[0][0], fontsize=11, color="0.2")
+            top += block_h
+            continue
         mesh = trimesh.load(f)
         size = info.get("bbox_mm", {}).get("size") or list(mesh.extents)
         c = part_color(i)
@@ -496,15 +537,8 @@ def main():
             fig.text(0.04 + 0.02 * ind, y(yy), text, fontsize=fs, color=col, fontweight="bold" if bold else "normal")
         top += block_h
 
-    ytop = top + 0.2
-    fig.add_artist(plt.Line2D([0.03, 0.97], [y(ytop - 0.1)] * 2, color="0.85", lw=1))
-    for key, items in (("buy", res.get("hardware", [])), ("check", res.get("checks", []))):
-        fig.text(0.04, y(ytop + 0.25), t(key), fontsize=13, fontweight="bold")
-        ytop += 0.32
-        for line in items or [t("missing")]:
-            fig.text(0.07, y(ytop + 0.25), "・" + line if JA else "- " + line, fontsize=11)
-            ytop += 0.32
-        ytop += 0.12
+    fig.add_artist(plt.Line2D([0.03, 0.97], [y(top + 0.05)] * 2, color="0.85", lw=1))
+    fig.text(0.04, y(top + 0.3), t("axes"), fontsize=8.5, color="0.5")
     fig.savefig(vdir / "sheet.png")
     plt.close(fig)
 
