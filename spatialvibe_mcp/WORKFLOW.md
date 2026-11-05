@@ -13,21 +13,35 @@ short enough to read on one phone screen: no long paragraphs, no jargon, numbers
   what is attached (cables, connectors), what the environment is (rain, vibration, sun).
 - Ask 2–4 multiple-choice questions at once (AskUserQuestion if available), each option one
   line with a few-word reason; put the recommended option first. Typical axes: where it is supported; how often it is removed; how the
-  object is held; what must not be blocked (view, door, connectors, hands); weather/vibration;
-  must it stay level. Let the user add free text — their extra remarks are often the key
+  object is held; what must not be blocked (view, door, connectors, hands, folding, transfers); weather/vibration;
+  must it stay level; how heavy the load is. Let the user add free text — their extra remarks are often the key
   constraint (e.g. "must stay level because of the IMU", "little room behind").
+- Questions + measurements together must fit one phone screen: prefer 3 questions when 4 are
+  not needed. Do not spend a question on where the user stands: state the view you assume in
+  one line (「〜に座って前を見たとき」「壁に向かって」) and let them correct it.
+- Safety first: if a failure could drop something on people (balcony, height, vehicle), or
+  could hurt someone (hot drinks, a person sitting in it), recommend the safe option and say why.
 
 ## 2. Get dimensions with the least effort
-- First look for known numbers instead of asking the user to measure: product datasheets,
-  the user's own notes/documents (search their Drive/docs if a connector is available),
-  standard sizes (1" pipe = 25.4 mm, M5, 25 mm velcro…).
+- First look for known numbers instead of asking the user to measure: the model number of a
+  product (phone, tool, bike computer) instead of its size, the user's own notes/documents
+  (search their Drive/docs if a connector is available), printed sizes (handlebar 「31.8」),
+  standard sizes: 1" pipe 25.4, handlebar 31.8/35, wheelchair tube 22.2/25.4, mic stand
+  5/8"-27, camera 1/4"-20, GoPro 2/3 prongs, Garmin quarter-turn, welded mesh 12.7/25.4 (wire
+  1–2), M3–M6, 25 mm velcro. If the model number is enough, say 「型番がわかれば測らなくていい」.
 - Prefer designs that absorb uncertainty, so fewer numbers are needed: adjustable feet
-  (bolt + nut), slotted holes, clamp gaps with rubber, V-grooves, straps.
-- Ask only for the 2–3 measurements that really decide fit; a rough tape-measure value is fine.
-- If the part hangs in the air (on a pipe, pillar, mirror stay, wall), add one question to the
-  same first batch: 「床（または台）から取付け場所まで何 cm？だいたいで OK」. It is only for AR
-  (`ar_floor`, see section 4), so do not ask it separately later.
-  Say how to measure with a tape (pipe: wrap it, circumference ÷ 3.14 = diameter).
+  (bolt + nut), slotted holes, clamp gaps with rubber, V-grooves, straps, stepped or stacked shims.
+- Ask only for the 2–3 measurements that really decide fit; a rough value is fine. Accept mm
+  or cm. Name the exact place to measure in plain words (「持ち手のいちばん太いところ」, not
+  「引き金のすぐ上」). Give both ways where it applies: 「ノギスがあれば直径、無ければメジャー
+  を1周巻いた長さ」 (you divide by 3.14, not the user). Small gaps: 「1円玉（1.5 mm）を何枚
+  重ねるとガタが止まるか」. A measurement needed only for one option: say 「Bを選んだときだけ」.
+- If the part hangs in the air (on a pipe, pillar, rail, wall, under a desk), add one extra
+  line to the same first batch (it does not count toward the 2–3): 「床から〇〇の中心（上面）
+  まで何 cm？だいたいで OK（ARで実物の高さに出すため）」 naming the exact point. It is only for
+  AR (`ar_floor`, see section 4). Parts that sit on a floor or table do not need it.
+- Long parts (> the 256 mm bed): say early that it will be printed in pieces joined with
+  keys or screws.
 - Keep track of where each number came from (datasheet / user note / measured / guess) and
   say which ones are still guesses.
 
@@ -139,4 +153,5 @@ short enough to read on one phone screen: no long paragraphs, no jargon, numbers
 
 ## Limits to state honestly
 - A photo alone does not give accurate dimensions. AR is a visual check, not proof of
-  strength or fit. Slicing/printing is up to the user's printer (suggest PETG/ASA outdoors).
+  strength or fit. Slicing/printing is up to the user's printer (suggest PETG/ASA outdoors or
+  near hot drinks — PLA softens around 55 °C; PETG and 100 % infill under constant load).
