@@ -40,6 +40,27 @@ short enough to read on one phone screen: no long paragraphs, no jargon, numbers
   orientation, no needless supports) and `context` (the real surroundings and the held object)
   so overlaps are detected and the user can align the AR model with reality. Faces that only
   touch are not reported as overlap. Each part must fit the print bed (`fits_bed` in the result).
+- **Fit dimensions**: for every dimension the user will check against the real thing with a tape
+  or caliper (hole spacing, opening/slot width, inner size, wall thickness, distance from a wall,
+  height of a hole, angle, gap to a nearby object), declare it in `dims` so the tool MEASURES it on
+  the shape and draws it on the sheet. Never write such numbers only by hand.
+  ```python
+  dims = [
+    {"label": "ケース穴 横", "part": "plate", "kind": "distance", "a": (-49, 0, 31), "b": (49, 0, 31),
+     "snap": "hole", "axis": "X", "expect": 98},                      # hole centre to hole centre
+    {"label": "口の幅", "part": "clip", "kind": "gap", "at": (0, 12, 0), "axis": "Y", "expect": 21.5},
+    {"label": "壁の厚さ", "part": "tray", "kind": "thickness", "at": (38.7, 0, 10), "axis": "X"},
+    {"label": "上面の傾き", "part": "wedge", "kind": "angle", "a": (0, 0, 8), "ref": "Z", "expect": 0},
+    {"label": "ライトとのすき間", "part": "holder", "kind": "clearance", "to": "light"},
+  ]
+  ```
+  `gap` needs a point in the empty space (inside a slot mouth, a pocket); `thickness` a point
+  inside the material; `expect` = what you intended — a mismatch becomes a warning (this also
+  catches a cut that went to the wrong place). 3–6 dims per part are enough.
+- `origin = "壁の面・ブラケットの底・ネジの中間"`: say in words where (0,0,0) is, so the user knows
+  what the coordinates are measured from. Put the origin on a real surface the user can touch.
+- `print_pose = {"wedge": Rot(-7, 0, 0)}` for parts that are modelled tilted/standing as installed:
+  the tool also writes `print_<name>.stl` in that pose and reports its size (bed check uses it).
 - Also define `hardware` (what to buy, one line per size: "M5×30 ボルト・ナット・ワッシャー 6組")
   and `checks` (2–3 things to measure or look at before printing, each with the target value:
   "パイプの周長 7.0 cm（Ø22.2）→ 8.0 cm なら Ø25.4 なので作り直し"). Check bolt lengths against
@@ -62,7 +83,8 @@ short enough to read on one phone screen: no long paragraphs, no jargon, numbers
 2. 3–6 bullets max: overall size of the printed parts (`parts_size_mm`), number of parts, the
    1–2 dimensions that decide fit, key heights/clearances if the user gave any.
 3. 「買うもの」 and 「印刷前に確認」 copied from `hardware` / `checks`.
-4. Point to the dimension sheet (sheet.png) — it carries the per-part sizes, so do not repeat them.
+4. Point to the dimension sheet (sheet.png): its blue 「合わせる寸法」 are what to measure on the real
+   thing; quote the 2–3 most important ones in the reply too.
 5. Material and print orientation in one line; which values are still guesses in one line.
 6. AR in one line (see below). Anything longer goes only if the user asks.
 

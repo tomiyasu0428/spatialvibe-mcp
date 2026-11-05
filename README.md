@@ -19,7 +19,7 @@
 
 | ツール | 内容 |
 | --- | --- |
-| `build_model(project, code, note)` | build123d スクリプトを別プロセスで実行。`parts`（印刷するもの）と `context`（周囲：パイプ・箱など）を STL/STEP に。形の有効性・体積・外形・**穴と長穴の中心座標**（`hole_list`）・**STL が閉じているか**・**ベッドに入るか**・部品全体の大きさ、**部品と周囲の重なり**（計算できなかった組は `interference_unchecked` ＝ 未判定）と **`warnings`** を返す。失敗した版には部品ファイルが残らず、プレビューも AR 公開もできない。任意で `hardware`（買うもの）と `checks`（印刷前に確認）を書くと結果とシートに載る。版ごと（v001, v002…）に保存 |
+| `build_model(project, code, note)` | build123d スクリプトを別プロセスで実行。`parts`（印刷するもの）と `context`（周囲：パイプ・箱など）を STL/STEP に。形の有効性・体積・外形・**穴と長穴の中心座標**（`hole_list`）・**STL が閉じているか**・**ベッドに入るか**・部品全体の大きさ、**部品と周囲の重なり**（計算できなかった組は `interference_unchecked` ＝ 未判定）と **`warnings`** を返す。失敗した版には部品ファイルが残らず、プレビューも AR 公開もできない。任意で `dims`（**合わせる寸法**: 穴の間隔・口の幅・厚み・角度・周囲とのすき間をツールが形から測り、シートに青で描く。`expect` とずれたら警告）、`origin`（原点の説明）、`print_pose`（印刷の向き）、`hardware`（買うもの）、`checks`（印刷前に確認）を書ける。版ごと（v001, v002…）に保存 |
 | `preview(project, version?)` | 4 方向の画像と **寸法シート**（スマホ向け: 部品ごとの W×D×H、番号つきの穴の中心、ベッドに入るか、警告、上・正面・右横の 3 面図と寸法線、買うもの、印刷前に確認）。向きの約束: 使う人は −Y 側に立って +Y を見る（右手が +X） |
 | `publish_ar(project, version?)` | 実寸 USDZ（m, Y-up）を作り iCloud Drive の `SpatialVibe/` に置く → iPhone の「ファイル」からタップで AR。回線を問わない |
 | `list_projects` / `get_code` | 版の一覧、過去のスクリプト |

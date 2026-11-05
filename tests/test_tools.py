@@ -194,6 +194,70 @@ class HoleTests(unittest.TestCase):
             self.assertIn({"d": 27.6, "n": 1, "half": True}, r["parts"][p]["holes"], p)
 
 
+
+DIMS_CODE = r"""
+from build123d import *
+import math
+plate = Box(110, 5, 120)
+for x in (-49, 49):
+    for z in (-31, 31):
+        plate -= Pos(x, 0, z) * Rot(90, 0, 0) * Cylinder(1.75, 20)
+        plate -= Pos(x, 2.5, z) * Rot(90, 0, 0) * Cylinder(3.25, 2.5, align=(Align.CENTER, Align.CENTER, Align.MIN))
+comb = Pos(0, 100, 0) * (Box(60, 10, 15) - Pos(0, 0, 5) * Box(6, 20, 10))
+t1 = 6 + 40 * math.tan(math.radians(7))
+wedge = Pos(-30, -120, 0) * extrude(Plane.YZ * Polygon((0, 0), (40, 0), (40, t1), (0, 6), align=None), 60)
+parts = {"plate": plate, "comb": comb, "wedge": wedge}
+context = {"post": Pos(0, 47.5, 0) * Box(90, 90, 300)}
+origin = "柱の正面の中心"
+print_pose = {"wedge": Rot(0, 0, 90)}
+dims = [
+  {"label": "穴 横", "part": "plate", "kind": "distance", "a": (-48, 0, 30), "b": (50, 0, 30), "snap": "hole", "axis": "X", "expect": 98},
+  {"label": "溝の幅", "part": "comb", "kind": "gap", "at": (0, 100, 6), "axis": "X", "expect": 6},
+  {"label": "厚さ", "part": "comb", "kind": "thickness", "at": (20, 100, 0), "axis": "Y", "expect": 10},
+  {"label": "傾き", "part": "wedge", "kind": "angle", "a": (0, -100, 7.5), "ref": "Z", "expect": 7},
+  {"label": "柱", "part": "plate", "kind": "clearance", "to": "post"},
+  {"label": "わざとずれ", "part": "comb", "kind": "gap", "at": (0, 100, 6), "axis": "X", "expect": 7},
+  {"label": "溝がない所", "part": "comb", "kind": "gap", "at": (20, 100, 0), "axis": "X"},
+]
+"""
+
+
+class DimsTests(unittest.TestCase):
+    """Fit dimensions are measured on the shape, not copied from the script."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.r = server.build_model("d-dims", DIMS_CODE)
+
+    def dim(self, label):
+        return next(d for d in self.r["dims"] if d["label"] == label)
+
+    def test_measured_values(self):
+        self.assertTrue(self.r["ok"], self.r)
+        self.assertEqual(self.dim("穴 横")["value"], 98.0)        # snapped to the hole centres
+        self.assertEqual(self.dim("溝の幅")["value"], 6.0)
+        self.assertEqual(self.dim("厚さ")["value"], 10.0)
+        self.assertAlmostEqual(self.dim("傾き")["value"], 7.0, places=1)
+        self.assertEqual(self.dim("柱")["value"], 0.0)            # plate touches the post
+
+    def test_mismatch_and_missing_gap_are_warned(self):
+        self.assertFalse(self.dim("わざとずれ")["ok"])
+        self.assertIsNone(self.dim("溝がない所")["value"])
+        self.assertTrue(any("わざとずれ" in w for w in self.r["warnings"]))
+        self.assertTrue(any("溝がない所" in w and "no gap" in w for w in self.r["warnings"]))
+
+    def test_counterbore_spacing_origin_print_pose(self):
+        plate = self.r["parts"]["plate"]
+        self.assertEqual(len(plate["hole_list"]), 4)                     # counterbores merged, not 8 holes
+        self.assertEqual(plate["hole_list"][0]["counterbore"]["d"], 6.5)
+        self.assertEqual(plate["hole_spacing"][0]["along"], {"X": [98.0], "Z": [62.0]})
+        self.assertEqual(self.r["origin"], "柱の正面の中心")
+        w = self.r["parts"]["wedge"]
+        self.assertEqual(w["print_size_mm"][:2], [40.0, 60.0])           # turned 90° for printing
+        self.assertTrue((Path(self.r["folder"]) / "print_wedge.stl").exists())
+        _, sheet, _ = server.preview("d-dims")
+        self.assertTrue(Path(sheet.path).exists())
+
 class StdioTests(unittest.TestCase):
     """Over a real MCP stdio connection the server's own error text must reach the client."""
 
