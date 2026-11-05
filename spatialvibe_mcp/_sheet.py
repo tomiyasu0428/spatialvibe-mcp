@@ -553,7 +553,8 @@ def main():
                                                 if overall else ""), fontsize=13)
     fig.text(0.04, y(1.3), t("conv_v", v=res["user_view"]) if res.get("user_view") else t("conv"),
              fontsize=9.5, color="0.4")
-    keep = set((res.get("changes") or {}).get("unchanged_parts") or [])
+    ch_ = res.get("changes") or {}
+    keep = set(ch_.get("unchanged_parts") or []) if ch_.get("vs_printed") else set()
     mins = [(disp(i_["_name"]), i_.get("print_minutes")) for i_ in infos
             if i_.get("print_minutes") and i_["_name"] not in keep]
     if mins:

@@ -173,6 +173,7 @@ def build_model(project: str, code: str, note: str = "", compare_to: int | None 
                          and _read_result(v).get("ok") is True), None)
         if prev is not None:
             res["changes"] = _diff(_read_result(prev), res, int(prev.name[1:]))
+            res["changes"]["vs_printed"] = compare_to is not None   # only then may the sheet say "keep"
             saved = _read_result(vdir)
             saved["changes"] = res["changes"]
             (vdir / "result.json").write_text(json.dumps(saved, ensure_ascii=False, indent=1), encoding="utf-8")
