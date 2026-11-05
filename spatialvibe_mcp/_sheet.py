@@ -47,7 +47,15 @@ T = {  # label text, Japanese when a font exists
     "typed": ("（座標で指定・形からは測っていない）", "(typed coordinates, not measured)"),
     "vs": ("{l} {v} → {d}", "{l} {v} → {d}"), "detail": ("{t}  {l}", "{t}  {l}"),
     "seen": ("{v}から見た断面", "section, seen from {v}"), "overview": ("全体（記号の場所）", "overview (where each letter is)"),
-    "touchmany": ("接する: {l}", "touches: {l}"), "dirs": {"X": "+X側", "Y": "−Y側（正面）", "Z": "上"},
+    "touchmany": ("接する: {l}", "touches: {l}"),
+    "caliper2": ("ノギスで: 穴の縁から縁 {i} mm（内側）／ {o} mm（外側）", "caliper: hole edge to edge {i} (inside) / {o} (outside)"),
+    "caliper1": ("ノギスで: {f} から穴の縁まで {e} mm（中心までは +{r}）", "caliper: {f} to hole edge {e} (+{r} to centre)"),
+    "level": ("水平から {v}°（机に置いて水準器で）", "{v}° from level (phone level app)"),
+    "plumb": ("垂直から {v}°", "{v}° from vertical"),
+    "range": ("範囲 {a}〜{b}", "range {a}–{b}"),
+    "intended": ("意図したすき間（測らなくてよい）: {l}", "intended gaps (no need to measure): {l}"),
+    "zoom": ("拡大", "zoom"),
+    "installed": ("取り付けた向きの外形", "as installed"), "dirs": {"X": "+X側", "Y": "−Y側（正面）", "Z": "上"},
     "buy": ("買うもの", "Hardware"), "check": ("印刷前に確認", "Check before printing"),
     "missing": ("（スクリプトに書かれていません）", "(not given in the script)"),
 }
@@ -130,57 +138,128 @@ def _section(mesh, normal, origin):
         return []
 
 
+def _arrow(ax, u0, v0, u1, v1, lw=2.2):
+    ax.annotate("", xy=(u1, v1), xytext=(u0, v0),
+                arrowprops=dict(arrowstyle="<->", color="#1f4fe0", lw=lw, shrinkA=0, shrinkB=0), zorder=5)
+
+
 def _detail(ax, mesh, ctx, d, color, title):
-    """Zoomed view of one fit dimension: light silhouette, bold section through it, the arrow."""
+    """One fit dimension on the whole part: silhouette, the cut through the measured place, one arrow
+    (and a zoomed inset when the place is small), so the user sees WHERE to put the caliper."""
     import numpy as np
     pa, pb = (np.array(d["p"][0]), np.array(d["p"][1])) if d.get("p") else (np.array(d["at"]),) * 2
     seg = pb - pa
     L = float(np.linalg.norm(seg))
-    if d.get("view_normal"):
-        cands = ["XYZ".index(d["view_normal"])]
-    else:
-        cands = [k for k in range(3) if abs(seg[k]) <= 0.05 * max(L, 1e-9)] or [int(np.argmin(np.abs(seg)))]
     mid = (pa + pb) / 2
 
     def nsec(k):
         nv = np.zeros(3)
         nv[k] = 1
         return len(_section(mesh, nv, mid))
-    k = max(cands, key=nsec)  # the view whose cut shows the most shape there
+    if d.get("view_normal"):
+        k = "XYZ".index(d["view_normal"])
+    elif d.get("axis_dir") and L > 1e-6:   # a diameter: look from the side, square to the arrow and the axis
+        cr = np.cross(seg / L, np.array(d["axis_dir"]))
+        k = int(np.argmax(np.abs(cr))) if np.linalg.norm(cr) > 0.5 else 1
+    else:
+        cands = [k for k in range(3) if abs(seg[k]) <= 0.05 * max(L, 1e-9)] or [int(np.argmin(np.abs(seg)))]
+        ext = mesh.extents
+
+        def area(k_):   # how big the whole part looks from that side; round parts look best from the side
+            i, j = [x for x in range(3) if x != k_]
+            return ext[i] * ext[j]
+        best = max(area(k_) for k_ in cands)
+        cands = [k_ for k_ in cands if area(k_) >= 0.9 * best]
+        k = max(cands, key=nsec)
     a, b = [i for i in range(3) if i != k]
-    if k == 1:   # front view is drawn from -Y with +X to the right (same as the overview)
-        a, b = 0, 2
     nv = np.zeros(3)
     nv[k] = 1
-    half = max(L * 0.9, 9.0)
-    ax.add_collection(PolyCollection(mesh.triangles[:, :, [a, b]], facecolors=[(*color[:3], 0.18)],
-                                     edgecolors="none", zorder=1))
-    for cm in ctx:
-        cs = _section(cm, nv, mid)
+
+    def draw(axx, zoom):
+        axx.add_collection(PolyCollection(mesh.triangles[:, :, [a, b]], facecolors=[(*color[:3], 0.30)],
+                                          edgecolors="none", antialiased=False, zorder=1))
+        for cm in ctx:
+            axx.add_collection(PolyCollection(cm.triangles[:, :, [a, b]], facecolors=[(0.6, 0.62, 0.66, 0.10)],
+                                              edgecolors="none", antialiased=False, zorder=0))
+            cs = _section(cm, nv, mid)
+            if len(cs):
+                axx.add_collection(LineCollection(cs[:, :, [a, b]], colors=["0.5"], linewidths=1.0,
+                                                  linestyles="dashed", zorder=2))
+        cs = _section(mesh, nv, mid)
         if len(cs):
-            ax.add_collection(LineCollection(cs[:, :, [a, b]], colors=["0.55"], linewidths=1.2,
-                                             linestyles="dashed", zorder=2))
-    cs = _section(mesh, nv, mid)
-    if len(cs):
-        ax.add_collection(LineCollection(cs[:, :, [a, b]], colors=["0.1"], linewidths=1.8, zorder=3))
-    u0, v0, u1, v1 = pa[a], pa[b], pb[a], pb[b]
-    txt = f"{d['_tag']} {fmt(d['value'])}{'°' if d.get('unit') == '°' else ''}"
-    if L > 1e-6:
-        ax.annotate("", xy=(u1, v1), xytext=(u0, v0),
-                    arrowprops=dict(arrowstyle="<->", color="#1f4fe0", lw=2.2, shrinkA=0, shrinkB=0), zorder=5)
-    ax.text((u0 + u1) / 2, (v0 + v1) / 2 + half * 0.16, txt, ha="center", va="bottom", fontsize=13,
-            fontweight="bold", color="#1f4fe0", zorder=6,
-            bbox=dict(facecolor="white", edgecolor="#1f4fe0", pad=2, lw=0.8))
-    cx, cy = (u0 + u1) / 2, (v0 + v1) / 2
+            axx.add_collection(LineCollection(cs[:, :, [a, b]], colors=["0.1"], linewidths=1.6, zorder=3))
+        if d.get("unit") == "°":
+            _angle_marks(axx, d, a, b, zoom)
+        elif L > 1e-6:
+            _arrow(axx, pa[a], pa[b], pb[a], pb[b], 2.4 if zoom else 2.0)
+        axx.set_aspect("equal")
+        axx.set_xticks([])
+        axx.set_yticks([])
+        for sp_ in axx.spines.values():
+            sp_.set_color("0.75")
+
+    draw(ax, False)
+    lo, hi = mesh.bounds[0][[a, b]], mesh.bounds[1][[a, b]]
+    span = max(hi - lo)
+    cx, cy = (lo + hi) / 2
+    half = span / 2 * 1.18 + 3
     ax.set_xlim(cx - half, cx + half)
     ax.set_ylim(cy - half, cy + half)
-    ax.set_aspect("equal")
-    ax.set_xticks([])
-    ax.set_yticks([])
-    for sp_ in ax.spines.values():
-        sp_.set_color("0.8")
+    unit = "°" if d.get("unit") == "°" else ""
+    ax.text(0.5, 0.98, f"{d['_tag']} {fmt(d['value'])}{unit}", transform=ax.transAxes, ha="center", va="top",
+            fontsize=14, fontweight="bold", color="#1f4fe0", zorder=8,
+            bbox=dict(facecolor="white", edgecolor="#1f4fe0", pad=2, lw=0.8))
+    small = (L < 0.22 * span) if d.get("unit") != "°" else False
+    if small:   # the place is small on this part: show it enlarged in the corner, and mark where it is
+        z = max(L * 1.3, 6.0)
+        mx, my = mid[a], mid[b]
+        ins = ax.inset_axes([0.56, 0.02, 0.43, 0.43])
+        draw(ins, True)
+        ins.set_xlim(mx - z, mx + z)
+        ins.set_ylim(my - z, my + z)
+        ins.set_title(t("zoom"), fontsize=7, color="0.4", pad=1)
+        ax.add_patch(plt.Rectangle((mx - z, my - z), 2 * z, 2 * z, fill=False, edgecolor="#1f4fe0", lw=0.8,
+                                   linestyle=":", zorder=6))
     ax.set_title(title, fontsize=10.5, color="0.1", loc="left")
     ax.text(0.02, 0.02, t("seen", v=t("dirs")["XYZ"[k]]), transform=ax.transAxes, fontsize=7.5, color="0.45")
+
+
+def _angle_marks(ax, d, a, b, zoom):
+    """Highlight the face(s) of an angle and draw the arc; against level, draw the level line."""
+    import numpy as np
+    at = np.array(d["at"])
+    na = np.array(d.get("n_a") or [0, 0, 1])
+    span = 25.0
+    fa = np.array([-na[b], na[a]])           # face a as a line in this view
+    if np.linalg.norm(fa) < 1e-6:
+        return
+    fa = fa / np.linalg.norm(fa)
+    if d.get("ref"):
+        ref = np.array([1.0, 0.0])            # level (or plumb) reference line through the point
+        if d["ref"] in ("X", "Y"):
+            ref = np.array([0.0, 1.0])
+        ax.plot([at[a] - span, at[a] + span], [at[b] - span * ref[1], at[b] + span * ref[1]] if ref[1] else
+                [at[b], at[b]], color="0.35", lw=1.2, linestyle="--", zorder=4)
+        rb = ref
+    else:
+        nb = np.array(d.get("n_b") or [0, 0, 1])
+        rb = np.array([-nb[b], nb[a]])
+        rb = rb / (np.linalg.norm(rb) or 1)
+        if d.get("at_b"):
+            q = np.array(d["at_b"])
+            ax.plot([q[a] - span * rb[0], q[a] + span * rb[0]], [q[b] - span * rb[1], q[b] + span * rb[1]],
+                    color="#1f4fe0", lw=2.4, zorder=5)
+    if np.dot(fa, rb) < 0:
+        fa = -fa
+    ax.plot([at[a] - span * fa[0], at[a] + span * fa[0]], [at[b] - span * fa[1], at[b] + span * fa[1]],
+            color="#1f4fe0", lw=2.4, zorder=5)
+    a0, a1 = np.degrees(np.arctan2(rb[1], rb[0])), np.degrees(np.arctan2(fa[1], fa[0]))
+    lo_, hi_ = sorted([a0, a1])
+    if hi_ - lo_ > 180:
+        lo_, hi_ = hi_, lo_ + 360
+    from matplotlib.patches import Arc
+    ax.add_patch(Arc((at[a], at[b]), span * 0.9, span * 0.9, theta1=lo_, theta2=hi_, color="#1f4fe0", lw=2,
+                     zorder=6))
 
 
 def main():
@@ -211,7 +290,12 @@ def main():
 
     def fit_lines(name):
         L = []
+        gaps = []
         for d in [d for d in dims_all if d.get("part") == name]:
+            if d.get("kind") == "clearance" and not d.get("panel"):
+                if d.get("value") is not None:
+                    gaps.append(f"{d['label']} {fmt(d['value'])}")
+                continue
             tag = f"{d['_tag']} " if d.get("_tag") else "   "
             if d.get("value") is None:
                 L += [(ln, 11, "#c0392b", True, 0) for ln in wrap(f"{tag}{d['label']}: {t('nomeasure')}", 40)]
@@ -219,26 +303,46 @@ def main():
             unit = d.get("unit", "mm")
             v = f"{fmt(d['value'])}{'°' if unit == '°' else ' mm'}"
             tail = ""
-            if "expect" in d:
-                tail = "  ✓" if d.get("ok") else f"  ✗ {t('exp', e=fmt(d['expect']))}"
+            if "expect" in d or "min" in d:
+                tail = "  ✓" if d.get("ok") else "  ✗"
+                if not d.get("ok") and "expect" in d:
+                    tail += f" {t('exp', e=fmt(d['expect']))}"
             col = "#1f4fe0" if d.get("ok", True) else "#c0392b"
             if d.get("measured") is False:
                 col = "0.45"
                 tail = "  " + t("typed")
             L.append((f"{tag}{d['label']}  {v}{tail}", 13, col, True, 0))
+            ed = d.get("end_d") or [None, None]
+            ends = d.get("ends") or [None, None]
+            if d.get("kind") == "distance" and ed[0] and ed[1]:
+                r2 = (ed[0] + ed[1]) / 2
+                L.append((t("caliper2", i=fmt(d["value"] - r2), o=fmt(d["value"] + r2)), 10, "0.2", False, 1))
+            elif d.get("kind") == "distance" and (ed[0] or ed[1]):
+                dh = ed[0] or ed[1]
+                f_ = ends[1] if ed[0] else ends[0]
+                L.append((t("caliper1", f=f_ or "", e=fmt(d["value"] - dh / 2), r=fmt(dh / 2)), 10, "0.2", False, 1))
+            if d.get("unit") == "°" and d.get("ref"):
+                L.append((t("level" if d["ref"] == "Z" else "plumb", v=fmt(d["value"])), 10, "0.2", False, 1))
+            if d.get("min") is not None or d.get("max") is not None:
+                L.append((t("range", a=fmt(d["min"]) if d.get("min") is not None else "",
+                            b=fmt(d["max"]) if d.get("max") is not None else ""), 10, "0.2", False, 1))
             if "vs" in d:
                 diff = d["value"] - d["vs"]
                 L.append((t("vs", l=d["vs_label"], v=fmt(d["vs"]), d=f"{d['label']} {fmt(d['value'])}"
                            f"（{'+' if diff >= 0 else ''}{fmt(diff)}）"), 10, "0.25", False, 1))
+        if gaps:
+            L += [(ln, 9, "0.45", False, 0) for ln in wrap(t("intended", l="、".join(gaps)), 60)]
         return L
 
     def info_lines(name, info):
         """[(text, fontsize, colour, bold, indent)] under the drawings of one part."""
         L = []
         size = info.get("bbox_mm", {}).get("size") or [0, 0, 0]
-        L.append((f"{size_text(size)} mm   W×D×H (X×Y×Z)", 11, "0.15", False, 0))
-        if info.get("print_size_mm"):
-            L.append((t("printpose", s=size_text(info["print_size_mm"]), n=name), 9, "0.35", False, 0))
+        if info.get("print_size_mm"):   # what the user holds on the table: the printed piece lying flat
+            L.append((t("printpose", s=size_text(info["print_size_mm"]), n=name), 11, "0.15", True, 0))
+            L.append((f"{t('installed')} {size_text(size)} mm", 9, "0.4", False, 0))
+        else:
+            L.append((f"{size_text(size)} mm   W×D×H (X×Y×Z)", 11, "0.15", False, 0))
         for sp in info.get("hole_spacing") or []:
             along = " / ".join(f"{ax} {'・'.join(fmt(v) for v in vals)}" for ax, vals in sp["along"].items())
             L.append((f"{t('spacing')} Ø{fmt(sp['d'])}: {along} mm", 10, "0.15", True, 0))
@@ -273,7 +377,8 @@ def main():
         info["_name"] = f.stem[5:]
         k = 0
         for d in dims_all:  # letters tie a drawing to its line in the list
-            if d.get("part") == info["_name"] and d.get("value") is not None and (d.get("p") or d.get("at")):
+            if (d.get("part") == info["_name"] and d.get("value") is not None and (d.get("p") or d.get("at"))
+                    and not (d.get("kind") == "clearance" and not d.get("panel"))):
                 d["_tag"] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[k % 26]
                 k += 1
     LINE, PANEL, VIEW_H = 0.3, 2.75, 2.6
@@ -344,10 +449,15 @@ def main():
             ax = fig.add_axes((0.04 + col * 0.315, y(yy + 0.35 + VIEW_H), 0.29, (VIEW_H - 0.35) / H))
             _view(ax, mesh, axes, c, t(key), (fmt(size[a_]), fmt(size[b_])), marks[{2: "Z", 1: "Y", 0: "X"}[nrm]],
                   ctx_meshes, ())
+            placed = []
+            spn = max(size[a_], size[b_], 1.0)
             for d in det:  # small letter at the place of each fit dimension
                 pts = d.get("p") or [d.get("at"), d.get("at")]
                 mu = (pts[0][a_] + pts[1][a_]) / 2
                 mv = (pts[0][b_] + pts[1][b_]) / 2
+                while any(abs(mu - pu) < 0.07 * spn and abs(mv - pv) < 0.07 * spn for pu, pv in placed):
+                    mu += 0.08 * spn          # do not stack letters on top of each other
+                placed.append((mu, mv))
                 ax.text(mu, mv, d["_tag"], fontsize=8, fontweight="bold", color="white", ha="center", va="center",
                         zorder=7, bbox=dict(boxstyle="circle,pad=0.2", facecolor="#1f4fe0", edgecolor="none"))
         yy += 0.5 + VIEW_H

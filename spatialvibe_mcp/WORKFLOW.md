@@ -50,8 +50,10 @@ short enough to read on one phone screen: no long paragraphs, no jargon, numbers
     # hole centre to hole centre
     {"label": "ケース穴 横", "part": "plate", "kind": "distance", "a": (-49, 0, 31), "b": (49, 0, 31),
      "snap": "hole", "axis": "X", "expect": 98},
-    # a surface to a hole centre ("face" = this part's surface, "context:wall" = the wall's surface)
-    {"label": "壁から穴の中心", "part": "br", "kind": "distance", "a": (-25, 0, 25), "b": (-25, 40, 25),
+    # a surface to a hole centre ("face" = this part's surface, "context:wall" = the wall's surface;
+    # "face:+Z" / "context:wall:-Y" only snap to surfaces facing that way). The user is at -Y, so a
+    # wall behind the part is at +Y and the hole is in front of it at -Y.
+    {"label": "壁から穴の中心", "part": "br", "kind": "distance", "a": (-25, 0, 25), "b": (-25, -40, 25),
      "snap_a": "context:wall", "snap_b": "hole", "axis": "Y", "expect": 40},
     # inner depth of an open box: a point on the floor to a point ON the rim (each within 10 mm of a surface)
     {"label": "深さ", "part": "tray", "kind": "distance", "a": (0, 0, 2), "b": (0, 14, 20), "snap": "face", "axis": "Z"},
@@ -59,16 +61,29 @@ short enough to read on one phone screen: no long paragraphs, no jargon, numbers
     {"label": "口の幅", "part": "clip", "kind": "gap", "at": (0, 0, 10), "axis": "X", "narrowest": (0, 0, 6),
      "expect": 21.5},
     {"label": "パイプ穴", "part": "clip", "kind": "diameter", "at": (0, 0, 0), "vs": 25.4, "vs_label": "パイプ"},
+    {"label": "差し込み外径", "part": "adapter", "kind": "diameter", "outer": True, "at": (0, 0, 40), "expect": 15.6},
     {"label": "壁の厚さ", "part": "tray", "kind": "thickness", "at": (19, 0, 10), "axis": "X"},
+    {"label": "端の厚さ", "part": "wedge", "kind": "thickness", "at": (0, -19.9, 3), "axis": "normal"},  # square to the face
     {"label": "くさびの角度", "part": "wedge", "kind": "angle", "a": (0, 0, 8), "b": (0, 0, 0), "expect": 7},
+    # against level: the sheet says 「水平から 65°（机に置いて水準器で）」
+    {"label": "背もたれ", "part": "stand", "kind": "angle", "a": (0, 20, 30), "ref": "Z", "expect": 65},
     {"label": "柱からのはみ出し", "part": "plate", "kind": "overhang", "to": "post", "axis": "X", "side": "+"},
     {"label": "全長", "part": "comb", "kind": "size", "axis": "X"},
-    # an intended small gap: declare it (with expect) so it is not reported as a problem
-    {"label": "筒とのすき間", "part": "br", "kind": "clearance", "to": "sensor", "expect": 0.25, "tol": 0.05},
+    {"label": "木ネジの間隔", "part": "plate", "kind": "distance", "a": (0, 0, -55), "b": (0, 0, 55),
+     "snap": "hole", "axis": "Z", "min": 60},                         # a range instead of one value
+    # gap between a held object and the wall along an axis (a point in the gap):
+    {"label": "電池と壁", "part": "tray", "kind": "clearance", "to": "cell4", "at": (37.5, 0, 8), "axis": "X"},
+    # intended small gaps: declare them so they are not warnings ("wire*" = all wires); they are
+    # listed in one grey line, not drawn, because the user cannot measure them
+    {"label": "配線とのすき間", "part": "comb", "kind": "clearance", "to": "wire*", "expect": 0.1, "tol": 0.05},
   ]
   ```
-  `vs` / `vs_label` put the real object's size next to the part's (パイプ 25.4 → 穴 25.6). `gap`
-  needs a point in the empty space; `thickness` a point inside the material. 3–7 dims per part.
+  `expect`/`tol` and `min`/`max` work for every kind. `vs` / `vs_label` put the real object's size
+  next to the part's (パイプ 25.4 → 穴 25.6). `gap` needs a point in the empty space; `thickness` a
+  point inside the material; `axis` may be "X"/"Y"/"Z", a direction (x, y, z) or "normal". Half-round
+  seats (comb slots, clip mouths) also count as holes for `snap: "hole"`. Hole-centre distances are
+  shown with the caliper values (edge to edge) automatically. Choose 3–7 dims per part: the ones the
+  user can actually measure on the real thing.
 - `origin = "壁の面・ブラケットの底・ネジの中間"`: say in words where (0,0,0) is, so the user knows
   what the coordinates are measured from. Put the origin on a real surface the user can touch.
 - `print_pose = {"bracket": "-X"}` (that face goes on the bed) or `{"wedge": Rot(-7, 0, 0)}` for parts

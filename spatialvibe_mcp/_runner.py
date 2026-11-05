@@ -136,6 +136,7 @@ def hole_list(shape):
             at = [round(foot[i] + d[i] * mid, 1) for i in range(3)]
             cn = math.sqrt(sum(x * x for x in r_["closed"])) or 1.0
             out.append({"d": dia, "axis": _axis_name(d), "at": at, "half": cover < 0.95,
+                        "depth": round(r_["hi"] - r_["lo"], 1),
                         "_closed": tuple(x / cn for x in r_["closed"]), "_dir": d, "_foot": foot,
                         "_lo": r_["lo"], "_hi": r_["hi"]})
     out = _merge_counterbores(out, _countersinks(shape))
@@ -162,6 +163,13 @@ def _countersinks(shape):
                 d = [-x for x in d]
             t0 = sum(a * b for a, b in zip(o, d))
             foot = tuple(round(o[i] - d[i] * t0, 1) for i in range(3))
+            c0 = f.center()
+            q0 = (c0.X - foot[0], c0.Y - foot[1], c0.Z - foot[2])
+            t_ = sum(q0[i] * d[i] for i in range(3))
+            radial = [q0[i] - d[i] * t_ for i in range(3)]
+            n0 = f.normal_at(c0)
+            if n0.X * radial[0] + n0.Y * radial[1] + n0.Z * radial[2] >= 0:
+                continue  # outer chamfer / cone surface, not a countersink
             rmax, ts = 0.0, []
             for v in f.vertices():
                 c = v.center()
@@ -195,7 +203,9 @@ def _merge_counterbores(hl, csks):
             absorbed.add(id(big))
             break
         for foot, d, dmax, lo, hi in csks:
-            if d == tuple(h["_dir"]) and all(abs(x - y) < 0.15 for x, y in zip(foot, h["_foot"])):
+            near = lo <= h["_hi"] + 0.5 and hi >= h["_lo"] - 0.5      # the cone touches the hole
+            if (d == tuple(h["_dir"]) and all(abs(x - y) < 0.15 for x, y in zip(foot, h["_foot"]))
+                    and near and dmax <= 2.6 * h["d"]):
                 h["countersink"] = {"d": dmax}
                 break
     return [h for h in hl if id(h) not in absorbed]
@@ -230,7 +240,7 @@ def _pair_slots(hl):
             used.update((i, j))
             mid = [round((a["at"][k] + b["at"][k]) / 2, 1) for k in range(3)]
             slots.append({"d": a["d"], "axis": a["axis"], "at": mid, "half": False, "kind": "slot",
-                          "length": round(dist + a["d"], 1)})
+                          "length": round(dist + a["d"], 1), "depth": a.get("depth")})
     keep = [h for h in hl if not h["half"]] + [a for k, a in enumerate(arcs) if k not in used]
     return keep + slots
 
@@ -311,6 +321,9 @@ def _snap_hole(p, hl):
         else:
             foot = tuple(c)
         d2 = sum((p[i] - foot[i]) ** 2 for i in range(3))
+        if ax and h.get("depth"):
+            if abs(t) > h["depth"] / 2 + 0.5:   # p is beside this hole along its axis, not in it
+                d2 += (abs(t) - h["depth"] / 2) ** 2 + 1.0
         if best is None or d2 < best[0]:
             best = (d2, foot, k, h)
     if best is None or best[0] > 12.0 ** 2:
@@ -318,11 +331,19 @@ def _snap_hole(p, hl):
     return best[1], best[2], best[3]
 
 
-def _snap_face(p, shp):
-    """The nearest point on the part's surface (a wall, the floor, a rim)."""
+def _snap_face(p, shp, facing=None):
+    """The nearest point on the part's surface (a wall, the floor, a rim). facing ("+Z", "-X"…)
+    keeps only faces whose outward normal points that way (e.g. the floor of a pocket = "+Z")."""
     from build123d import Vector, Vertex
     q = Vector(*p)
-    f = min(shp.faces(), key=lambda f_: f_.distance_to(q))
+    faces = shp.faces()
+    if facing:
+        sign = -1.0 if facing.startswith("-") else 1.0
+        ax = Vector(*AXES[facing.lstrip("+-")]) * sign
+        faces = [f_ for f_ in faces if f_.normal_at(f_.closest_points(Vertex(*p))[0]).dot(ax) > 0.9]
+        if not faces:
+            raise ValueError(f"no surface facing {facing} near {p}")
+    f = min(faces, key=lambda f_: f_.distance_to(q))
     a, _ = f.closest_points(Vertex(*p))
     if math.dist((a.X, a.Y, a.Z), p) > 10.0:
         raise ValueError(f"no surface within 10 mm of {p}")
@@ -335,17 +356,66 @@ def _end(d, key, shp, hl, ctx_shapes):
     how = d.get(f"snap_{key}", d.get("snap"))
     if how == "hole":
         q, k, h = _snap_hole(p, hl)
-        return q, f"穴{k + 1}"
-    if how == "face":
-        return _snap_face(p, shp), "面"
+        return q, (f"穴{k + 1}", h["d"])
+    if isinstance(how, str) and (how == "face" or how.startswith("face:")):
+        facing = how.split(":", 1)[1] if ":" in how else None
+        return _snap_face(p, shp, facing), ("面", None)
     if isinstance(how, str) and how.startswith("context:"):
-        c = how.split(":", 1)[1]
+        parts_ = how.split(":")
+        c, facing = parts_[1], (parts_[2] if len(parts_) > 2 else None)
         if c not in ctx_shapes:
             raise ValueError(f"context {c!r} not found")
-        return _snap_face(p, ctx_shapes[c]), c
+        return _snap_face(p, ctx_shapes[c], facing), (c, None)
     if how not in (None, "point"):
-        raise ValueError('snap must be "hole", "face", "context:<name>" or "point"')
+        raise ValueError('snap must be "hole", "face", "face:+Z", "context:<name>", "context:<name>:-Y" or "point"')
     return p, None   # typed coordinate: not measured on the shape
+
+
+def _ctx_names(to, context):
+    """'pipe', ['wire1', 'wire2'] or 'wire*' -> the matching context names."""
+    import fnmatch
+    items = to if isinstance(to, (list, tuple)) else [to]
+    names = []
+    for it in items:
+        if not isinstance(it, str):
+            raise ValueError("to must be a context name, a list of names or a pattern like 'wire*'")
+        hit = [c for c in context if fnmatch.fnmatch(c, it)]
+        if not hit:
+            raise ValueError(f"context {it!r} not found")
+        names += [c for c in hit if c not in names]
+    return names
+
+
+def _snap_outer(p, shp):
+    """Outer round surface (shaft, spigot, barb) near p: (point on its axis level with p, Ø, axis)."""
+    from build123d import GeomType
+    from OCP.BRepAdaptor import BRepAdaptor_Surface
+    best = None
+    for f in shp.faces().filter_by(GeomType.CYLINDER):
+        try:
+            cyl = BRepAdaptor_Surface(f.wrapped).Cylinder()
+            loc, dr = cyl.Axis().Location(), cyl.Axis().Direction()
+            o, d = (loc.X(), loc.Y(), loc.Z()), (dr.X(), dr.Y(), dr.Z())
+            c = f.center()
+            oc = (c.X - o[0], c.Y - o[1], c.Z - o[2])
+            t = sum(oc[i] * d[i] for i in range(3))
+            radial = [oc[i] - d[i] * t for i in range(3)]
+            n = f.normal_at(c)
+            if n.X * radial[0] + n.Y * radial[1] + n.Z * radial[2] <= 0:
+                continue  # a hole, not an outer surface
+            tp = sum((p[i] - o[i]) * d[i] for i in range(3))
+            foot = tuple(o[i] + d[i] * tp for i in range(3))
+            off = math.dist(p, foot)
+            bb = f.bounding_box()
+            inside_span = all(bb.min.to_tuple()[i] - 0.5 <= foot[i] <= bb.max.to_tuple()[i] + 0.5 for i in range(3))
+            score = off + (0 if inside_span else 50)
+            if best is None or score < best[0]:
+                best = (score, foot, 2 * cyl.Radius(), d)
+        except Exception:
+            continue
+    if best is None or best[0] > 40:
+        raise ValueError(f"no outer round surface near {p}")
+    return best[1], best[2], best[3]
 
 
 def measure_dims(spec, parts, context, holes_by_part):
@@ -395,11 +465,19 @@ def measure_dims(spec, parts, context, holes_by_part):
                     val, b = abs(t), tuple(a[i] + ax[i] * t for i in range(3))
                 else:
                     val = math.dist(a, b)
-                m.update(value=round(val, 2), unit="mm", p=[list(a), list(b)], ends=[fa, fb],
+                m.update(value=round(val, 2), unit="mm", p=[list(a), list(b)],
+                         ends=[fa[0] if fa else None, fb[0] if fb else None],
+                         end_d=[fa[1] if fa else None, fb[1] if fb else None],
                          measured=fa is not None and fb is not None)
             elif kind in ("gap", "thickness"):
                 at = _vec(d.get("at"), "at")
-                ax = _axis(d.get("axis"))
+                if d.get("axis") == "normal":   # square to the nearest face (tilted wedge ends, sloped walls)
+                    from build123d import Vector, Vertex
+                    f = min(shp.faces(), key=lambda f_: f_.distance_to(Vector(*at)))
+                    nv = f.normal_at(f.closest_points(Vertex(*at))[0])
+                    ax = (nv.X, nv.Y, nv.Z)
+                else:
+                    ax = _axis(d.get("axis"))
                 probes = [at]
                 if kind == "gap" and d.get("narrowest") is not None:
                     span = _vec(d["narrowest"], "narrowest")
@@ -429,17 +507,26 @@ def measure_dims(spec, parts, context, holes_by_part):
                     if best is None or t1 - t0 < best[0]:
                         best = (t1 - t0, q, t0, t1)
                 if best is None:
-                    raise ValueError(f"no closed gap found along the 'narrowest' sweep from {at}")
+                    end = tuple(round(at[i] + _vec(d["narrowest"], "narrowest")[i], 1) for i in range(3))
+                    raise ValueError(f"no closed gap between {at} and {end}: every probe was inside the material "
+                                     "or open on one side. 'narrowest' is a move from 'at' that should stay "
+                                     "inside the opening (e.g. from the seat toward the mouth)")
                 _, q, t0, t1 = best
                 pa = [q[i] + ax[i] * t0 for i in range(3)]
                 pb = [q[i] + ax[i] * t1 for i in range(3)]
                 m.update(value=round(t1 - t0, 2), unit="mm", p=[pa, pb])
+            elif kind == "diameter" and d.get("outer"):
+                c, dia, ax = _snap_outer(_vec(d.get("at"), "at"), shp)
+                u = next(v for v in AXES.values() if abs(sum(v[i] * ax[i] for i in range(3))) < 0.9)
+                r = dia / 2
+                m.update(value=round(dia, 2), unit="mm", at=list(c), axis_dir=list(ax),
+                         p=[[c[i] - u[i] * r for i in range(3)], [c[i] + u[i] * r for i in range(3)]])
             elif kind == "diameter":
                 _, idx, h = _snap_hole(_vec(d.get("at"), "at"), hl)
                 c, ax = h["at"], AXES.get(h["axis"], (0.0, 0.0, 1.0))
                 u = next(v for v in AXES.values() if v != ax)
                 r = h["d"] / 2
-                m.update(value=h["d"], unit="mm", ends=[f"穴{idx + 1}", f"穴{idx + 1}"], at=c,
+                m.update(value=h["d"], unit="mm", ends=[f"穴{idx + 1}", f"穴{idx + 1}"], at=c, axis_dir=list(ax),
                          p=[[c[i] - u[i] * r for i in range(3)], [c[i] + u[i] * r for i in range(3)]])
             elif kind == "size":
                 ax = _axis(d.get("axis"))
@@ -487,14 +574,37 @@ def measure_dims(spec, parts, context, holes_by_part):
                     f0 = (ns[0].X, ns[0].Y, ns[0].Z)
                     view = min(range(3), key=lambda i: abs(f0[i]))
                 m.update(value=round(math.degrees(math.acos(min(1.0, cosv))), 2), unit="°", at=pts[0],
-                         view_normal="XYZ"[view])
+                         at_b=pts[1] if len(pts) > 1 else None, view_normal="XYZ"[view],
+                         n_a=[ns[0].X, ns[0].Y, ns[0].Z], n_b=[ns[1].X, ns[1].Y, ns[1].Z],
+                         ref=d.get("ref") if isinstance(d.get("ref"), str) else None)
             elif kind == "clearance":
-                to = d.get("to")
-                if to not in context:
-                    raise ValueError(f"context {to!r} not found")
-                dist, pa, pb = shp.distance_to_with_closest_points(context[to])
-                m.update(value=round(dist, 2), unit="mm", to=to,
-                         p=[[pa.X, pa.Y, pa.Z], [pb.X, pb.Y, pb.Z]] if dist > 1e-6 else None)
+                names = _ctx_names(d.get("to"), context)
+                if d.get("at") is not None:   # the gap along an axis at a point (cell to side wall)
+                    at, ax = _vec(d.get("at"), "at"), _axis(d.get("axis"))
+                    both = shp
+                    for c in names:
+                        both = both + context[c]
+                    spans = _crossings(both, at, ax)
+                    if any(s_[0] < 0 < s_[1] for s_ in spans):
+                        raise ValueError(f"{at} is inside the part or {names}: put it in the gap")
+                    before = [s_[1] for s_ in spans if s_[1] <= 1e-6]
+                    after = [s_[0] for s_ in spans if s_[0] >= -1e-6]
+                    if not before or not after:
+                        raise ValueError(f"nothing on one side of {at} along that axis")
+                    t0, t1 = max(before), min(after)
+                    m.update(value=round(t1 - t0, 2), unit="mm", to=",".join(names),
+                             p=[[at[i] + ax[i] * t0 for i in range(3)], [at[i] + ax[i] * t1 for i in range(3)]])
+                else:
+                    best = None
+                    for c in names:
+                        dist, pa, pb = shp.distance_to_with_closest_points(context[c])
+                        if best is None or dist < best[0]:
+                            best = (dist, pa, pb, c)
+                    dist, pa, pb, c = best
+                    m.update(value=round(dist, 2), unit="mm", to=",".join(names),
+                             p=[[pa.X, pa.Y, pa.Z], [pb.X, pb.Y, pb.Z]] if dist > 1e-6 else None)
+                m["_names"] = names
+                m["panel"] = bool(d.get("panel", d.get("at") is not None))
             else:
                 raise ValueError('kind must be distance, gap, thickness, diameter, size, overhang, angle or clearance')
             if isinstance(d.get("vs"), (int, float)):  # the real object's size, shown next to the part's
@@ -506,6 +616,14 @@ def measure_dims(spec, parts, context, holes_by_part):
                 m["expect"], m["ok"] = float(exp), abs(m["value"] - float(exp)) <= tol
                 if not m["ok"]:
                     warns.append(f"{name}: 「{label}」を測ると {m['value']} {m['unit']}（予定 {exp}）")
+            lo_, hi_ = d.get("min"), d.get("max")
+            if isinstance(lo_, (int, float)) or isinstance(hi_, (int, float)):
+                inside = (lo_ is None or m["value"] >= lo_ - 1e-9) and (hi_ is None or m["value"] <= hi_ + 1e-9)
+                m["min"], m["max"] = lo_, hi_
+                m["ok"] = inside and m.get("ok", True)
+                if not inside:
+                    rng = f"{lo_ if lo_ is not None else ''}〜{hi_ if hi_ is not None else ''}"
+                    warns.append(f"{name}: 「{label}」が {m['value']} {m['unit']}（範囲 {rng} の外）")
             if not m["measured"]:
                 m["note"] = "typed coordinates"
             out.append(m)
@@ -531,7 +649,7 @@ def clearances(parts, context):
 def summarize(hl):
     counts = {}
     for h in hl:
-        key = (h["d"], h["half"], h.get("length"))
+        key = (h["d"], h["half"], h.get("length") if h.get("kind") == "slot" else None)
         counts[key] = counts.get(key, 0) + 1
     out = []
     for (d, half, length), n in sorted(counts.items(), key=lambda kv: (kv[0][2] is not None, kv[0][0], kv[0][1])):
@@ -676,7 +794,10 @@ def main():
     result["dims"], dim_warns = measure_dims(ns.get("dims"), parts, context, holes_by_part)
     warn.extend(dim_warns)
     result["clearance"] = clearances(parts, context)
-    intended = {(m["part"], m.get("to")) for m in result["dims"] if m.get("kind") == "clearance" and m.get("ok")}
+    for m in result["dims"]:
+        m.setdefault("_names", [])
+    intended = {(m["part"], c) for m in result["dims"] if m.get("kind") == "clearance" and m.get("ok")
+                for c in m.get("_names", [])}
     for c in result["clearance"]:
         if c["mm"] is not None and 0 < c["mm"] < 1.0 and (c["part"], c["to"]) not in intended:
             warn.append(f"{c['part']}: {c['to']} とのすき間が {c['mm']} mm しかない"
@@ -699,6 +820,8 @@ def main():
             result["interference"].append({"a": a, "b": b, "overlap_cm3": round(v / 1000, 3)})
         elif v > 1e-6:
             result["near_contact"].append({"a": a, "b": b, "overlap_mm3": round(v, 3)})
+    for m in result["dims"]:
+        m.pop("_names", None)
     write_result(result)
 
 
