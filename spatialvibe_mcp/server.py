@@ -1,4 +1,4 @@
-"""SpatialVibe MCP server (stdio).
+"""SpatialVibe MCP server (stdio, or Streamable HTTP behind the gateway: see _remote.py).
 
 Tools: build_model, preview, publish_ar, export_print, get_print_job, list_projects, get_code.
 Data lives in $SPATIALVIBE_HOME (default: <repo>/data/mcp_projects), one folder per
@@ -593,7 +593,18 @@ def design_session(goal: str = "") -> str:
 
 def main():
     HOME.mkdir(parents=True, exist_ok=True)
-    mcp.run()
+    transport = os.environ.get("SPATIALVIBE_TRANSPORT", "stdio")
+    if transport == "stdio":
+        mcp.run()
+    elif transport == "http":
+        from ._remote import RemoteError, serve, settings as remote_settings
+        try:
+            config = remote_settings()
+        except RemoteError as exc:
+            raise SystemExit(f"spatialvibe http mode refused: {exc}") from None
+        serve(mcp, config)
+    else:
+        raise SystemExit("SPATIALVIBE_TRANSPORT must be stdio or http")
 
 
 if __name__ == "__main__":

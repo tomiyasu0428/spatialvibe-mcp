@@ -1,0 +1,19 @@
+// Copy to wrangler.jsonc (git-ignored) and replace the placeholders.
+// Secrets (stdin, never CLI arguments): `wrangler secret put LOGIN_PASSWORD`, `wrangler secret put UPSTREAM_TOKEN`.
+// Create the KV namespace once: `wrangler kv namespace create OAUTH_KV` and paste its id below.
+{
+  "name": "spatialvibe-mcp",
+  "account_id": "REPLACE-ACCOUNT-ID",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-07-30",
+  // Required for Client ID Metadata Documents (ChatGPT's client registration), see the provider README.
+  "compatibility_flags": ["global_fetch_strictly_public"],
+  "workers_dev": true,
+  "preview_urls": false,
+  "observability": { "enabled": false },
+  "vars": {
+    "PUBLIC_ORIGIN": "https://spatialvibe-mcp.REPLACE-SUBDOMAIN.workers.dev",
+    "UPSTREAM_ORIGIN": "https://REPLACE-TUNNEL-HOSTNAME"
+  },
+  "kv_namespaces": [{ "binding": "OAUTH_KV", "id": "REPLACE-KV-NAMESPACE-ID" }]
+}

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- launchd user agent for the SpatialVibe MCP server in remote (http) mode.
+     Install: copy to ~/Library/LaunchAgents/, edit the three REPLACE paths,
+     then `launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.spatialvibe.mcp.plist`.
+     The server binds 127.0.0.1 only; cloudflared (com.spatialvibe.cloudflared.plist) exposes it. -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.spatialvibe.mcp</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/REPLACE/path/to/spatialvibe-mcp/.venv/bin/python</string>
+    <string>-I</string>
+    <string>/REPLACE/path/to/spatialvibe-mcp/tools/ar_mcp_launch.py</string>
+    <string>/REPLACE/path/to/spatialvibe-mcp/.spatialvibe-ar.local.json</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>KeepAlive</key><true/>
+  <key>ThrottleInterval</key><integer>10</integer>
+  <key>ProcessType</key><string>Interactive</string>
+  <key>StandardOutPath</key><string>/tmp/spatialvibe-mcp.out.log</string>
+  <key>StandardErrorPath</key><string>/tmp/spatialvibe-mcp.err.log</string>
+</dict>
+</plist>

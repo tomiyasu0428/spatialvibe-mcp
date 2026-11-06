@@ -1,0 +1,19 @@
+# Remote MCP (Claude / ChatGPT → Mac) — handoff
+
+Goal: ask for a shape from the phone, get an expiring AR link, check it in Safari. Steps ③④ (AR
+Worker) existed; this adds ① ② — an OAuth gateway and an HTTP mode for the Mac-hosted server.
+Design and operator steps: `REMOTE_MCP.md`. No secret values are recorded here.
+
+## 2026-11-06
+- `spatialvibe_mcp/_remote.py` + `SPATIALVIBE_TRANSPORT=http`: Streamable HTTP on 127.0.0.1:8765,
+  one upstream Bearer credential (Keychain account `mcp-upstream`, constant-time compare), Host check
+  for the Tunnel hostname, no OAuth metadata and no access log on the Mac. Launcher config keys
+  `transport`, `public_host`, `upstream_keychain_service`, `http_port`.
+- `cloudflare/mcp-gateway`: Worker on `@cloudflare/workers-oauth-provider` 1.2.4 (DCR + CIMD, PKCE),
+  single-owner password consent page, `/mcp` relay with header filtering; outages → 503, credential
+  mismatch → 502. `node --test gateway.test.mjs` runs the full flow in local workerd (11 checks).
+- `mac/`: launchd agents for the server and cloudflared, Tunnel config example.
+- Verified here: `tests/test_remote.py` (7), `tests/test_ar_launch.py` (5), gateway tests (11). Not
+  verified: a real deploy (no Cloudflare access from the cloud session), the Tunnel, claude.ai and
+  ChatGPT registration, a phone end-to-end. The AR Worker proxy-injection 401 from the cloud session
+  is unresolved and no longer on this path (the Mac uses its Keychain key, 415 confirmed earlier).

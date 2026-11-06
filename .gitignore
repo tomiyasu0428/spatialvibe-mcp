@@ -31,3 +31,6 @@ wrangler.toml
 *-result.json
 *-state.json
 node_modules/
+
+# Bundled gateway output (tests bundle in memory; wrangler bundles on deploy)
+cloudflare/mcp-gateway/dist/
