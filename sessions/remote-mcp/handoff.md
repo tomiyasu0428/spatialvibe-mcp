@@ -17,3 +17,10 @@ Design and operator steps: `REMOTE_MCP.md`. No secret values are recorded here.
   verified: a real deploy (no Cloudflare access from the cloud session), the Tunnel, claude.ai and
   ChatGPT registration, a phone end-to-end. The AR Worker proxy-injection 401 from the cloud session
   is unresolved and no longer on this path (the Mac uses its Keychain key, 415 confirmed earlier).
+
+## 2026-11-06 (later) — parked
+- Decision: stop the gateway/Tunnel route for now. The phone drives Claude Code on the Mac with
+  Remote Control instead (`claude remote-control` in the repo folder, or Desktop app `/remote-control`),
+  which already carries the local stdio SpatialVibe MCP server, the Keychain AR key and the
+  sandbox. No gateway, OAuth or Tunnel needed. Nothing here was deployed; the code stays on
+  `claude/magical-goldberg-anag9s` for later.
