@@ -13,6 +13,10 @@ TOKEN = re.compile(r"[A-Za-z0-9_-]{43}\Z")
 # Honest application identity. Cloudflare's edge rejects urllib's default agent with
 # error 1010 before the Worker runs, so the request must not rely on that default.
 USER_AGENT = "SpatialVibe-MCP-AR-Publisher/1"
+# Cloud sessions: the egress proxy replaces this placeholder with the saved credential for
+# the Worker host only (a "network secret"). It is not a key; this process never holds one.
+PROXY_PLACEHOLDER = "proxy-injected-credential-placeholder-00000"
+assert TOKEN.fullmatch(PROXY_PLACEHOLDER)
 
 
 class PublicationError(ValueError):
@@ -26,6 +30,7 @@ class Settings:
     ttl: int
     timeout: int
     max_bytes: int
+    via_proxy: bool = False   # True: credential added by the HTTPS proxy, send through it
 
 
 def settings() -> Settings:
@@ -36,11 +41,21 @@ def settings() -> Settings:
                 or url.port is not None or url.path or url.query or url.fragment
                 or origin != f"https://{url.hostname}"):
             raise ValueError
-        token = os.environ.get("SPATIALVIBE_AR_UPLOAD_TOKEN")
-        if token is None:
-            service = os.environ.get("SPATIALVIBE_AR_KEYCHAIN_SERVICE")
-            token = read_upload_token(service) if service else ""
-        if not TOKEN.fullmatch(token):
+        mode = os.environ.get("SPATIALVIBE_AR_CREDENTIAL", "local")
+        if mode == "proxy":
+            # Never also read a local key: one source of the credential, chosen explicitly.
+            if ("SPATIALVIBE_AR_UPLOAD_TOKEN" in os.environ or "SPATIALVIBE_AR_KEYCHAIN_SERVICE" in os.environ
+                    or not _proxied(url.hostname)):
+                raise ValueError
+            token = PROXY_PLACEHOLDER
+        elif mode == "local":
+            token = os.environ.get("SPATIALVIBE_AR_UPLOAD_TOKEN")
+            if token is None:
+                service = os.environ.get("SPATIALVIBE_AR_KEYCHAIN_SERVICE")
+                token = read_upload_token(service) if service else ""
+            if not TOKEN.fullmatch(token) or token == PROXY_PLACEHOLDER:
+                raise ValueError
+        else:
             raise ValueError
         ttl = int(os.environ.get("SPATIALVIBE_AR_TTL", "3600"))
         timeout = int(os.environ.get("SPATIALVIBE_AR_TIMEOUT", "60"))
@@ -49,7 +64,12 @@ def settings() -> Settings:
             raise ValueError
     except (ValueError, TypeError, KeychainError):
         raise PublicationError("AR publication configuration is missing or invalid; configure the trusted parent securely") from None
-    return Settings(origin, token, ttl, timeout, maximum)
+    return Settings(origin, token, ttl, timeout, maximum, mode == "proxy")
+
+
+def _proxied(host: str) -> bool:
+    """An HTTPS proxy is configured and the Worker host is not exempted from it."""
+    return bool(request.getproxies().get("https")) and not request.proxy_bypass(host)
 
 
 class NoRedirect(request.HTTPRedirectHandler):
@@ -57,8 +77,12 @@ class NoRedirect(request.HTTPRedirectHandler):
         return None
 
 
-def _opener():
-    # Do not send the bearer credential through inherited HTTP proxies or redirects.
+def _opener(via_proxy: bool = False):
+    # Local key: never send the bearer credential through inherited HTTP proxies or redirects.
+    # Proxy mode: the proxy is the only holder of the credential, so it must be used; redirects
+    # are still refused.
+    if via_proxy:
+        return request.build_opener(request.ProxyHandler(), NoRedirect())
     return request.build_opener(request.ProxyHandler({}), NoRedirect())
 
 
@@ -72,7 +96,7 @@ def publish(body: bytes, metadata: dict, config: Settings, *, opener=None, now=t
                "Idempotency-Key": identity, "X-Content-SHA256": checksum,
                "X-AR-TTL-Seconds": str(config.ttl),
                "X-AR-Metadata": json.dumps(metadata, separators=(",", ":"), allow_nan=False)}
-    client = opener or _opener()
+    client = opener or _opener(config.via_proxy)
     for attempt in range(2):
         req = request.Request(config.origin + "/api/publications", data=body, headers=headers, method="POST")
         try:
@@ -100,6 +124,9 @@ def publish(body: bytes, metadata: dict, config: Settings, *, opener=None, now=t
                 continue
             if status in (301, 302, 303, 307, 308):
                 raise PublicationError("AR publication refused a redirect") from None
+            if status == 401 and config.via_proxy:
+                raise PublicationError("AR publication was not authorized (HTTP 401): the proxy did not add a "
+                                       "valid credential for this host; no local fallback was used") from None
             raise PublicationError(f"AR publication was not confirmed (HTTP {status}); no local fallback was used") from None
         except (error.URLError, TimeoutError, OSError):
             if attempt == 0:
