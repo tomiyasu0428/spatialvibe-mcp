@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>spatialvibe demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+JP:wght@100..900&display=block">
+<style>
+/* Demo video chapters (deterministic render(t)). Photos, a reconstructed chat, real build results.
+   The process clip (demo/process) is spliced in between chapters by render.py. */
+:root {
+  --ink: #0d0e10; --paper: #f1f0ec; --orange: #ff5a1f; --blue: #3b6cff; --green: #35c26b; --grey: #8a8c92;
+  --jp: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --lat: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; }
+body { background: #060607; color: var(--paper); font-family: var(--jp); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 16px; box-sizing: border-box; }
+body.capture { padding: 0; gap: 0; }
+.stage { container-type: inline-size; position: relative; overflow: hidden; width: min(100%, 1100px, calc((100vh - 110px) * 16 / 9)); aspect-ratio: 16 / 9; background: var(--ink); color: var(--paper); }
+body.capture .stage { width: 100vw; height: 100vh; aspect-ratio: auto; }
+.scene { position: absolute; inset: 0; opacity: 0; }
+.mono { font-family: var(--mono); letter-spacing: 0.12em; text-transform: uppercase; }
+.hud { position: absolute; inset: 0; pointer-events: none; opacity: 0.55; z-index: 5; }
+.hud .mono { position: absolute; font-size: 1.05cqw; }
+.hud .tl { left: 3.2cqw; top: 2.8cqw; } .hud .tr { right: 3.2cqw; top: 2.8cqw; }
+.crop { position: absolute; width: 1.6cqw; height: 1.6cqw; border-color: var(--paper); border-style: solid; border-width: 0; }
+.crop.a { left: 1.6cqw; top: 1.6cqw; border-left-width: 1px; border-top-width: 1px; }
+.crop.b { right: 1.6cqw; top: 1.6cqw; border-right-width: 1px; border-top-width: 1px; }
+.crop.c { left: 1.6cqw; bottom: 1.6cqw; border-left-width: 1px; border-bottom-width: 1px; }
+.crop.d { right: 1.6cqw; bottom: 1.6cqw; border-right-width: 1px; border-bottom-width: 1px; }
+
+/* photo scenes */
+.photo { position: absolute; inset: 0; background-size: cover; background-position: center; transform-origin: center; }
+.shade { position: absolute; inset: 0; background: linear-gradient(to top, rgba(6,6,7,.85) 0%, rgba(6,6,7,.25) 45%, rgba(6,6,7,0) 70%); }
+.cap { position: absolute; left: 6cqw; right: 6cqw; bottom: 7cqw; font-size: 4.6cqw; font-weight: 900; letter-spacing: -0.045em; line-height: 1.1; text-shadow: 0 0.2cqw 1.2cqw rgba(0,0,0,.6); }
+.cap b { color: var(--orange); font-weight: 900; }
+.cap.small { font-size: 2.6cqw; font-weight: 700; }
+.q { position: absolute; width: 5.4cqw; height: 5.4cqw; border-radius: 50%; background: var(--orange); color: var(--ink); font: 900 3.6cqw var(--lat); display: flex; align-items: center; justify-content: center; transform: translate(-50%, -50%); box-shadow: 0 0.4cqw 1.6cqw rgba(0,0,0,.5); }
+.q span { position: absolute; top: 110%; white-space: nowrap; font: 700 1.3cqw var(--jp); color: var(--paper); letter-spacing: 0; text-shadow: 0 0 0.6cqw #000; }
+.wish { position: absolute; left: 6cqw; top: 9cqw; display: flex; flex-direction: column; gap: 1.2cqw; }
+.wish div { font-size: 3.4cqw; font-weight: 900; letter-spacing: -0.04em; text-shadow: 0 0.2cqw 1.2cqw rgba(0,0,0,.7); }
+.wish div b { color: var(--orange); font-weight: 900; }
+
+/* chat scene */
+.chat { position: absolute; left: 6cqw; right: 6cqw; top: 7cqw; bottom: 5cqw; display: flex; flex-direction: column; gap: 1.1cqw; }
+.msg { display: flex; gap: 1.2cqw; align-items: flex-start; max-width: 92%; }
+.msg.me { align-self: flex-end; flex-direction: row-reverse; }
+.av { flex: none; width: 3.2cqw; height: 3.2cqw; border-radius: 50%; display: flex; align-items: center; justify-content: center; font: 800 1.2cqw var(--lat); color: var(--ink); }
+.me .av { background: var(--paper); } .ai .av { background: var(--orange); }
+.bub { background: #17181c; border: 1px solid #2a2c33; padding: 1.1cqw 1.5cqw; font-size: 1.55cqw; font-weight: 500; line-height: 1.5; border-radius: 0.8cqw; }
+.me .bub { background: #1e2026; }
+.bub .ph { display: inline-flex; gap: 0.5cqw; margin-right: 0.8cqw; vertical-align: middle; }
+.bub .ph i { width: 4.2cqw; height: 3.1cqw; background-size: cover; background-position: center; border-radius: 0.3cqw; display: block; }
+.choices { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8cqw; margin-top: 0.6cqw; }
+.choice { border: 1px solid #2a2c33; padding: 0.8cqw 1cqw; border-radius: 0.5cqw; font-size: 1.25cqw; line-height: 1.4; }
+.choice b { display: block; font-size: 1.05cqw; color: var(--grey); font-weight: 700; margin-bottom: 0.3cqw; letter-spacing: 0.02em; }
+.choice .opt { display: flex; flex-wrap: wrap; gap: 0.5cqw; }
+.choice .opt span { border: 1px solid #3a3d46; padding: 0.15cqw 0.6cqw; border-radius: 99px; font-size: 1.1cqw; }
+.choice .opt span.on { background: var(--orange); border-color: var(--orange); color: var(--ink); font-weight: 700; }
+.tool { align-self: stretch; border-left: 0.3cqw solid var(--blue); background: #121622; padding: 0.9cqw 1.4cqw; font-family: var(--mono); font-size: 1.2cqw; letter-spacing: 0; text-transform: none; line-height: 1.6; }
+.tool .nm { color: var(--blue); font-weight: 600; }
+.tool .ok { color: var(--green); } .tool .warn { color: var(--orange); }
+.src { display: inline-block; font: 600 0.95cqw var(--mono); letter-spacing: 0.06em; padding: 0.1cqw 0.5cqw; border-radius: 0.3cqw; margin-left: 0.5cqw; vertical-align: middle; }
+.src.ds { background: #1d3b2a; color: var(--green); } .src.gs { background: #3a2415; color: var(--orange); }
+.pv { position: absolute; right: 6cqw; top: 7cqw; width: 36cqw; aspect-ratio: 1040 / 840; background: #fff; background-size: contain; background-repeat: no-repeat; border-radius: 0.6cqw; box-shadow: 0 1cqw 3cqw rgba(0,0,0,.6); }
+.pv .lbl { position: absolute; left: 0; top: -2.4cqw; font: 600 1cqw var(--mono); letter-spacing: 0.1em; color: var(--grey); }
+.chat.narrow { right: 46cqw; }
+
+/* AR scene */
+.ar { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 5cqw; }
+.phone { width: 22cqw; aspect-ratio: 9 / 19.5; border-radius: 3cqw; background: #000; border: 0.5cqw solid #222; box-shadow: 0 2cqw 5cqw rgba(0,0,0,.6); overflow: hidden; position: relative; }
+.phone .scr { position: absolute; inset: 0; background: #fff; background-size: cover; background-position: center; }
+.phone .scr.sim { background-size: 150% auto; background-position: center 45%; }
+.phone .tag { position: absolute; left: 50%; bottom: 3cqw; transform: translateX(-50%); font: 600 0.9cqw var(--mono); letter-spacing: 0.1em; color: #fff; background: rgba(0,0,0,.6); padding: 0.3cqw 0.8cqw; border-radius: 99px; white-space: nowrap; }
+.artext { max-width: 44cqw; display: flex; flex-direction: column; gap: 1.4cqw; }
+.artext .h { font-size: 3.6cqw; font-weight: 900; letter-spacing: -0.045em; line-height: 1.1; } .artext .h b { color: var(--orange); font-weight: 900; }
+.artext .p { font-size: 1.6cqw; font-weight: 500; line-height: 1.6; opacity: 0.9; }
+.artext .p .mono { font-size: 1.3cqw; color: var(--blue); text-transform: none; letter-spacing: 0.02em; }
+.artext .st { display: flex; gap: 0.8cqw; margin-top: 0.4cqw; }
+.artext .st span { border: 1px solid var(--green); color: var(--green); font: 600 0.95cqw var(--mono); letter-spacing: 0.1em; padding: 0.35cqw 0.8cqw; }
+
+/* export scene */
+.ex { position: absolute; left: 6cqw; right: 6cqw; top: 8cqw; display: flex; gap: 4cqw; }
+.ex .left { flex: 1; }
+.ex .h { font-size: 3.6cqw; font-weight: 900; letter-spacing: -0.045em; line-height: 1.1; margin-bottom: 1.6cqw; } .ex .h b { color: var(--blue); font-weight: 900; }
+.ex .doc { font-family: var(--mono); font-size: 1.15cqw; line-height: 1.7; background: #121622; border-left: 0.3cqw solid var(--blue); padding: 1.2cqw 1.6cqw; white-space: pre; letter-spacing: 0; text-transform: none; }
+.ex .doc b { color: var(--blue); font-weight: 600; } .ex .doc i { color: var(--green); font-style: normal; } .ex .doc s { color: var(--orange); text-decoration: none; }
+.ex .tree { font-family: var(--mono); font-size: 1.15cqw; line-height: 1.8; white-space: pre; width: 30cqw; opacity: 0.85; letter-spacing: 0; text-transform: none; }
+.ex .tree b { color: var(--blue); font-weight: 600; }
+
+/* close */
+.close { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2cqw; text-align: center; }
+.close .l1 { font-size: 3cqw; font-weight: 700; opacity: 0.85; }
+.close .big { font-size: 7cqw; font-weight: 900; letter-spacing: -0.045em; line-height: 1; } .close .big b { color: var(--orange); font-weight: 900; }
+.close .url { font: 500 1.6cqw var(--mono); letter-spacing: 0.04em; text-transform: none; color: var(--blue); margin-top: 1cqw; }
+.close .meta { font: 400 1cqw var(--mono); letter-spacing: 0.14em; opacity: 0.6; }
+
+/* player */
+.ctl { width: min(100%, 1100px); display: flex; align-items: center; gap: 14px; }
+.ctl button { font: 700 14px/1 var(--jp); color: var(--paper); background: transparent; border: 1px solid rgba(241,240,236,.5); border-radius: 99px; padding: 9px 16px; cursor: pointer; }
+.prog { flex: 1; height: 3px; background: rgba(241,240,236,.15); } .prog div { height: 100%; width: 0; background: var(--orange); }
+.time { font: 400 12px var(--mono); color: rgba(241,240,236,.6); min-width: 110px; text-align: right; }
+body.capture .ctl { display: none; }
+.preload { position: absolute; left: 0; top: 0; opacity: 0.01; pointer-events: none; font-size: 10px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <!-- Chapter 1: opening photos -->
+  <div class="scene" id="s-open1"><div class="photo" style="background-image:url(assets/IMG_4623.jpg)"></div><div class="shade"></div><div class="cap">トラクターに、乗る。</div></div>
+  <div class="scene" id="s-open2"><div class="photo" style="background-image:url(assets/IMG_4625.jpg)"></div><div class="shade"></div>
+    <div class="wish"><div>スマホを置きたい。</div><div><b>ラズパイ</b>を置きたい。</div><div>この箱も付けたい。</div></div></div>
+  <div class="scene" id="s-open3"><div class="photo" style="background-image:url(assets/IMG_4592.jpg)"></div><div class="shade"></div>
+    <div class="q" style="left:19%;top:33%">?<span>ピラーのネジ穴</span></div><div class="q" style="left:70%;top:60%">?<span>ダッシュのトレイ</span></div>
+    <div class="cap small">付けられそうな場所は、いくつかある。</div></div>
+  <div class="scene" id="s-open4"><div class="photo" style="background-image:url(assets/IMG_4621.jpg)"></div><div class="shade"></div>
+    <div class="q" style="left:40%;top:52%">?<span>ハンドレール</span></div>
+    <div class="cap">でも、<b>何を作ればいいか</b>分からない。</div></div>
+
+  <!-- Chapter 2: conversation -->
+  <div class="scene" id="s-chat">
+    <div class="chat" id="chat">
+      <div class="msg me" data-at="0"><div class="av">YOU</div><div class="bub"><span class="ph"><i style="background-image:url(assets/IMG_4621.jpg)"></i><i style="background-image:url(assets/IMG_4625.jpg)"></i></span>トラクターのハンドレールに Raspberry Pi 4 を付けたい。キャブの中だから雨は当たらない。振動はある。プリンターは A1 mini。</div></div>
+      <div class="msg ai" data-at="2200"><div class="av">C</div><div class="bub">写真を見ました。形を決める前に 4 つだけ聞かせてください。
+        <div class="choices">
+          <div class="choice" data-at="2800"><b>どこで支える</b><div class="opt"><span class="on">パイプを挟む</span><span>ネジ穴に固定</span><span>トレイに置く</span></div></div>
+          <div class="choice" data-at="3300"><b>どのくらい外す</b><div class="opt"><span>毎回</span><span class="on">たまに（工具あり）</span><span>外さない</span></div></div>
+          <div class="choice" data-at="3800"><b>ケーブルの向き</b><div class="opt"><span class="on">後ろへ</span><span>横へ</span><span>決めていない</span></div></div>
+          <div class="choice" data-at="4300"><b>水平が要るか</b><div class="opt"><span>要る（センサー）</span><span class="on">要らない</span></div></div>
+        </div></div></div>
+      <div class="msg ai" data-at="7200"><div class="av">C</div><div class="bub">寸法は測らなくて大丈夫です。<br>Raspberry Pi 4: 85 × 56 mm、穴 58 × 49 mm、M2.5<span class="src ds">公式図面</span><br>ハンドレール: Ø25.6 mm<span class="src ds">手順書</span><br>基板の上の部品の高さ: 20 mm<span class="src gs">推定</span></div></div>
+    </div>
+  </div>
+
+  <!-- Chapter 3: build + preview -->
+  <div class="scene" id="s-build">
+    <div class="chat narrow" id="chat2">
+      <div class="tool" data-at="0"><span class="nm">build_model</span>(project="pi-mount", code=…, printer="a1mini")<br>
+        <span data-at="1200">→ parts 3/3 <span class="ok">valid</span>　干渉 <span class="ok">0</span>　造形範囲 <span class="ok">fits ×3</span></span><br>
+        <span data-at="1800">→ dims  58.0 / 49.0 / 27.5 mm <span class="ok">OK</span></span><br>
+        <span data-at="2400">→ <span class="warn">warning</span>: クランプ内径を測れない</span></div>
+      <div class="tool" data-at="3200"><span class="nm">preview</span>(project="pi-mount")　→ 4 方向の画像</div>
+      <div class="msg ai" data-at="5200"><div class="av">C</div><div class="bub">プレビューを見ました。形は問題なし。警告だけ直して作り直します。</div></div>
+      <div class="tool" data-at="7000"><span class="nm">build_model</span>(…)　→ v003　warnings <span class="ok">0</span>　dims 5/5 <span class="ok">OK</span></div>
+      <div class="msg ai" data-at="8600"><div class="av">C</div><div class="bub">パイプを上下 2 分割のクランプで挟み、トレイの 4 本の柱に Pi をねじ止め。ゴムシート 1 mm で振動を逃がします。買うもの: M2.5×8 ×4、M5×30 ×4。</div></div>
+    </div>
+    <div class="pv" id="pv" style="background-image:url(assets/preview_v001.png)"><div class="lbl" id="pvlbl">PREVIEW v001</div></div>
+  </div>
+
+  <!-- Chapter 4: AR -->
+  <div class="scene" id="s-ar"><div class="ar">
+    <div class="phone" id="phone"><div class="scr sim" style="background-image:url(assets/ar_sim.png)"></div><div class="tag" id="phonetag">AR 見え方の模擬（実機スクショに差し替え）</div></div>
+    <div class="artext">
+      <div class="h" data-at="0">現場で、<b>実寸</b>で重ねる。</div>
+      <div class="p" data-at="900"><span class="mono">publish_ar</span> が実寸の USDZ を作り、iPhone に届ける。iCloud Drive か、期限付きのリンク。</div>
+      <div class="p" data-at="1800">Safari で開いて、画像をタップ。実物のハンドレールに重ねて、ずれを一言伝える。それが次の版になる。</div>
+      <div class="st" data-at="2700"><span>0.297 × 0.071 × 0.068 m</span><span>iPhone 実機: 実寸 確認済み</span></div>
+    </div></div></div>
+
+  <!-- Chapter 5: export -->
+  <div class="scene" id="s-export"><div class="ex">
+    <div class="left"><div class="h" data-at="0">決まったら、<b>印刷へ</b>引き継ぐ。</div>
+      <div class="doc" data-at="800"><b>export_print</b>(project="pi-mount", quantities={…}, material="PETG")
+プリンター: Bambu Lab A1 mini  180 × 180 × 180 mm
+材料:       PETG
+部品:       tray ×1  97 × 68 × 28.75 mm   <i>姿勢指定済</i>
+            clamp_cap_L ×1  clamp_cap_R ×1   <i>姿勢指定済</i>
+金具:       M2.5×8 ×4  M5×30 ×4  ゴムシート 1 mm
+未確認:     <i>なし</i>
+まだのこと: <s>スライス・サポート・見積り・印刷</s>  ← この MCP はしない</div></div>
+    <div class="tree" data-at="2200">pi-mount_v003_print/
+  <b>manifest.json</b>       条件の正本
+  PRINT_GUIDE_ja.txt  人向けの案内
+  AI_HANDOFF.txt      別の AI へ
+  stl/                印刷姿勢・z=0
+  step/               編集用
+  source/model.py     この版のスクリプト</div>
+  </div></div>
+
+  <!-- Chapter 6: close -->
+  <div class="scene" id="s-close"><div class="close">
+    <div class="l1" data-at="0">スマホも、箱も、同じやり方で。</div>
+    <div class="big" data-at="900">写真から、<b>3Dプリント</b>まで。</div>
+    <div class="url" data-at="1800">github.com/tomiyasu0428/spatialvibe-mcp</div>
+    <div class="meta" data-at="1800">SPATIALVIBE — CLAUDE + MCP — BUILT 2026.11.04–11.08</div>
+  </div></div>
+
+  <div class="hud" aria-hidden="true">
+    <i class="crop a"></i><i class="crop b"></i><i class="crop c"></i><i class="crop d"></i>
+    <div class="mono tl">SPATIALVIBE — DEMO</div><div class="mono tr" id="tc"></div>
+  </div>
+  <div class="preload"><span style="font-family:var(--jp);font-weight:900">写</span><span style="font-family:var(--jp);font-weight:700">写</span><span style="font-family:var(--jp);font-weight:500">写</span><span style="font-family:var(--lat);font-weight:800">A</span><span style="font-family:var(--mono)">A</span><span style="font-family:var(--mono);font-weight:600">A</span></div>
+</div>
+<div class="ctl">
+  <button id="play" type="button">再生</button>
+  <button id="restart" type="button">最初から</button>
+  <div class="prog"><div id="prog"></div></div>
+  <div class="time" id="time"></div>
+</div>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const clamp = (v) => Math.max(0, Math.min(1, v));
+  const ease = (p) => 1 - Math.pow(1 - p, 3);
+  const seg = (t, a, d) => clamp((t - a) / d);
+  const pad = (n, w = 2) => String(n).padStart(w, "0");
+
+  // Chapters: [id, duration ms]. render.py renders each as its own clip and splices the process clip in between.
+  const CHAPTERS = [
+    ["open", 15000], ["chat", 12500], ["build", 13000], ["ar", 9000], ["export", 9000], ["close", 7000],
+  ];
+  const starts = {}; let acc = 0;
+  for (const [id, d] of CHAPTERS) { starts[id] = acc; acc += d; }
+  const DUR = acc;
+  window.reelChapters = CHAPTERS.map(([id, d]) => ({ id, start: starts[id], end: starts[id] + d }));
+
+  const show = (id, on, fade = 1) => { const e = $(id); e.style.opacity = on ? fade : 0; e.style.zIndex = on ? 2 : 0; };
+  const inFade = (t, a, d, lead = 450, tail = 450) => t < a || t >= a + d ? 0 : Math.min(ease(seg(t, a, lead)), 1 - ease(seg(t, a + d - tail, tail)));
+  const rise = (el, p) => { el.style.opacity = p; el.style.transform = `translateY(${(1 - p) * 1.2}cqw)`; };
+  const staged = (root, t0, t) => root.querySelectorAll("[data-at]").forEach((el) => rise(el, ease(seg(t, t0 + +el.dataset.at, 500))));
+
+  function render(t) {
+    // --- open: 4 photos, hard cuts, slow zoom
+    const o = starts.open;
+    const cuts = [[0, 3200], [3200, 4300], [7500, 3700], [11200, 3800]];
+    ["s-open1", "s-open2", "s-open3", "s-open4"].forEach((id, i) => {
+      const [a, d] = cuts[i]; const on = t >= o + a && t < o + a + d && t < o + 15000;
+      const e = $(id); e.style.opacity = on ? (i === 3 ? 1 - ease(seg(t, o + 15000 - 400, 400)) : 1) : 0; e.style.zIndex = on ? 2 : 0;
+      if (on) {
+        const p = seg(t, o + a, d);
+        e.querySelector(".photo").style.transform = `scale(${1.04 + p * 0.06})`;
+        const cap = e.querySelector(".cap"); if (cap) rise(cap, ease(seg(t, o + a + 350, 500)));
+        e.querySelectorAll(".wish div").forEach((w, k) => rise(w, ease(seg(t, o + a + 400 + k * 900, 450))));
+        e.querySelectorAll(".q").forEach((q, k) => { const s = ease(seg(t, o + a + 500 + k * 700, 400)); q.style.transform = `translate(-50%, -50%) scale(${s})`; q.style.opacity = s; });
+      }
+    });
+    // --- chat
+    const c = starts.chat; const chatOn = t >= c && t < c + 12500;
+    show("s-chat", chatOn, inFade(t, c, 12500));
+    if (chatOn) staged($("chat"), c, t);
+    // --- build
+    const b = starts.build; const buildOn = t >= b && t < b + 13000;
+    show("s-build", buildOn, inFade(t, b, 13000));
+    if (buildOn) {
+      staged($("chat2"), b, t);
+      const pv = $("pv"); const p1 = ease(seg(t, b + 3600, 500)); pv.style.opacity = p1; pv.style.transform = `translateY(${(1 - p1) * 1.5}cqw)`;
+      const v2 = t >= b + 7600; pv.style.backgroundImage = `url(assets/${v2 ? "preview_v003" : "preview_v001"}.png)`; $("pvlbl").textContent = v2 ? "PREVIEW v003" : "PREVIEW v001";
+    }
+    // --- ar
+    const a = starts.ar; const arOn = t >= a && t < a + 9000;
+    show("s-ar", arOn, inFade(t, a, 9000));
+    if (arOn) { staged($("s-ar"), a, t); const ph = ease(seg(t, a, 700)); $("phone").style.transform = `translateY(${(1 - ph) * 3}cqw)`; $("phone").style.opacity = ph; }
+    // --- export
+    const x = starts.export; const exOn = t >= x && t < x + 9000;
+    show("s-export", exOn, inFade(t, x, 9000));
+    if (exOn) staged($("s-export"), x, t);
+    // --- close
+    const z = starts.close; const zOn = t >= z && t < z + 7000;
+    show("s-close", zOn, inFade(t, z, 7000, 450, 900));
+    if (zOn) staged($("s-close"), z, t);
+    // hud
+    const sec = Math.floor(t / 1000), fr = Math.floor((t % 1000) / 1000 * 30);
+    $("tc").textContent = `TC 00:${pad(Math.floor(sec / 60))}:${pad(sec % 60)}:${pad(fr)}`;
+  }
+  render(0);
+
+  const capture = new URLSearchParams(location.search).has("capture");
+  if (capture) document.body.classList.add("capture");
+  window.reelDuration = DUR; window.reelSeek = render;
+  const imgs = [...document.querySelectorAll("[style*='background-image']")].map((e) => new Promise((r) => {
+    const m = /url\((.*?)\)/.exec(e.style.backgroundImage); if (!m) return r(); const im = new Image(); im.onload = im.onerror = () => r(); im.src = m[1].replace(/["']/g, "");
+  }));
+  window.reelReady = Promise.all([document.fonts.ready, ...imgs]).then(() => new Promise((r) => requestAnimationFrame(() => r(true))));
+
+  let playing = false, base = 0, start = 0;
+  const fmt0 = (ms) => `${pad(Math.floor(ms / 60000))}:${pad(Math.floor(ms / 1000) % 60)}`;
+  function tick() {
+    if (!playing) return;
+    let t = base + performance.now() - start;
+    if (t >= DUR) { t = DUR; playing = false; $("play").textContent = "再生"; base = 0; }
+    render(t); $("prog").style.width = (t / DUR * 100) + "%"; $("time").textContent = `${fmt0(t)} / ${fmt0(DUR)}`;
+    if (playing) requestAnimationFrame(tick); else base = 0;
+  }
+  $("play").onclick = () => {
+    if (playing) { playing = false; base += performance.now() - start; $("play").textContent = "再生"; return; }
+    playing = true; start = performance.now(); $("play").textContent = "停止"; requestAnimationFrame(tick);
+  };
+  $("restart").onclick = () => { base = 0; start = performance.now(); if (!playing) { playing = true; $("play").textContent = "停止"; requestAnimationFrame(tick); } };
+  $("time").textContent = `00:00 / ${fmt0(DUR)}`;
+  if (!capture) window.reelReady.then(() => $("play").click());
+})();
+</script>
+</body>
+</html>
