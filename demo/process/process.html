@@ -142,7 +142,7 @@ body.capture .ctl { display: none; }
     { x: 4, who: "mcp",    ttl: "作って検査",   sub: "build_model: 隔離実行・干渉・造形範囲" },
     { x: 5, who: "mcp",    ttl: "プレビュー",   sub: "preview: 4 方向の画像" },
     { x: 5, who: "claude", ttl: "見て、直す",   sub: "v001 → v002", loop: 3 },
-    { x: 6, who: "mcp",    ttl: "実寸 AR",      sub: "publish_ar: USDZ → iPhone" },
+    { x: 6, who: "mcp",    ttl: "実寸 AR",      sub: "publish_ar: 実寸 USDZ → iCloud / 期限付きリンク → iPhone" },
     { x: 6, who: "user",   ttl: "現場で重ねる", sub: "ずれを伝える", loop: 3 },
     { x: 7, who: "mcp",    ttl: "印刷引き継ぎ", sub: "export_print: STL・manifest" },
     { x: 8, who: "user",   ttl: "3Dプリント",   sub: "現場に取り付け" },
@@ -150,7 +150,7 @@ body.capture .ctl { display: none; }
   const TOOLS = [
     { nm: "build_model", ar: "(project, code, note?, printer?)", ds: "build123d スクリプトを別プロセスで実行。parts と context を STL / STEP に。形の有効性・体積・部品と周囲の干渉・造形範囲を返し、版（v001, v002…）として保存", st: "作って検査" },
     { nm: "preview", ar: "(project, version?)", ds: "4 方向の画像。Claude が自分で見て、人に見せる前に直す", st: "プレビュー" },
-    { nm: "publish_ar", ar: "(project, version?, include_context?)", ds: "実寸の USDZ（m, Y-up）を作り iCloud Drive の SpatialVibe/ へ。iPhone の「ファイル」からタップで AR", st: "実寸 AR" },
+    { nm: "publish_ar", ar: "(project, version?, include_context?)", ds: "実寸の USDZ（m, Y-up）を iPhone へ。iCloud Drive の SpatialVibe/ か、Cloudflare Worker の期限付きリンク。タップで AR", st: "実寸 AR" },
     { nm: "export_print", ar: "(project, version?, printer?, quantities?, material?, hardware?, …)", ds: "印刷姿勢の STL・STEP・manifest.json・日本語の案内・AI 引き継ぎ文を 1 フォルダに。失敗した版や造形範囲超えは出さない", st: "印刷引き継ぎ" },
     { nm: "list_projects", ar: "(project?)", ds: "プロジェクトと版の一覧、各版の結果", st: "いつでも" },
     { nm: "get_code", ar: "(project, version?)", ds: "過去の版のスクリプトを取り出す。直す・作り直すの起点", st: "見て、直す" },

@@ -60,9 +60,9 @@ def checks(smoke=True, printer=None):
             continue
         yield got == want, f"package {name}", f"{got} (requirements.txt: {want})"
     if sys.platform == "darwin":
-        yield bool(shutil.which("sandbox-exec")), "sandbox-exec", "isolates model scripts"
+        yield bool(shutil.which("sandbox-exec")), "sandbox-exec", "isolates model scripts (required)"
     else:
-        yield None, "sandbox-exec", "not macOS: model scripts run without the sandbox"
+        yield False, "sandbox-exec", "not macOS: the server refuses to run model scripts without it"
 
     home = Path(os.environ.get("SPATIALVIBE_HOME", DEFAULT_HOME)).expanduser().absolute()
     yield _data_folder(home)
@@ -74,6 +74,8 @@ def checks(smoke=True, printer=None):
     if pub == "icloud":
         yield (True if icloud.exists() else None), "AR target", (
             "iCloud Drive/SpatialVibe" if icloud.exists() else "iCloud Drive not found; set SPATIALVIBE_PUBLISH=dir:/path")
+    elif pub == "cloudflare":
+        yield None, "AR target", "Cloudflare AR Worker (expiring link; see AR_PUBLICATION.md and tools/ar_mcp_launch.py)"
     else:
         yield None, "AR target", pub
 
@@ -115,11 +117,13 @@ def _smoke():
         code = out / "model.py"
         code.write_text("from build123d import *\nparts = {'block': Box(20, 10, 5)}\n"
                         "print_orientation = {'block': (0, 90, 0)}\n")
-        env = dict(os.environ, PYTHONPATH=str(REPO), PYTHONDONTWRITEBYTECODE="1")
+        env = dict(os.environ, PYTHONPATH=str(REPO), PYTHONDONTWRITEBYTECODE="1", MPLBACKEND="Agg",
+                   MPLCONFIGDIR=str(out / ".mpl"))
+        result_file = out / "_result.json"
         try:
-            p = subprocess.run([sys.executable, "-m", "spatialvibe_mcp._runner", str(code), str(out)],
-                               capture_output=True, text=True, timeout=180, env=env, cwd=out)
-            res = json.loads([ln for ln in p.stdout.splitlines() if ln.startswith("{")][-1])
+            subprocess.run([sys.executable, "-m", "spatialvibe_mcp._runner", str(code), str(out), str(result_file)],
+                           capture_output=True, text=True, timeout=180, env=env, cwd=out)
+            res = json.loads(result_file.read_text(encoding="utf-8"))
         except Exception as e:  # noqa: BLE001 — report any failure as a failed check
             return False, "test build", repr(e)[:300]
         ok = res.get("ok") and (out / "print_block.stl").exists()

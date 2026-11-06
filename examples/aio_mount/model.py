@@ -126,5 +126,3 @@ caps_placed = [Pos(x, 0, 0) * cap for x in clamp_xs]
 
 parts = {"tray": tray, "clamp_cap_L": Pos(clamp_xs[0], 0, 0) * cap, "clamp_cap_R": Pos(clamp_xs[1], 0, 0) * cap}
 context = {"pipe": pipe, "aio_box": box, "foot_bolt": foot_bolt}
-# caps print split face down; the tray's print pose is not decided yet (and it is longer than 180 mm)
-print_orientation = {"clamp_cap_L": (180, 0, 0), "clamp_cap_R": (180, 0, 0)}

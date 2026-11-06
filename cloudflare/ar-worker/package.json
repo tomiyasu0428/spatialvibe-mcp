@@ -1,0 +1,1 @@
+{"name":"spatialvibe-ar-worker","private":true,"type":"module","scripts":{"test":"node --test worker.test.mjs runtime.test.mjs"},"devDependencies":{"miniflare":"^4.20260730.0"}}

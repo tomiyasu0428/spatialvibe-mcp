@@ -15,6 +15,7 @@ import argparse
 import base64
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -93,7 +94,8 @@ def record(page: Path, wav: Path, mp4: Path) -> None:
     with tempfile.TemporaryDirectory() as tmp:
         silent = Path(tmp) / "video.mp4"
         with sync_playwright() as p:
-            browser = p.chromium.launch()
+            exe = os.environ.get("REEL_CHROMIUM")  # e.g. a preinstalled Chromium in CI/containers
+            browser = p.chromium.launch(executable_path=exe) if exe else p.chromium.launch()
             pg = browser.new_page(viewport={"width": W, "height": H}, device_scale_factor=1)
             pg.goto(page.resolve().as_uri() + "?capture=1")
             pg.wait_for_function("window.reelReady !== undefined")
