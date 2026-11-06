@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>spatialvibe process</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+JP:wght@100..900&display=block">
+<style>
+/* Swimlane animation for the demo video: the whole path from photo to printed part, with each step
+   placed in the lane of whoever does it (person / Claude / MCP). Deterministic: render(t) only. */
+:root {
+  --ink: #0d0e10; --paper: #f1f0ec; --orange: #ff5a1f; --blue: #3b6cff;
+  --jp: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --lat: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { height: 100%; margin: 0; }
+body { background: #060607; color: var(--paper); font-family: var(--jp); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 16px; box-sizing: border-box; }
+body.capture { padding: 0; gap: 0; }
+.stage { container-type: inline-size; position: relative; overflow: hidden; width: min(100%, 1100px, calc((100vh - 110px) * 16 / 9)); aspect-ratio: 16 / 9; background: var(--ink); color: var(--paper); }
+body.capture .stage { width: 100vw; height: 100vh; aspect-ratio: auto; }
+.abs { position: absolute; }
+.mono { font-family: var(--mono); font-size: 1.05cqw; letter-spacing: 0.14em; text-transform: uppercase; }
+.hud { position: absolute; inset: 0; pointer-events: none; opacity: 0.55; }
+.hud .mono { position: absolute; }
+.hud .tl { left: 3.2cqw; top: 2.8cqw; } .hud .tr { right: 3.2cqw; top: 2.8cqw; }
+.crop { position: absolute; width: 1.6cqw; height: 1.6cqw; border-color: var(--paper); border-style: solid; border-width: 0; }
+.crop.a { left: 1.6cqw; top: 1.6cqw; border-left-width: 1px; border-top-width: 1px; }
+.crop.b { right: 1.6cqw; top: 1.6cqw; border-right-width: 1px; border-top-width: 1px; }
+.crop.c { left: 1.6cqw; bottom: 1.6cqw; border-left-width: 1px; border-bottom-width: 1px; }
+.crop.d { right: 1.6cqw; bottom: 1.6cqw; border-right-width: 1px; border-bottom-width: 1px; }
+
+/* title card */
+.title { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.4cqw; text-align: center; }
+.title .big { font-size: 7.2cqw; font-weight: 900; letter-spacing: -0.045em; line-height: 1; white-space: nowrap; }
+.title .big b { color: var(--orange); font-weight: 900; }
+.title .sub { font-size: 1.6cqw; font-weight: 500; opacity: 0.8; }
+
+/* lanes */
+.lanes { position: absolute; inset: 0; }
+.lane { position: absolute; left: 0; right: 0; }
+.lane .line { position: absolute; left: 14.5cqw; right: 3.2cqw; top: 50%; height: 1px; background: color-mix(in srgb, var(--paper) 22%, transparent); transform-origin: left; }
+.lane .band { position: absolute; left: 0; right: 0; top: 0; bottom: 0; opacity: 0; }
+.lane[data-who="claude"] .band { background: color-mix(in srgb, var(--orange) 9%, transparent); }
+.lane[data-who="mcp"] .band { background: color-mix(in srgb, var(--blue) 11%, transparent); }
+.lane[data-who="user"] .band { background: color-mix(in srgb, var(--paper) 5%, transparent); }
+.lane .name { position: absolute; left: 3.2cqw; top: 50%; transform: translateY(-50%); width: 13cqw; }
+.lane .name .who { font-family: var(--lat); font-weight: 800; font-size: 2.4cqw; letter-spacing: -0.03em; line-height: 1; }
+.lane .name .jpwho { font-size: 1.3cqw; font-weight: 700; margin-top: 0.4cqw; }
+.lane .name .does { font-size: 1.05cqw; font-weight: 500; margin-top: 0.7cqw; opacity: 0; line-height: 1.4; }
+.lane .name .count { font-family: var(--mono); font-size: 0.95cqw; letter-spacing: 0.1em; margin-top: 0.5cqw; opacity: 0; }
+.lane[data-who="claude"] .who, .lane[data-who="claude"] .count { color: var(--orange); }
+.lane[data-who="mcp"] .who, .lane[data-who="mcp"] .count { color: var(--blue); }
+
+/* nodes */
+svg.wires { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+svg.wires path, svg.wires line { fill: none; stroke-width: 0.22cqw; stroke-linecap: round; }
+.node { position: absolute; transform: translate(-50%, -50%); display: flex; flex-direction: column; align-items: center; gap: 0.9cqw; width: 0; }
+.node .dot { width: 1.55cqw; height: 1.55cqw; border-radius: 50%; border: 0.22cqw solid var(--c); background: var(--ink); box-sizing: border-box; }
+.node .txt { position: absolute; top: 1.6cqw; display: flex; flex-direction: column; align-items: center; gap: 0.35cqw; white-space: nowrap; }
+.node .ttl { font-size: 1.6cqw; font-weight: 800; letter-spacing: -0.04em; line-height: 1; }
+.node .sub { display: none; }
+.now { position: absolute; left: 0; right: 0; bottom: 3.4cqw; display: flex; justify-content: center; align-items: center; gap: 1.2cqw; }
+.now .tag { font-family: var(--mono); font-size: 0.95cqw; letter-spacing: 0.12em; padding: 0.35cqw 0.8cqw; border: 1px solid var(--c); color: var(--c); }
+.now .what { font-family: var(--mono); font-size: 1.15cqw; letter-spacing: 0.04em; }
+.node[data-who="claude"] { --c: var(--orange); }
+.node[data-who="mcp"] { --c: var(--blue); }
+.node[data-who="user"] { --c: var(--paper); }
+.node .dot.full { background: var(--c); }
+.looplbl { position: absolute; font-family: var(--mono); font-size: 0.9cqw; letter-spacing: 0.1em; padding: 0.25cqw 0.7cqw; border: 1px solid var(--c); color: var(--c); background: var(--ink); transform: translate(-50%, -50%); white-space: nowrap; }
+
+/* closing line */
+.close { position: absolute; left: 0; right: 0; bottom: 3.4cqw; text-align: center; font-size: 2.3cqw; font-weight: 800; letter-spacing: -0.04em; }
+.close b.o { color: var(--orange); font-weight: 800; } .close b.b { color: var(--blue); font-weight: 800; }
+
+/* player */
+.ctl { width: min(100%, 1100px); display: flex; align-items: center; gap: 14px; }
+.ctl button { font: 700 14px/1 var(--jp); color: var(--paper); background: transparent; border: 1px solid rgba(241,240,236,.5); border-radius: 99px; padding: 9px 16px; cursor: pointer; }
+.prog { flex: 1; height: 3px; background: rgba(241,240,236,.15); } .prog div { height: 100%; width: 0; background: var(--orange); }
+.time { font: 400 12px var(--mono); color: rgba(241,240,236,.6); min-width: 88px; text-align: right; }
+body.capture .ctl { display: none; }
+.preload { position: absolute; left: 0; top: 0; opacity: 0.01; pointer-events: none; font-size: 10px; white-space: nowrap; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <div class="lanes" id="lanes"></div>
+  <svg class="wires" id="wires" viewBox="0 0 1000 562.5" preserveAspectRatio="none"></svg>
+  <div id="nodes"></div>
+  <div class="title" id="title"><div class="big">写真から、<b>3Dプリント</b>まで。</div><div class="sub">誰が、何をするか</div></div>
+  <div class="now" id="now"><span class="tag" id="nowtag"></span><span class="what" id="nowwhat"></span></div>
+  <div class="close" id="close"><b class="o">Claude</b> が考え、<b class="b">MCP</b> が動かし、人は確かめる。</div>
+  <div class="hud" aria-hidden="true">
+    <i class="crop a"></i><i class="crop b"></i><i class="crop c"></i><i class="crop d"></i>
+    <div class="mono tl">SPATIALVIBE — PROCESS</div><div class="mono tr" id="tc"></div>
+  </div>
+  <div class="preload"><span style="font-family:var(--jp);font-weight:900">写</span><span style="font-family:var(--jp);font-weight:800">写</span><span style="font-family:var(--jp);font-weight:700">写</span><span style="font-family:var(--jp);font-weight:500">写</span><span style="font-family:var(--lat);font-weight:800">A</span><span style="font-family:var(--mono)">A</span><span style="font-family:var(--mono);font-weight:600">A</span></div>
+</div>
+<div class="ctl">
+  <button id="play" type="button">再生</button>
+  <button id="restart" type="button">最初から</button>
+  <div class="prog"><div id="prog"></div></div>
+  <div class="time" id="time"></div>
+</div>
+<script>
+(() => {
+  // ---- data -----------------------------------------------------------------------------------
+  const LANES = [
+    { who: "user",   name: "PERSON", jp: "人",     does: "場所と目的を伝える・AR で確かめる・使う" },
+    { who: "claude", name: "Claude", jp: "考える", does: "写真を読む・選択肢で聞く・寸法を探す・設計を書く・見て直す" },
+    { who: "mcp",    name: "MCP",    jp: "動かす", does: "隔離実行・形の検査・4 方向プレビュー・実寸 USDZ・印刷の引き継ぎ" },
+  ];
+  // x = column (0..8), who = lane. Steps appear in this order.
+  const STEPS = [
+    { x: 0, who: "user",   ttl: "写真と目的",   sub: "ここに、これを付けたい" },
+    { x: 1, who: "claude", ttl: "聞く",         sub: "選択肢で 4 問、一度に" },
+    { x: 2, who: "claude", ttl: "寸法を探す",   sub: "手順書・規格 / 推定は推定と書く" },
+    { x: 3, who: "claude", ttl: "形を考える",   sub: "ずれを吸収する設計 → build123d" },
+    { x: 4, who: "mcp",    ttl: "作って検査",   sub: "build_model: 隔離実行・干渉・造形範囲" },
+    { x: 5, who: "mcp",    ttl: "プレビュー",   sub: "preview: 4 方向の画像" },
+    { x: 5, who: "claude", ttl: "見て、直す",   sub: "v001 → v002", loop: 3 },
+    { x: 6, who: "mcp",    ttl: "実寸 AR",      sub: "publish_ar: USDZ → iPhone" },
+    { x: 6, who: "user",   ttl: "現場で重ねる", sub: "ずれを伝える", loop: 3 },
+    { x: 7, who: "mcp",    ttl: "印刷引き継ぎ", sub: "export_print: STL・manifest" },
+    { x: 8, who: "user",   ttl: "3Dプリント",   sub: "現場に取り付け" },
+  ];
+  // timing (ms)
+  const T_TITLE = 2200, T_LANES = 1100, STEP = 2050, T_STEP0 = T_TITLE + T_LANES;
+  const T_SUM = T_STEP0 + STEPS.length * STEP + 400;
+  const DUR = T_SUM + 4800;
+
+  // ---- geometry (stage units: cqw / cqh; svg viewBox 1000 x 562.5) ------------------------------
+  const laneY = { user: 22, claude: 50, mcp: 78 };           // % of height
+  const X0 = 21.5, X1 = 91;                                    // % of width for columns 0..8
+  const colX = (x) => X0 + (X1 - X0) * x / 8;
+  const P = (s) => ({ x: colX(s.x) * 10, y: laneY[s.who] * 5.625 });  // svg coords
+
+  // ---- build DOM --------------------------------------------------------------------------------
+  const $ = (id) => document.getElementById(id);
+  const lanesEl = $("lanes"), nodesEl = $("nodes"), wires = $("wires"), stage = $("stage");
+  const laneEls = {};
+  for (const l of LANES) {
+    const d = document.createElement("div");
+    d.className = "lane"; d.dataset.who = l.who;
+    d.style.top = (laneY[l.who] - 14) + "%"; d.style.height = "28%";
+    d.innerHTML = `<div class="band"></div><div class="line"></div><div class="name"><div class="who">${l.name}</div><div class="jpwho">${l.jp}</div><div class="does">${l.does}</div><div class="count"></div></div>`;
+    lanesEl.appendChild(d); laneEls[l.who] = d;
+  }
+  const NS = "http://www.w3.org/2000/svg";
+  const COLOR = { user: "#f1f0ec", claude: "#ff5a1f", mcp: "#3b6cff" };
+  const nodeEls = [], wireEls = [], loopEls = [];
+  STEPS.forEach((s, i) => {
+    const n = document.createElement("div");
+    n.className = "node"; n.dataset.who = s.who;
+    n.style.left = colX(s.x) + "%"; n.style.top = laneY[s.who] + "%";
+    n.innerHTML = `<div class="dot"></div><div class="txt"><div class="ttl">${s.ttl}</div><div class="sub">${s.sub}</div></div>`;
+    nodesEl.appendChild(n); nodeEls.push(n);
+    if (i > 0) {
+      const a = P(STEPS[i - 1]), b = P(s);
+      const p = document.createElementNS(NS, "path");
+      const d = a.x === b.x ? `M${a.x},${a.y} L${b.x},${b.y}`
+              : a.y === b.y ? `M${a.x},${a.y} L${b.x},${b.y}`
+              : `M${a.x},${a.y} C${(a.x + b.x) / 2},${a.y} ${(a.x + b.x) / 2},${b.y} ${b.x},${b.y}`;
+      p.setAttribute("d", d); p.setAttribute("stroke", COLOR[s.who]);
+      wires.appendChild(p);
+      const len = p.getTotalLength(); p.style.strokeDasharray = len; p.style.strokeDashoffset = len;
+      wireEls.push({ el: p, len });
+    } else wireEls.push(null);
+    if (s.loop !== undefined) {
+      const a = P(s), b = P(STEPS[s.loop]);
+      const up = s.who === "claude" ? -70 : 0;                       // arc above the claude lane
+      const p = document.createElementNS(NS, "path");
+      const d = s.who === "claude"
+        ? `M${a.x},${a.y - 9} C${a.x},${a.y + up} ${b.x},${b.y + up} ${b.x},${b.y - 9}`
+        : `M${a.x},${a.y - 9} C${a.x},${a.y - 95} ${b.x},${a.y - 95} ${b.x},${b.y - 9}`;
+      p.setAttribute("d", d); p.setAttribute("stroke", COLOR[s.who]); p.setAttribute("stroke-dasharray", "4 5");
+      p.style.opacity = 0; wires.appendChild(p);
+      const lbl = document.createElement("div");
+      lbl.className = "looplbl"; lbl.style.setProperty("--c", COLOR[s.who]); lbl.textContent = s.who === "claude" ? "直す → 再ビルド" : "ずれを伝える → 再設計";
+      const m = p.getPointAtLength(p.getTotalLength() * (s.who === "claude" ? 0.5 : 0.3));
+      lbl.style.left = (m.x / 10) + "%"; lbl.style.top = (m.y / 5.625) + "%"; lbl.style.opacity = 0;
+      nodesEl.appendChild(lbl);
+      loopEls.push({ i, p, lbl });
+    }
+  });
+  const counts = {}; STEPS.forEach((s) => counts[s.who] = (counts[s.who] || 0) + 1);
+
+  // ---- render(t) ---------------------------------------------------------------------------------
+  const clamp = (v) => Math.max(0, Math.min(1, v));
+  const ease = (p) => 1 - Math.pow(1 - p, 3);
+  const back = (p) => { const c = 1.7; return 1 + (c + 1) * Math.pow(p - 1, 3) + c * Math.pow(p - 1, 2); };
+  const seg = (t, a, d) => clamp((t - a) / d);
+  const pad = (n, w = 2) => String(n).padStart(w, "0");
+
+  function render(t) {
+    // title card
+    const ti = seg(t, 0, 500), to = seg(t, T_TITLE - 500, 450);
+    $("title").style.opacity = ti * (1 - to);
+    $("title").style.transform = `translateY(${(1 - ease(ti)) * 2 - ease(to) * 3}cqw) scale(${1 + ease(to) * 0.04})`;
+    // lanes
+    LANES.forEach((l, k) => {
+      const d = laneEls[l.who], p = seg(t, T_TITLE + k * 180, 700);
+      d.querySelector(".line").style.transform = `scaleX(${ease(p)})`;
+      d.querySelector(".name").style.opacity = ease(seg(t, T_TITLE + k * 180 + 150, 450));
+      const act = STEPS.findIndex((s, i) => t >= T_STEP0 + i * STEP && t < T_STEP0 + (i + 1) * STEP && s.who === l.who) >= 0;
+      d.querySelector(".band").style.opacity = t >= T_SUM ? 0.75 : act ? 1 : 0;
+      const sp = ease(seg(t, T_SUM + k * 200, 600));
+      d.querySelector(".does").style.opacity = sp;
+      const c = d.querySelector(".count"); c.style.opacity = sp;
+      c.textContent = `${counts[l.who]} / ${STEPS.length} STEPS`;
+    });
+    // steps
+    STEPS.forEach((s, i) => {
+      const t0 = T_STEP0 + i * STEP;
+      const w = wireEls[i];
+      if (w) w.el.style.strokeDashoffset = w.len * (1 - ease(seg(t, t0 - 650, 650)));
+      const n = nodeEls[i], p = seg(t, t0, 420);
+      n.style.opacity = p > 0 ? 1 : 0;
+      n.querySelector(".dot").style.transform = `scale(${p > 0 ? back(p) : 0})`;
+      n.querySelector(".dot").classList.toggle("full", t >= t0 && t < t0 + STEP || t >= T_SUM);
+      const tp = ease(seg(t, t0 + 120, 420));
+      n.querySelector(".txt").style.opacity = tp;
+      n.querySelector(".txt").style.transform = `translateY(${(1 - tp) * 0.8}cqw)`;
+    });
+    loopEls.forEach(({ i, p, lbl }) => {
+      const t0 = T_STEP0 + i * STEP + 700, q = ease(seg(t, t0, 600));
+      p.style.opacity = q * 0.9; lbl.style.opacity = q;
+    });
+    // detail strip: what is happening now
+    const cur = STEPS.findIndex((s, i) => t >= T_STEP0 + i * STEP && t < T_STEP0 + (i + 1) * STEP);
+    const now = $("now");
+    if (cur >= 0) {
+      const s = STEPS[cur], q = seg(t, T_STEP0 + cur * STEP + 150, 350);
+      now.style.opacity = ease(q); now.style.setProperty("--c", COLOR[s.who]);
+      $("nowtag").textContent = LANES.find((l) => l.who === s.who).name; $("nowwhat").textContent = s.sub;
+    } else now.style.opacity = 0;
+    // closing line
+    const cp = ease(seg(t, T_SUM + 900, 600));
+    $("close").style.opacity = cp; $("close").style.transform = `translateY(${(1 - cp) * 1.2}cqw)`;
+    // hud
+    const sec = Math.floor(t / 1000), fr = Math.floor((t % 1000) / 1000 * 30);
+    $("tc").textContent = `TC 00:${pad(Math.floor(sec / 60))}:${pad(sec % 60)}:${pad(fr)}`;
+  }
+  render(0);
+
+  // ---- player / capture --------------------------------------------------------------------------
+  const capture = new URLSearchParams(location.search).has("capture");
+  if (capture) document.body.classList.add("capture");
+  window.reelDuration = DUR;
+  window.reelSeek = render;
+  window.reelReady = document.fonts.ready.then(() => new Promise((r) => requestAnimationFrame(() => r(true))));
+
+  let playing = false, base = 0, start = 0;
+  const fmt = (ms) => `${pad(Math.floor(ms / 60000))}:${pad(Math.floor(ms / 1000) % 60)} / ${fmt0(DUR)}`;
+  const fmt0 = (ms) => `${pad(Math.floor(ms / 60000))}:${pad(Math.floor(ms / 1000) % 60)}`;
+  function tick() {
+    if (!playing) return;
+    let t = base + performance.now() - start;
+    if (t >= DUR) { t = DUR; playing = false; $("play").textContent = "再生"; base = 0; }
+    render(t); $("prog").style.width = (t / DUR * 100) + "%"; $("time").textContent = fmt(t);
+    if (playing) requestAnimationFrame(tick); else base = 0;
+  }
+  $("play").onclick = () => {
+    if (playing) { playing = false; base += performance.now() - start; $("play").textContent = "再生"; return; }
+    playing = true; start = performance.now(); $("play").textContent = "停止"; requestAnimationFrame(tick);
+  };
+  $("restart").onclick = () => { base = 0; start = performance.now(); if (!playing) { playing = true; $("play").textContent = "停止"; requestAnimationFrame(tick); } };
+  $("time").textContent = fmt(0);
+  if (!capture) window.reelReady.then(() => $("play").click());
+})();
+</script>
+</body>
+</html>
