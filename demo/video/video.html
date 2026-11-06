@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>spatialvibe demo</title>
+<title>Pittari demo</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+JP:wght@100..900&display=block">
@@ -79,6 +79,7 @@ body.capture .stage { width: 100vw; height: 100vh; aspect-ratio: auto; }
 .artext { max-width: 44cqw; display: flex; flex-direction: column; gap: 1.4cqw; }
 .artext .h { font-size: 3.6cqw; font-weight: 900; letter-spacing: -0.045em; line-height: 1.1; } .artext .h b { color: var(--orange); font-weight: 900; }
 .artext .p { font-size: 1.6cqw; font-weight: 500; line-height: 1.6; opacity: 0.9; }
+.close .big b { letter-spacing: -0.02em; font-family: var(--lat); }
 .artext .p .mono { font-size: 1.3cqw; color: var(--blue); text-transform: none; letter-spacing: 0.02em; }
 .artext .st { display: flex; gap: 0.8cqw; margin-top: 0.4cqw; }
 .artext .st span { border: 1px solid var(--green); color: var(--green); font: 600 0.95cqw var(--mono); letter-spacing: 0.1em; padding: 0.35cqw 0.8cqw; }
@@ -184,14 +185,15 @@ body.capture .ctl { display: none; }
   <!-- Chapter 6: close -->
   <div class="scene" id="s-close"><div class="close">
     <div class="l1" data-at="0">スマホも、箱も、同じやり方で。</div>
-    <div class="big" data-at="900">写真から、<b>3Dプリント</b>まで。</div>
+    <div class="big" data-at="900"><b>Pittari</b>（ぴったり）</div>
+    <div class="l1" data-at="1300">写真から、3Dプリントまで。</div>
     <div class="url" data-at="1800">github.com/tomiyasu0428/spatialvibe-mcp</div>
-    <div class="meta" data-at="1800">SPATIALVIBE — CLAUDE + MCP — BUILT 2026.11.04–11.08</div>
+    <div class="meta" data-at="1800">PITTARI — CLAUDE + MCP — BUILT 2026.11.04–11.08</div>
   </div></div>
 
   <div class="hud" aria-hidden="true">
     <i class="crop a"></i><i class="crop b"></i><i class="crop c"></i><i class="crop d"></i>
-    <div class="mono tl">SPATIALVIBE — DEMO</div><div class="mono tr" id="tc"></div>
+    <div class="mono tl">PITTARI — DEMO</div><div class="mono tr" id="tc"></div>
   </div>
   <div class="preload"><span style="font-family:var(--jp);font-weight:900">写</span><span style="font-family:var(--jp);font-weight:700">写</span><span style="font-family:var(--jp);font-weight:500">写</span><span style="font-family:var(--lat);font-weight:800">A</span><span style="font-family:var(--mono)">A</span><span style="font-family:var(--mono);font-weight:600">A</span></div>
 </div>

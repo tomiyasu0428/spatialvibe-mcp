@@ -1,4 +1,4 @@
-# SpatialVibe: design a part that fits a real place
+# Pittari (ぴったり): design a part that fits a real place
 
 The user shows a place (photo of the space) and a purpose (often a photo of the thing to put
 there), and wants a 3D-printable part that fits. They usually do not know what shape or which

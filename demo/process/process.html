@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>spatialvibe process</title>
+<title>Pittari process</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+JP:wght@100..900&display=block">
@@ -105,7 +105,7 @@ body.capture .ctl { display: none; }
   <div class="lanes" id="lanes"></div>
   <svg class="wires" id="wires" viewBox="0 0 1000 562.5" preserveAspectRatio="none"></svg>
   <div id="nodes"></div>
-  <div class="title" id="title"><div class="big">写真から、<b>3Dプリント</b>まで。</div><div class="sub">誰が、何をするか</div></div>
+  <div class="title" id="title"><div class="sub">Pittari（ぴったり）</div><div class="big">写真から、<b>3Dプリント</b>まで。</div><div class="sub">誰が、何をするか</div></div>
   <div class="now" id="now"><span class="tag" id="nowtag"></span><span class="what" id="nowwhat"></span></div>
   <div class="close" id="close"><b class="o">Claude</b> が考え、<b class="b">MCP</b> が動かし、人は確かめる。</div>
   </div>
@@ -116,7 +116,7 @@ body.capture .ctl { display: none; }
   </div>
   <div class="hud" aria-hidden="true">
     <i class="crop a"></i><i class="crop b"></i><i class="crop c"></i><i class="crop d"></i>
-    <div class="mono tl">SPATIALVIBE — PROCESS</div><div class="mono tr" id="tc"></div>
+    <div class="mono tl">PITTARI — PROCESS</div><div class="mono tr" id="tc"></div>
   </div>
   <div class="preload"><span style="font-family:var(--jp);font-weight:900">写</span><span style="font-family:var(--jp);font-weight:800">写</span><span style="font-family:var(--jp);font-weight:700">写</span><span style="font-family:var(--jp);font-weight:500">写</span><span style="font-family:var(--lat);font-weight:800">A</span><span style="font-family:var(--mono)">A</span><span style="font-family:var(--mono);font-weight:600">A</span></div>
 </div>
@@ -151,7 +151,7 @@ body.capture .ctl { display: none; }
   const TOOLS = [
     { nm: "build_model", ar: "(project, code, note?, printer?)", ds: "build123d スクリプトを別プロセスで実行。parts と context を STL / STEP に。形の有効性・体積・部品と周囲の干渉・造形範囲を返し、版（v001, v002…）として保存", st: "作って検査" },
     { nm: "preview", ar: "(project, version?)", ds: "4 方向の画像。Claude が自分で見て、人に見せる前に直す", st: "プレビュー" },
-    { nm: "publish_ar", ar: "(project, version?, include_context?)", ds: "実寸の USDZ（m, Y-up）を iPhone へ。iCloud Drive の SpatialVibe/ か、Cloudflare Worker の期限付きリンク。タップで AR", st: "実寸 AR" },
+    { nm: "publish_ar", ar: "(project, version?, include_context?)", ds: "実寸の USDZ（m, Y-up）を iPhone へ。iCloud Drive のフォルダか、Cloudflare Worker の期限付きリンク。タップで AR", st: "実寸 AR" },
     { nm: "export_print", ar: "(project, version?, printer?, quantities?, material?, hardware?, …)", ds: "印刷姿勢の STL・STEP・manifest.json・日本語の案内・AI 引き継ぎ文を 1 フォルダに。失敗した版や造形範囲超えは出さない", st: "印刷引き継ぎ" },
     { nm: "list_projects", ar: "(project?)", ds: "プロジェクトと版の一覧、各版の結果", st: "いつでも" },
     { nm: "get_code", ar: "(project, version?)", ds: "過去の版のスクリプトを取り出す。直す・作り直すの起点", st: "見て、直す" },

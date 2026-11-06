@@ -1,6 +1,8 @@
-# spatialvibe-mcp
+# Pittari（ぴったり）
 
 **写真と目的から、その場所にぴったり合う 3D プリント部品を Claude と一緒に決めて作る MCP サーバー。**
+
+製品名は Pittari。コード上の名前（パッケージ `spatialvibe_mcp`、環境変数 `SPATIALVIBE_*`、MCP サーバー名 `spatialvibe`）は開発中の旧名のまま使っています。
 
 畑・ハウス・トラクターで「ここにこれを付けたい」と思ったとき、Claude が選択肢で聞き返して形を決め、
 手元の資料から寸法を探し、build123d で 3D データを作り、iPhone の AR で実寸を重ねて確かめるところまで進めます。
