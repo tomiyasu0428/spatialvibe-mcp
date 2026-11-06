@@ -75,3 +75,20 @@ parts = {'block': Box(10, 10, 5)}
         server.preview("test-plate")
         self.assertFalse((v / "preview.png").is_symlink())
         self.assertEqual(self.sentinel.read_text(), "test-only marker")
+
+    def test_preview_titles_use_the_real_project_and_version(self):
+        # Sheets are drawn in a scratch copy; its folder name must not become the title.
+        vdir = server.HOME / "titled" / "v003"
+        vdir.mkdir(parents=True)
+        calls = []
+
+        def fake_run(scratch, package_root, module, args, timeout):
+            calls.append((module, [str(a) for a in args]))
+            return mock.Mock(returncode=1, stderr="stop")
+
+        with mock.patch.object(server, "_built_version_dir", return_value=vdir), \
+                mock.patch.object(server, "_read_result", return_value={}), \
+                mock.patch.object(server, "run_isolated", side_effect=fake_run):
+            with self.assertRaises(server.SpatialVibeError):
+                server.preview("titled", 3)
+        self.assertEqual(calls[0][1][1:], ["titled", "v003"])

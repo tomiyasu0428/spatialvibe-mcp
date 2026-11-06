@@ -343,7 +343,7 @@ def preview(project: str, version: int | None = None) -> list:
         _write_json(scratch / "result.json", _read_result(vdir))
         for mod, names in (("_render", ["preview.png"]), ("_sheet", ["sheet.png", "sheet_detail.png"]),
                            ("_steps", ["sheet_build.png"])):
-            p = run_isolated(scratch, REPO, mod, [scratch], TIMEOUT)
+            p = run_isolated(scratch, REPO, mod, [scratch, project, vdir.name], TIMEOUT)
             if p.returncode != 0:
                 raise SpatialVibeError(f"drawing {mod} failed: {clean_text(p.stderr[-1500:], 1500, multiline=True)}")
             for name in names:
