@@ -40,6 +40,8 @@ class LaunchTests(unittest.TestCase):
         self.assertEqual(env["SPATIALVIBE_PUBLISH"], "cloudflare")
         self.assertEqual(env["PATH"], "/usr/bin:/bin")
         self.assertNotIn("admin-secret", json.dumps(env))
+        kept = launch.server_environment(launch.load_config(self.write({**GOOD, "keep": "icloud"})))
+        self.assertEqual(kept["SPATIALVIBE_AR_KEEP"], "icloud")
 
     def test_config_must_be_private_regular_and_well_formed(self):
         with self.assertRaises(launch.LaunchError):
@@ -53,7 +55,7 @@ class LaunchTests(unittest.TestCase):
                     {**GOOD, "origin": "https://user@ar.example.test"}, {**GOOD, "origin": "https://localhost"},
                     {**GOOD, "origin": "http://insecure.example"}, {**GOOD, "origin": GOOD["origin"] + "/path"},
                     {**GOOD, "keychain_service": "bad service"}, {**GOOD, "home": "relative/path"},
-                    {**GOOD, "ttl": "3600"}]:
+                    {**GOOD, "ttl": "3600"}, {**GOOD, "keep": "relative"}, {**GOOD, "keep": "dropbox"}]:
             with self.subTest(bad=bad), self.assertRaises(launch.LaunchError):
                 launch.load_config(self.write(bad))
 

@@ -28,6 +28,7 @@ REPO = Path(__file__).resolve().parent.parent
 HOME = Path(os.environ.get("SPATIALVIBE_HOME", REPO / "data" / "mcp_projects")).expanduser()
 ICLOUD = Path.home() / "Library/Mobile Documents/com~apple~CloudDocs"
 PUBLISH = os.environ.get("SPATIALVIBE_PUBLISH", "icloud")   # icloud | dir:/path | cloudflare
+KEEP = os.environ.get("SPATIALVIBE_AR_KEEP", "")           # with cloudflare: also keep a copy: icloud | dir:/path
 TIMEOUT = int(os.environ.get("SPATIALVIBE_TIMEOUT", "180"))
 PROJECT = re.compile(r"[A-Za-z0-9_-]{1,60}")
 
@@ -434,6 +435,8 @@ def publish_ar(project: str, version: int | None = None, include_context: bool =
     model up with the real object (e.g. the pipe). Default target is iCloud Drive
     (Files app → iCloud Drive → SpatialVibe), which works on any network.
     SPATIALVIBE_PUBLISH=cloudflare uses the dedicated AR Worker and returns an expiring
+    HTTPS link; with SPATIALVIBE_AR_KEEP=icloud (or dir:/path) the same USDZ is also kept there
+    (`kept` in the result), so every version stays on the phone after the link expires.
     HTTPS link. It requires trusted-parent upload configuration and supported isolation.
     If the script set ar_floor, the model gets a floor plate at that height: tell the user to aim
     the phone at that floor before tapping AR, then slide it until the grey context lines up.
@@ -494,6 +497,12 @@ def publish_ar(project: str, version: int | None = None, include_context: bool =
         published = public["url"]
         how += "。リンクを知っている人は期限内に閲覧でき、保存したコピーは期限後も残る"
         extra = {"expires_at": public["expires_at"], "sha256": public["sha256"]}
+        keep_dir = _keep_dir()
+        if keep_dir is not None:
+            keep_dir.mkdir(parents=True, exist_ok=True)
+            _atomic_bytes(keep_dir / fname, snapshot.body)
+            extra["kept"] = str(keep_dir / fname)
+            how += f"。同じファイルを {keep_dir.name}/ にも残した（iPhone の「ファイル」から期限後も開ける）"
     else:
         dest_dir.mkdir(parents=True, exist_ok=True)
         _atomic_bytes(dest_dir / fname, snapshot.body)
@@ -504,6 +513,19 @@ def publish_ar(project: str, version: int | None = None, include_context: bool =
             **metadata, **extra,
             "note": "quote parts_size_m (what is printed); scene_size_m also contains the context. "
                     "Both use the script's axes: x = width, y = depth, z = height."}
+
+
+def _keep_dir() -> Path | None:
+    """Where a Cloudflare publication is also kept (SPATIALVIBE_AR_KEEP), or None."""
+    if not KEEP:
+        return None
+    if KEEP == "icloud":
+        if not ICLOUD.exists():
+            raise SpatialVibeError("SPATIALVIBE_AR_KEEP=icloud but iCloud Drive not found on this Mac")
+        return ICLOUD / "SpatialVibe"
+    if KEEP.startswith("dir:"):
+        return Path(KEEP[4:]).expanduser()
+    raise SpatialVibeError(f"unknown SPATIALVIBE_AR_KEEP={KEEP!r} (icloud | dir:/path)")
 
 
 @mcp.tool()

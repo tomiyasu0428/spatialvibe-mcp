@@ -12,6 +12,7 @@
 | `SPATIALVIBE_AR_UPLOAD_TOKEN` | 専用アップロード認証。暗号学的乱数 32 バイトをパディングなし base64url にした 43 文字 |
 | `SPATIALVIBE_AR_KEYCHAIN_SERVICE` | 上の変数が未設定の場合だけ使う macOS Keychain 汎用パスワード項目のサービス名（アカウント名は `upload` 固定）。親プロセスが対話なしで読み、読めない・形式が違う場合は公開を拒否 |
 | `SPATIALVIBE_AR_TTL` | 既定 3600 秒。60〜86400 秒 |
+| `SPATIALVIBE_AR_KEEP` | 任意。`icloud` か `dir:/path`。Cloudflare に送った USDZ と同じファイルをそこにも残す（返り値の `kept`）。期限が切れても iPhone の「ファイル」から開ける。ランチャー設定では `"keep": "icloud"` |
 | `SPATIALVIBE_AR_TIMEOUT` | 通信 1 回の制限。既定 60 秒、最大 300 秒 |
 | `SPATIALVIBE_AR_MAX_BYTES` | 既定 8 MiB、最大 16 MiB。Worker 側の制限と合わせる |
 

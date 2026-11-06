@@ -165,6 +165,25 @@ class IntegrationTests(unittest.TestCase):
         self.assertNotIn("project", metadata)
         self.assertNotIn(str(self.root), json.dumps(metadata))
 
+    def test_cloudflare_can_also_keep_a_local_copy(self):
+        keep = self.root / "keep"
+        with mock.patch.object(server, "PUBLISH", "cloudflare"), \
+             mock.patch.object(server, "KEEP", "dir:" + str(keep)), \
+             mock.patch.object(server, "cloud_settings", return_value=CONFIG), \
+             mock.patch.object(server, "cloud_publish", side_effect=self.mock_publish) as upload:
+            result = server.publish_ar("calibration")
+        kept = keep / "calibration_v001.usdz"
+        self.assertEqual(result["kept"], str(kept))
+        self.assertEqual(result["published"], ORIGIN + "/ar/" + "A" * 86)   # the link is still the main result
+        self.assertEqual(kept.read_bytes(), bytes(upload.call_args.args[0]))  # same bytes as uploaded
+        self.assertIn("keep/", result["how_to_open"])
+        with mock.patch.object(server, "PUBLISH", "cloudflare"), \
+             mock.patch.object(server, "KEEP", "ftp:x"), \
+             mock.patch.object(server, "cloud_settings", return_value=CONFIG), \
+             mock.patch.object(server, "cloud_publish", side_effect=self.mock_publish):
+            with self.assertRaises(server.SpatialVibeError):
+                server.publish_ar("calibration")
+
     def test_parallel_variants_keep_independent_bytes_and_dimensions(self):
         captured = []
         def publish(body, metadata, config):

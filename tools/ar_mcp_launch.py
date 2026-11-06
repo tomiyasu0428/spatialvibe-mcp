@@ -24,7 +24,7 @@ import sys
 
 REPO = Path(__file__).resolve().parent.parent
 DEFAULT_CONFIG = REPO / ".spatialvibe-ar.local.json"
-ALLOWED = {"origin", "keychain_service", "home", "bed", "timeout", "ttl", "printer"}
+ALLOWED = {"origin", "keychain_service", "home", "bed", "timeout", "ttl", "printer", "keep"}
 
 
 class LaunchError(RuntimeError):
@@ -60,6 +60,9 @@ def load_config(path: Path) -> dict:
     for key in ("timeout", "ttl"):
         if key in value and not (isinstance(value[key], int) and value[key] > 0):
             raise LaunchError(f"{key} must be a positive integer")
+    if "keep" in value and not (isinstance(value["keep"], str) and (value["keep"] == "icloud" or (
+            value["keep"].startswith("dir:") and Path(value["keep"][4:]).is_absolute()))):
+        raise LaunchError("keep must be icloud or dir:/absolute/path")
     if "bed" in value and not (isinstance(value["bed"], str) and re.fullmatch(r"[0-9.,]{1,40}", value["bed"])):
         raise LaunchError("bed must look like 256,256,256")
     if "printer" in value and not (isinstance(value["printer"], str)
@@ -79,7 +82,7 @@ def server_environment(config: dict) -> dict:
         "SPATIALVIBE_AR_KEYCHAIN_SERVICE": config["keychain_service"],
     }
     optional = {"home": "SPATIALVIBE_HOME", "bed": "SPATIALVIBE_BED", "printer": "SPATIALVIBE_PRINTER",
-                "timeout": "SPATIALVIBE_TIMEOUT", "ttl": "SPATIALVIBE_AR_TTL"}
+                "timeout": "SPATIALVIBE_TIMEOUT", "ttl": "SPATIALVIBE_AR_TTL", "keep": "SPATIALVIBE_AR_KEEP"}
     for key, name in optional.items():
         if key in config:
             env[name] = str(config[key])
