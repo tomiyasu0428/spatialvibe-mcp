@@ -47,4 +47,5 @@ TLS の標準検証を使用し、環境の HTTP プロキシとリダイレク�
 - `python -m unittest discover -s tests -v`: 公開クライアント、既存の公開先との互換性、寸法・床情報、並列公開、読み取り境界、ランチャー。`cloudflare/ar-worker` に `node_modules` があれば、Python の `publish_ar` からローカルの workerd / R2 へ実際に公開する試験も行います。
 - `cloudflare/ar-worker` で `node --test worker.test.mjs runtime.test.mjs`。
 - 本番（専用 Worker・非公開 R2）でも、匿名の校正ブロックで確認済みです。MCP stdio 経由の `build_model` → `publish_ar`（サンドボックス、USDZ 書き出し、Keychain の読み取り、アップロード）、期限付きページ・モデルの hash・HEAD・Range・画像、期限切れ後の 404、非公開バケットへの直接アクセス拒否。
-- 未検証: iPhone 実機での Quick Look 起動・縮尺ロック・実寸・配置。リンクを知る人は期限内に閲覧でき、期限で保存済みコピーを回収することはできません。
+- iPhone 実機（2026-11-06）: Safari で期限付きリンクを開き、Quick Look が起動して実寸で表示されることを確認済み。
+- 未検証: 縮尺ロック（ピンチで大きさが変わらないか）と配置の精度。リンクを知る人は期限内に閲覧でき、期限で保存済みコピーを回収することはできません。

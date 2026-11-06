@@ -56,4 +56,5 @@ without the secret is never an unauthenticated uploader.
   operation if early removal is needed.
 - Cloudflare's edge rejects some default HTTP client user agents (error 1010) before
   the Worker runs; the MCP client sends its own `SpatialVibe-MCP-AR-Publisher/1`.
-- Scale lock, real size and placement on an iPhone must be checked on a device.
+- Checked on an iPhone (2026-11-06): Quick Look opens from the expiring link and shows the
+  model at real size. Scale lock and placement accuracy are not yet checked.
