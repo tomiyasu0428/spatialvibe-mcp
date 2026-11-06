@@ -26,7 +26,7 @@
 
 サーバーのエラー文（「その版はない」「名前は英数字で」など）は MCP の `ToolError` として返るので、Claude にそのまま届きます。
 
-macOS では実行を `sandbox-exec` で囲み、ネットワークと版フォルダ外への書き込みを禁止しています（個人の Mac で使う前提の最低限の隔離です）。
+macOS では生成コードと描画処理を `sandbox-exec` で囲み、ネットワーク、他の実行ファイル、許可したコード・依存ライブラリ・当該版以外のファイル読み取りを制限します。子へ渡す環境変数も限定します。隔離を利用できない環境では実行を拒否します。検証済みの範囲と Cloudflare 公開の条件は [AR_PUBLICATION.md](AR_PUBLICATION.md) に記載しています。
 
 ## セットアップ（macOS）
 
@@ -41,9 +41,10 @@ Claude Desktop では `claude_desktop_config.json` の `mcpServers` に同じコ
 | 環境変数 | 既定 | 意味 |
 | --- | --- | --- |
 | `SPATIALVIBE_HOME` | `./data/mcp_projects` | プロジェクトと版の保存先 |
-| `SPATIALVIBE_PUBLISH` | `icloud` | AR ファイルの置き場所（`icloud` / `dir:/path`） |
+| `SPATIALVIBE_PUBLISH` | `icloud` | AR ファイルの置き場所（`icloud` / `dir:/path` / `cloudflare`）。既定は変更していません |
 | `SPATIALVIBE_TIMEOUT` | `180` | 1 回の実行の制限秒数 |
 | `SPATIALVIBE_BED` | `256,256,256` | プリンタの造形範囲 mm（`fits_bed` の判定） |
+| `SPATIALVIBE_PRINTER` | 未設定 | `build_model` / `export_print` の `printer` を省略したときのプリンター（`a1mini` または `WxDxH`）。未設定なら造形範囲の判定は `printer_not_set` |
 
 ## 作例
 

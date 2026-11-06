@@ -1,26 +1,33 @@
 """SpatialVibe MCP server (stdio).
 
-Tools: build_model, preview, publish_ar, list_projects, get_code.
+Tools: build_model, preview, publish_ar, export_print, get_print_job, list_projects, get_code.
 Data lives in $SPATIALVIBE_HOME (default: <repo>/data/mcp_projects), one folder per
 project and one numbered folder per version (v001, v002, ...).
 """
 import json
+import math
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
+import tempfile
+import secrets
 from pathlib import Path
 
 from mcp.server.mcpserver import Image, MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 
-from .usdz import build_usdz, usdz_size_m
+from . import printing
+from ._ar_export import export_snapshot
+from ._ar_publish import PublicationError, publish as cloud_publish, settings as cloud_settings
+from ._isolation import child_environment, sandbox_command
 
 REPO = Path(__file__).resolve().parent.parent
 HOME = Path(os.environ.get("SPATIALVIBE_HOME", REPO / "data" / "mcp_projects")).expanduser()
 ICLOUD = Path.home() / "Library/Mobile Documents/com~apple~CloudDocs"
-PUBLISH = os.environ.get("SPATIALVIBE_PUBLISH", "icloud")   # "icloud" | "dir:/some/path"
+PUBLISH = os.environ.get("SPATIALVIBE_PUBLISH", "icloud")   # icloud | dir:/path | cloudflare
 TIMEOUT = int(os.environ.get("SPATIALVIBE_TIMEOUT", "180"))
 PROJECT = re.compile(r"[A-Za-z0-9_-]{1,60}")
 
@@ -77,10 +84,69 @@ def _built_version_dir(project: str, version) -> Path:
 
 def _read_result(vdir: Path) -> dict:
     try:
-        r = json.loads((vdir / "result.json").read_text(encoding="utf-8"))
-        return r if isinstance(r, dict) else {}
+        r = json.loads(_safe_text(vdir / "result.json"))
     except (OSError, ValueError):
         return {}
+    if not isinstance(r, dict):
+        return {}
+    if r.get("ok") is True and "parts_size_mm" not in r:
+        size = _overall_size(r.get("parts"))
+        if size is not None:   # versions built by older servers; in memory only, the file is not rewritten
+            r["parts_size_mm"] = size
+    return r
+
+
+def _overall_size(parts) -> list | None:
+    """Overall size of all parts from their bbox min/max (the runner's own formula), or None."""
+    if not isinstance(parts, dict) or not parts:
+        return None
+    boxes = []
+    for info in parts.values():
+        box = info.get("bbox_mm") if isinstance(info, dict) else None
+        lo, hi = (box or {}).get("min"), (box or {}).get("max")
+        if not all(isinstance(v, list) and len(v) == 3 and all(
+                isinstance(c, (int, float)) and not isinstance(c, bool) and math.isfinite(c) for c in v)
+                for v in (lo, hi)) or any(h < l for l, h in zip(lo, hi)):
+            return None
+        boxes.append((lo, hi))
+    return [round(max(h[i] for _, h in boxes) - min(l[i] for l, _ in boxes), 1) for i in range(3)]
+
+
+def _safe_text(path: Path) -> str:
+    """Never let a generated symlink redirect a trusted-parent file read."""
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
+        with os.fdopen(fd, "rb") as stream:
+            if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+                raise SpatialVibeError("Project file is not a regular file")
+            text = stream.read(8 * 1024 * 1024 + 1)
+            if len(text) > 8 * 1024 * 1024:
+                raise SpatialVibeError("Project file is too large")
+            return text.decode("utf-8")
+    finally:
+        os.close(directory)
+
+
+def _atomic_bytes(path: Path, body: bytes) -> None:
+    """Replace a destination entry instead of following its possibly hostile symlink."""
+    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    name = ".parent-write-" + secrets.token_hex(16)
+    try:
+        fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=directory)
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(body)
+        os.replace(name, path.name, src_dir_fd=directory, dst_dir_fd=directory)
+    finally:
+        try:
+            os.unlink(name, dir_fd=directory)
+        except FileNotFoundError:
+            pass
+        os.close(directory)
+
+
+def _write_json(path: Path, value) -> None:
+    _atomic_bytes(path, json.dumps(value, ensure_ascii=False, indent=1).encode("utf-8"))
 
 
 def _new_version_dir(pdir: Path) -> Path:
@@ -98,25 +164,36 @@ def _new_version_dir(pdir: Path) -> Path:
 
 
 def _sandbox_cmd(out: Path, argv):
-    """Deny network and writes outside the version folder / temp (macOS sandbox-exec)."""
-    if sys.platform != "darwin" or not shutil.which("sandbox-exec"):
-        return argv
-    profile = (
-        "(version 1)(allow default)(deny network*)(deny file-write*)"
-        f'(allow file-write* (subpath "{out.resolve()}") (subpath "/private/var/folders")'
-        ' (subpath "/private/tmp") (literal "/dev/null"))'
-    )
-    return ["sandbox-exec", "-p", profile, *argv]
+    """Fail closed; generated code cannot read uploader credentials or other projects."""
+    try:
+        return sandbox_command(out, REPO, argv)
+    except (RuntimeError, ValueError) as exc:
+        raise SpatialVibeError(str(exc)) from None
 
 
-def _child_env():
-    env = dict(os.environ, PYTHONPATH=str(REPO), PYTHONDONTWRITEBYTECODE="1", MPLBACKEND="Agg")
-    env["MPLCONFIGDIR"] = "/private/tmp/spatialvibe-mpl"
+def _child_env(runtime: Path):
+    env = child_environment(runtime, REPO)
+    # The build's only nonsecret user setting; never inherit arbitrary parent env.
+    raw = os.environ.get("SPATIALVIBE_BED", "256,256,256")
+    try:
+        dimensions = [float(value) for value in raw.split(",")]
+        if len(dimensions) == 3 and all(0 < value <= 10000 for value in dimensions):
+            env["SPATIALVIBE_BED"] = ",".join(map(str, dimensions))
+    except ValueError:
+        pass
     return env
 
 
+def _run_isolated(vdir: Path, argv):
+    command = _sandbox_cmd(vdir, argv)
+    with tempfile.TemporaryDirectory(prefix=".runtime-", dir=vdir) as runtime:
+        return subprocess.run(command, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+                              timeout=TIMEOUT, cwd=vdir, env=_child_env(Path(runtime)), close_fds=True)
+
+
 @mcp.tool()
-def build_model(project: str, code: str, note: str = "", compare_to: int | None = None) -> dict:
+def build_model(project: str, code: str, note: str = "", compare_to: int | None = None,
+                printer: str = "") -> dict:
     """Run a build123d script and save it as a new version of the project.
 
     `code` is a complete Python script using build123d (units: mm, Z up). It must define
@@ -134,9 +211,19 @@ def build_model(project: str, code: str, note: str = "", compare_to: int | None 
     computed are in `interference_unchecked` = 未判定), and `warnings` you must fix or explain.
     `changes` compares with the previous good version, or with `compare_to` (e.g. the version the
     user already printed, after some drafts) and is saved in result.json.
+    Optionally `print_orientation = {"part": (rx, ry, rz)}` (degrees, like build123d Rot) or
+    `print_pose = {"part": "-X" | Rot(...)}` turns a part to its print pose; preview/AR stay assembled.
+    `printer`: "a1mini" (Bambu Lab A1 mini, 180x180x180) or a build volume "WxDxH" in mm; empty uses
+    $SPATIALVIBE_PRINTER, else each part's `print.fit` is printer_not_set (ask the user, never guess).
+    Each part's `print` has the pose, size and fit: fits / exceeds / printer_not_set (exceeds is about
+    that pose only).
     A build that fails leaves no part files behind and cannot be previewed or published.
     Always call `preview` afterwards and look at both images before showing the user.
     """
+    try:
+        pr = printing.resolve_printer(printer)  # a bad printer spec fails before anything runs
+    except ValueError as exc:
+        raise SpatialVibeError(str(exc)) from None
     vdir = _new_version_dir(_project_dir(project))
     (vdir / "model.py").write_text(code, encoding="utf-8")
     (vdir / "note.txt").write_text(note, encoding="utf-8")
@@ -145,28 +232,44 @@ def build_model(project: str, code: str, note: str = "", compare_to: int | None 
     result_file = stage / "_result.json"
     argv = [sys.executable, "-m", "spatialvibe_mcp._runner", str(vdir / "model.py"), str(stage), str(result_file)]
     try:
-        p = subprocess.run(_sandbox_cmd(vdir, argv), capture_output=True, text=True, stdin=subprocess.DEVNULL,
-                           timeout=TIMEOUT, cwd=vdir, env=_child_env())
+        p = _run_isolated(vdir, argv)
     except subprocess.TimeoutExpired:
         res = {"ok": False, "error": f"timed out after {TIMEOUT}s; nothing was kept"}
     else:
         try:
-            res = json.loads(result_file.read_text(encoding="utf-8"))
+            res = json.loads(_safe_text(result_file))
         except (OSError, ValueError):
             res = None
         if p.returncode != 0 or not isinstance(res, dict):
             tail = (p.stderr or "").strip()[-2500:] or "no output"
             res = {"ok": False, "error": f"the build process exited with code {p.returncode} before finishing. {tail}"}
     if res.get("ok") is True:
-        for f in stage.iterdir():
-            if f.name.startswith(("part_", "ctx_", "print_", "pose")):
+        candidates = [] if stage.is_symlink() else [f for f in stage.iterdir()
+                        if f.name.startswith(("part_", "ctx_", "print_", "pose"))]
+        if not candidates or any(not stat.S_ISREG(f.lstat().st_mode) for f in candidates):
+            res = {"ok": False, "error": "Unsafe or missing generated output; nothing was kept"}
+        else:
+            for f in candidates:
                 f.replace(vdir / f.name)
     shutil.rmtree(stage, ignore_errors=True)
-    (vdir / "result.json").write_text(json.dumps(res, ensure_ascii=False, indent=1), encoding="utf-8")
+    if res.get("ok") is True:
+        try:
+            res["printer"] = pr
+            for info in res["parts"].values():
+                info["print"].update(printing.fit(info["print"], pr))
+        except (KeyError, TypeError, AttributeError, ValueError) as exc:
+            res = {"ok": False, "error": f"runner result malformed: {type(exc).__name__}"}
+            for f in vdir.iterdir():
+                if f.name.startswith(("part_", "ctx_", "print_", "pose")) and (f.is_symlink() or not f.is_dir()):
+                    f.unlink()
+    _write_json(vdir / "result.json", res)
     res.update(project=project, version=int(vdir.name[1:]), folder=str(vdir))
     if res.get("ok") is True:
         _write_print_job(project, vdir, res)
         res["files"] = sorted(str(f) for f in vdir.iterdir() if f.name.startswith(("part_", "print_", "ctx_")))
+        res["print_files"] = sorted(str(f) for f in vdir.glob("print_*.stl"))
+        if pr is None:
+            res["printer_note"] = "printer not set: ask the user which printer (model or build volume) before export"
         if compare_to is not None:   # e.g. the version the user actually printed, not the last draft
             prev = _built_version_dir(project, compare_to)
         else:
@@ -177,7 +280,7 @@ def build_model(project: str, code: str, note: str = "", compare_to: int | None 
             res["changes"]["vs_printed"] = compare_to is not None   # only then may the sheet say "keep"
             saved = _read_result(vdir)
             saved["changes"] = res["changes"]
-            (vdir / "result.json").write_text(json.dumps(saved, ensure_ascii=False, indent=1), encoding="utf-8")
+            _write_json(vdir / "result.json", saved)
     return res
 
 
@@ -226,7 +329,7 @@ def _write_print_job(project: str, vdir: Path, res: dict) -> None:
             "Start a print only after the user confirms. Parts in keep_already_printed are not reprinted.",
         ],
     }
-    (vdir / "print_job.json").write_text(json.dumps(job, ensure_ascii=False, indent=1), encoding="utf-8")
+    _write_json(vdir / "print_job.json", job)
     res["print_job"] = str(vdir / "print_job.json")
 
 
@@ -303,7 +406,7 @@ def preview(project: str, version: int | None = None) -> list:
     out = []
     for mod, name in (("_render", "preview.png"), ("_sheet", "sheet.png")):
         argv = [sys.executable, "-m", f"spatialvibe_mcp.{mod}", str(vdir)]
-        p = subprocess.run(argv, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=TIMEOUT, env=_child_env())
+        p = _run_isolated(vdir, argv)
         png = vdir / name
         if p.returncode != 0 or not png.exists():
             raise SpatialVibeError(f"drawing the {name} failed: {p.stderr.strip()[-1500:] or 'no output'}")
@@ -314,7 +417,7 @@ def preview(project: str, version: int | None = None) -> list:
     build = vdir / "sheet_build.png"   # page 3 (print plate + assembly steps), when the script has them
     build.unlink(missing_ok=True)
     argv = [sys.executable, "-m", "spatialvibe_mcp._steps", str(vdir)]
-    p = subprocess.run(argv, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=TIMEOUT, env=_child_env())
+    p = _run_isolated(vdir, argv)
     if p.returncode != 0:
         raise SpatialVibeError(f"drawing sheet_build.png failed: {p.stderr.strip()[-1500:] or 'no output'}")
     if build.exists():
@@ -330,16 +433,40 @@ def publish_ar(project: str, version: int | None = None, include_context: bool =
     With include_context the surroundings are included translucent, so the user can line the
     model up with the real object (e.g. the pipe). Default target is iCloud Drive
     (Files app → iCloud Drive → SpatialVibe), which works on any network.
+    SPATIALVIBE_PUBLISH=cloudflare uses the dedicated AR Worker and returns an expiring
+    HTTPS link. It requires trusted-parent upload configuration and supported isolation.
     If the script set ar_floor, the model gets a floor plate at that height: tell the user to aim
     the phone at that floor before tapping AR, then slide it until the grey context lines up.
     """
     vdir = _built_version_dir(project, version)
     res = _read_result(vdir)
     floor_z = res.get("ar_floor_z") if include_context else None
+    config = None
+    if PUBLISH == "cloudflare":
+        # Validate the supported isolation boundary before accessing runtime auth.
+        _sandbox_cmd(vdir, [sys.executable, "-c", "pass"])
+        try:
+            config = cloud_settings()
+        except PublicationError as exc:
+            raise SpatialVibeError(str(exc)) from None
+    elif PUBLISH != "icloud" and not PUBLISH.startswith("dir:"):
+        raise SpatialVibeError(f"unknown SPATIALVIBE_PUBLISH={PUBLISH!r}")
     try:
-        usdz = build_usdz(vdir, include_context, floor_z)
-    except ValueError as e:
-        raise SpatialVibeError(str(e)) from e
+        snapshot = export_snapshot(vdir, include_context, floor_z,
+                                   **({"max_bytes": config.max_bytes} if config else {}))
+    except ValueError as exc:
+        if str(exc).startswith("ar_floor "):
+            raise SpatialVibeError(str(exc)) from None
+        raise SpatialVibeError("AR export failed; check the model files and configured upload limit") from None
+    except OSError:
+        raise SpatialVibeError("AR export failed; check the model files and configured upload limit") from None
+    usdz = vdir / "model.usdz"
+    _atomic_bytes(usdz, snapshot.body)
+    pm = [round(v / 1000, 4) for v in res.get("parts_size_mm", [0, 0, 0])]
+    sx, sy_up, sz = snapshot.scene_size_m
+    metadata = {"parts_size_m": {"x_width": pm[0], "y_depth": pm[1], "z_height": pm[2]},
+                "scene_size_m": {"x_width": sx, "y_depth": sz, "z_height": sy_up},
+                "include_context": include_context, "ar_floor_mm": floor_z}
     fname = f"{project}_{vdir.name}{'' if include_context else '_parts-only'}.usdz"
     if PUBLISH == "icloud":
         if not ICLOUD.exists():
@@ -349,26 +476,66 @@ def publish_ar(project: str, version: int | None = None, include_context: bool =
     elif PUBLISH.startswith("dir:"):
         dest_dir = Path(PUBLISH[4:]).expanduser()
         how = f"{dest_dir / fname} を iPhone で開く"
-    else:
-        raise SpatialVibeError(f"unknown SPATIALVIBE_PUBLISH={PUBLISH!r}")
+    else:  # cloudflare; local destinations retain their existing behavior above
+        try:
+            public = cloud_publish(snapshot.body, metadata, config)
+        except PublicationError as exc:
+            raise SpatialVibeError(str(exc)) from None
+        how = "iPhone の Safari で published のリンクを開き、画像をタップして AR を開く"
     where = f"（{res['origin']}）" if res.get("origin") else ""
-    moves = "1本指でずらす・2本指でひねって回すのは OK、つまんで広げる/縮めるのは NG（100% が実物大）。上下には動かせない"
+    moves = ("1本指でずらす・2本指でひねって回すのは OK。縮尺変更を制限する設定だが実機では未検証。上下には動かせない"
+             if config else "1本指でずらす・2本指でひねって回すのは OK、つまんで広げる/縮めるのは NG（100% が実物大）。上下には動かせない")
     if floor_z is not None and floor_z < -5:
         how += (f"。取付け場所の手前の床にスマホを向けてから AR。黄色い板が床に出て、細い柱の先＝取付け点{where}が"
                 f"床から {abs(floor_z) / 10:g} cm の高さに出る。灰色の周囲が本物に重なるまで動かす（{moves}）")
     else:
         how += f"。置きたい床や台にスマホを向けてから AR。灰色の周囲が本物に重なるまで動かす（{moves}）"
-    dest_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(usdz, dest_dir / fname)
-    pm = [round(v / 1000, 4) for v in res.get("parts_size_mm", [0, 0, 0])]
-    sx, sy_up, sz = usdz_size_m(usdz)
-    return {"usdz": str(usdz), "published": str(dest_dir / fname), "how_to_open": how,
-            "parts_size_m": {"x_width": pm[0], "y_depth": pm[1], "z_height": pm[2]},
-            "scene_size_m": {"x_width": sx, "y_depth": sz, "z_height": sy_up},
-            "include_context": include_context,
-            "ar_floor_mm": floor_z,
+    if config:
+        published = public["url"]
+        how += "。リンクを知っている人は期限内に閲覧でき、保存したコピーは期限後も残る"
+        extra = {"expires_at": public["expires_at"], "sha256": public["sha256"]}
+    else:
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        _atomic_bytes(dest_dir / fname, snapshot.body)
+        published = str(dest_dir / fname)
+        extra = {}
+    # size_m: the USDZ's own extent in metres, USD axes (x, y-up, z), kept for older callers.
+    return {"usdz": str(usdz), "published": published, "how_to_open": how, "size_m": [sx, sy_up, sz],
+            **metadata, **extra,
             "note": "quote parts_size_m (what is printed); scene_size_m also contains the context. "
                     "Both use the script's axes: x = width, y = depth, z = height."}
+
+
+@mcp.tool()
+def export_print(project: str, version: int | None = None, printer: str = "",
+                 quantities: dict[str, int] | None = None, material: str = "",
+                 hardware: list[str] | None = None, notes: list[str] | None = None,
+                 part_notes: dict[str, str] | None = None, include_zip: bool = False) -> dict:
+    """Hand a finished version over to print preparation: one local folder of files + conditions.
+
+    Folder: stl/ (each part turned to its print pose, resting on z=0, mm), step/ (assembled
+    pose, for editing), source/model.py, manifest.json (the conditions: printer, material,
+    per-part quantity/pose/size/fit, hardware, notes, unconfirmed), PRINT_GUIDE_ja.txt (the
+    same for the user) and AI_HANDOFF.txt (short text for another AI). Context is never
+    included. Pass only what is actually known — quantities per part, material, hardware
+    (bolts, nuts…; [] means none), notes, part_notes; anything omitted is listed as unconfirmed.
+    `printer` overrides the one used at build time. Refuses failed builds, invalid solids and
+    parts that exceed the build volume in their print pose (returns ok=false with details).
+    The result has absolute paths to every file, the manifest itself, `handoff` and
+    `next_steps`. This MCP does not slice or print; continue with a slicer/printer integration
+    if you have one and show the user what was actually set and estimated.
+    A ZIP is made only with include_zip=true (for sharing); otherwise a ZIP left by an earlier
+    export of this version is removed so it is never mistaken for the current files.
+    """
+    vdir = _built_version_dir(project, version)
+    res = _read_result(vdir)
+    try:
+        pr = printing.resolve_printer(printer, res.get("printer"))
+        return printing.make_bundle(project, vdir, res, pr, quantities=quantities, material=material,
+                                    hardware=hardware, notes=notes, part_notes=part_notes,
+                                    include_zip=bool(include_zip))
+    except ValueError as exc:
+        raise SpatialVibeError(str(exc)) from None
 
 
 @mcp.tool()
@@ -381,7 +548,7 @@ def get_print_job(project: str, version: int | None = None) -> dict:
     f = vdir / "print_job.json"
     if not f.exists():
         _write_print_job(project, vdir, _read_result(vdir))
-    job = json.loads(f.read_text(encoding="utf-8"))
+    job = json.loads(_safe_text(f))
     job["folder"] = str(vdir)
     if job.get("plate", {}).get("file"):
         job["plate"]["path"] = str(vdir / job["plate"]["file"])
@@ -402,7 +569,7 @@ def list_projects(project: str | None = None) -> dict:
     for v in _versions(_project_dir(project)):
         r = _read_result(v)
         ok = r.get("ok") is True
-        note = (v / "note.txt").read_text(encoding="utf-8") if (v / "note.txt").exists() else ""
+        note = _safe_text(v / "note.txt") if (v / "note.txt").exists() else ""
         out.append({"version": int(v.name[1:]), "note": note,
                     "ok": ok, "status": "built" if ok else ("failed" if r else "building or unknown"),
                     "warnings": len(r.get("warnings", [])) if ok else None,
@@ -415,7 +582,7 @@ def list_projects(project: str | None = None) -> dict:
 @mcp.tool()
 def get_code(project: str, version: int | None = None) -> str:
     """Return the build123d script of a version (latest by default), to modify and rebuild."""
-    return (_version_dir(project, version) / "model.py").read_text(encoding="utf-8")
+    return _safe_text(_version_dir(project, version) / "model.py")
 
 
 @mcp.prompt()

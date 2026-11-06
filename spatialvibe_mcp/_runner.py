@@ -758,6 +758,41 @@ def down_face(loc):
     return "tilted"
 
 
+def orientations(obj, parts):
+    """print_orientation = {part: (rx, ry, rz)} degrees, applied like build123d Rot."""
+    if obj is None:
+        return {}
+    if not isinstance(obj, dict):
+        fail("print_orientation must be a dict {part_name: (rx, ry, rz)} in degrees")
+    out = {}
+    for k, v in obj.items():
+        if k not in parts:
+            fail(f"print_orientation: {k!r} is not one of parts {sorted(parts)} (context is never printed)")
+        if not isinstance(v, (tuple, list)) or len(v) != 3 or not all(
+                isinstance(a, (int, float)) and not isinstance(a, bool) and math.isfinite(a) for a in v):
+            fail(f"print_orientation[{k!r}] must be three finite numbers (rx, ry, rz) in degrees, got {v!r}")
+        out[k] = [float(a) for a in v]
+    return out
+
+
+def pose_angles(spec):
+    """Rotation of a print_pose as (rx, ry, rz) degrees, or None if it cannot be expressed."""
+    if isinstance(spec, str):
+        return [float(a) for a in DOWN[spec.strip()]]
+    try:
+        o = spec.orientation
+        return [round(float(o.X), 6), round(float(o.Y), 6), round(float(o.Z), 6)]
+    except Exception:
+        return None
+
+
+def grounded(shape):
+    """Centre on X/Y and rest on z=0 (the print STL is placed like this on the bed)."""
+    from build123d import Pos
+    b = shape.bounding_box()
+    return Pos(-(b.min.X + b.max.X) / 2, -(b.min.Y + b.max.Y) / 2, -b.min.Z) * shape
+
+
 def bed_size():
     raw = os.environ.get("SPATIALVIBE_BED", "256,256,256")
     try:
@@ -822,7 +857,7 @@ def main():
     except Exception:
         fail(traceback.format_exc(limit=6))
 
-    from build123d import export_step, export_stl
+    from build123d import Rot, export_step, export_stl
 
     parts = as_dict(ns.get("parts"), "parts")
     context = as_dict(ns.get("context"), "context")
@@ -834,6 +869,10 @@ def main():
     print_pose = ns.get("print_pose") or {}
     if not isinstance(print_pose, dict):
         fail("print_pose must be a dict: {'part name': Rot(...) or Location(...)} (how to lay it on the bed)")
+    rots = orientations(ns.get("print_orientation"), parts)
+    both = sorted(set(rots) & set(print_pose))
+    if both:
+        fail(f"print_orientation and print_pose both given for {both}: use one of them per part")
     result = {"ok": True, "parts": {}, "context": {}, "interference": [], "interference_unchecked": [],
               "near_contact": [], "warnings": [], "origin": str(origin)[:120] if origin else None,
               "hardware": text_list(ns.get("hardware"), "hardware"),
@@ -869,17 +908,25 @@ def main():
         }
         info["hole_spacing"] = hole_spacing(hl)
         info["fits_bed"] = fits_bed(info["bbox_mm"]["size"], bed)
-        if name in print_pose:
+        posed, rot = shp, None
+        if name in print_pose or name in rots:
             try:
-                pose = pose_of(print_pose[name])
+                spec = print_pose[name] if name in print_pose else Rot(*rots[name])
+                pose = pose_of(spec)
                 pp = pose * shp
                 info["print_down"] = down_face(pose)
                 pb = pp.bounding_box()
-                export_stl(pp, str(out / f"print_{name}.stl"))
                 info["print_size_mm"] = [round(pb.size.X, 2), round(pb.size.Y, 2), round(pb.size.Z, 2)]
                 info["fits_bed"] = fits_bed(info["print_size_mm"], bed)
+                posed, rot = pp, (rots[name] if name in rots else pose_angles(print_pose[name]))
             except Exception as e:
                 warn.append(f"{name}: print_pose を使えない: {type(e).__name__}: {str(e)[:80]}")
+        # Every part gets a print STL (turned to its print pose, or as modelled) centred and on z=0,
+        # and unrounded print sizes: the build-volume check must not be fooled by rounding.
+        posed = grounded(posed)
+        export_stl(posed, str(out / f"print_{name}.stl"))
+        gb = posed.bounding_box()
+        info["print"] = {"rotate_xyz_deg": rot, "size_mm_exact": [gb.size.X, gb.size.Y, gb.size.Z]}
         try:
             info["watertight"], info["open_edges"] = mesh_check(stl)
         except Exception as e:  # never report "closed" when the check itself failed

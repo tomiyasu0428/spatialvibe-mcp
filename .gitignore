@@ -18,3 +18,16 @@ reels/*/reel.mp4
 .idea/
 .vscode/
 reels/*/audio.wav
+.wrangler/
+.env*
+.dev.vars*
+
+# Local Cloudflare AR launch settings (0600, personal paths/origin)
+.spatialvibe-ar.local.json
+# Real deployment configs and local operator/diagnostic outputs never belong in git
+wrangler.jsonc
+wrangler.toml
+*.prepared.jsonc
+*-result.json
+*-state.json
+node_modules/

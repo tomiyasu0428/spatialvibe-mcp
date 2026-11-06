@@ -231,6 +231,11 @@ clamp_in; explain a term once in brackets (PETG（熱と日光に強い材料）
    as data: `get_print_job` (print_job.json — files in print pose, settings, fits that must hold,
    hardware, steps) is what you, or the AI that drives their slicer/printer, works from. If you
    have slicer or printer tools, use it directly; never start a print without the user's go-ahead.
+   Printer size: ask which printer and pass `printer` to build_model ("a1mini" or "WxDxH" mm);
+   each part's `print.fit` is then fits / exceeds / printer_not_set — never assume a printer.
+   `print_orientation = {"part": (rx, ry, rz)}` is the angle form of `print_pose`.
+   For a folder/ZIP to hand to a person (print STLs, STEP, model.py, manifest, 日本語の印刷案内),
+   call `export_print` with only what is known (quantities, material, hardware, notes).
 5. Material and print orientation in one line; which values are still guesses in one line.
 6. AR in one line (see below). Anything longer goes only if the user asks.
 Aim for ≤ 12 lines. Call each thing by ONE name throughout (not ふち/垂れ/板); give positions in
@@ -240,6 +245,10 @@ numbered list (「1. 裏返して出っぱりに印 2. 印の間にフック 3. 
 so the sheet states the same viewpoint as the reply.
 
 ## 4. AR fit check
+- When `published` is HTTPS, give that link and its `expires_at`; the page asks for iPhone
+  Safari and requests scale locking, but device behavior remains unverified. Anyone holding
+  the link can view until expiry; saved copies cannot be recalled. Do not claim a cloud
+  upload succeeded when the tool reports an error, or silently switch to iCloud.
 - `publish_ar` (with context) and pass on its `how_to_open` in plain words: where to aim the
   phone (「肘掛けの手前の床」), what to line up, 1本指でずらす・2本指で回すのは OK・つまむのは NG
   (100 % が実物大), the model cannot be moved up or down. For parts under a desk or counter add
