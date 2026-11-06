@@ -76,6 +76,19 @@ svg.wires path, svg.wires line { fill: none; stroke-width: 0.22cqw; stroke-linec
 .close { position: absolute; left: 0; right: 0; bottom: 3.4cqw; text-align: center; font-size: 2.3cqw; font-weight: 800; letter-spacing: -0.04em; }
 .close b.o { color: var(--orange); font-weight: 800; } .close b.b { color: var(--blue); font-weight: 800; }
 
+/* tools scene */
+.tools { position: absolute; inset: 0; padding: 7cqw 6cqw 5cqw; box-sizing: border-box; display: flex; flex-direction: column; gap: 2.2cqw; opacity: 0; }
+.tools .who { font-family: var(--lat); font-weight: 800; font-size: 1.6cqw; color: var(--blue); letter-spacing: 0.02em; }
+.tools .h { font-size: 3.4cqw; font-weight: 900; letter-spacing: -0.045em; line-height: 1.05; margin-top: 0.3cqw; } .tools .h b { color: var(--blue); font-weight: 900; }
+.tools .s { font-size: 1.25cqw; font-weight: 500; opacity: 0.75; margin-top: 0.6cqw; }
+.grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.2cqw; flex: 1; }
+.card { border: 1px solid color-mix(in srgb, var(--blue) 55%, transparent); background: color-mix(in srgb, var(--blue) 9%, transparent); padding: 1.3cqw 1.5cqw; display: flex; flex-direction: column; gap: 0.6cqw; transform-origin: 50% 60%; }
+.card .nm { font-family: var(--mono); font-size: 1.55cqw; font-weight: 600; color: var(--blue); letter-spacing: 0; text-transform: none; }
+.card .ar { font-family: var(--mono); font-size: 0.78cqw; opacity: 0.6; letter-spacing: 0.02em; text-transform: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card .ds { font-size: 1.1cqw; font-weight: 700; line-height: 1.45; margin-top: 0.3cqw; }
+.card .st { margin-top: auto; font-family: var(--mono); font-size: 0.78cqw; letter-spacing: 0.1em; opacity: 0.6; }
+.card .st b { font-weight: 400; color: var(--orange); }
+.tfoot { font-family: var(--mono); font-size: 0.95cqw; letter-spacing: 0.06em; text-transform: none; opacity: 0.6; }
 /* player */
 .ctl { width: min(100%, 1100px); display: flex; align-items: center; gap: 14px; }
 .ctl button { font: 700 14px/1 var(--jp); color: var(--paper); background: transparent; border: 1px solid rgba(241,240,236,.5); border-radius: 99px; padding: 9px 16px; cursor: pointer; }
@@ -87,12 +100,19 @@ body.capture .ctl { display: none; }
 </head>
 <body>
 <div class="stage" id="stage">
+  <div class="main" id="main">
   <div class="lanes" id="lanes"></div>
   <svg class="wires" id="wires" viewBox="0 0 1000 562.5" preserveAspectRatio="none"></svg>
   <div id="nodes"></div>
   <div class="title" id="title"><div class="big">写真から、<b>3Dプリント</b>まで。</div><div class="sub">誰が、何をするか</div></div>
   <div class="now" id="now"><span class="tag" id="nowtag"></span><span class="what" id="nowwhat"></span></div>
   <div class="close" id="close"><b class="o">Claude</b> が考え、<b class="b">MCP</b> が動かし、人は確かめる。</div>
+  </div>
+  <div class="tools" id="tools">
+    <div class="th"><div class="who">MCP</div><div class="h">このサーバーが持つ <b>6 つ</b>のツール</div><div class="s">Claude がこれを呼ぶ。テンプレートはなく、形は Claude が build123d で書く。</div></div>
+    <div class="grid" id="grid"></div>
+    <div class="tfoot" id="tfoot">実行は別プロセス・隔離（macOS: sandbox-exec）。スライスも印刷もしない。そこから先はスライサーと人。</div>
+  </div>
   <div class="hud" aria-hidden="true">
     <i class="crop a"></i><i class="crop b"></i><i class="crop c"></i><i class="crop d"></i>
     <div class="mono tl">SPATIALVIBE — PROCESS</div><div class="mono tr" id="tc"></div>
@@ -127,10 +147,19 @@ body.capture .ctl { display: none; }
     { x: 7, who: "mcp",    ttl: "印刷引き継ぎ", sub: "export_print: STL・manifest" },
     { x: 8, who: "user",   ttl: "3Dプリント",   sub: "現場に取り付け" },
   ];
+  const TOOLS = [
+    { nm: "build_model", ar: "(project, code, note?, printer?)", ds: "build123d スクリプトを別プロセスで実行。parts と context を STL / STEP に。形の有効性・体積・部品と周囲の干渉・造形範囲を返し、版（v001, v002…）として保存", st: "作って検査" },
+    { nm: "preview", ar: "(project, version?)", ds: "4 方向の画像。Claude が自分で見て、人に見せる前に直す", st: "プレビュー" },
+    { nm: "publish_ar", ar: "(project, version?, include_context?)", ds: "実寸の USDZ（m, Y-up）を作り iCloud Drive の SpatialVibe/ へ。iPhone の「ファイル」からタップで AR", st: "実寸 AR" },
+    { nm: "export_print", ar: "(project, version?, printer?, quantities?, material?, hardware?, …)", ds: "印刷姿勢の STL・STEP・manifest.json・日本語の案内・AI 引き継ぎ文を 1 フォルダに。失敗した版や造形範囲超えは出さない", st: "印刷引き継ぎ" },
+    { nm: "list_projects", ar: "(project?)", ds: "プロジェクトと版の一覧、各版の結果", st: "いつでも" },
+    { nm: "get_code", ar: "(project, version?)", ds: "過去の版のスクリプトを取り出す。直す・作り直すの起点", st: "見て、直す" },
+  ];
   // timing (ms)
   const T_TITLE = 2200, T_LANES = 1100, STEP = 2050, T_STEP0 = T_TITLE + T_LANES;
   const T_SUM = T_STEP0 + STEPS.length * STEP + 400;
-  const DUR = T_SUM + 4800;
+  const T_TOOLS = T_SUM + 4800, CARD = 850;
+  const DUR = T_TOOLS + 1300 + TOOLS.length * CARD + 3200;
 
   // ---- geometry (stage units: cqw / cqh; svg viewBox 1000 x 562.5) ------------------------------
   const laneY = { user: 22, claude: 50, mcp: 78 };           // % of height
@@ -186,6 +215,11 @@ body.capture .ctl { display: none; }
       loopEls.push({ i, p, lbl });
     }
   });
+  const cardEls = TOOLS.map((tl) => {
+    const c = document.createElement("div"); c.className = "card";
+    c.innerHTML = `<div class="nm">${tl.nm}</div><div class="ar">${tl.ar}</div><div class="ds">${tl.ds}</div><div class="st">USED AT <b>${tl.st}</b></div>`;
+    $("grid").appendChild(c); return c;
+  });
   const counts = {}; STEPS.forEach((s) => counts[s.who] = (counts[s.who] || 0) + 1);
 
   // ---- render(t) ---------------------------------------------------------------------------------
@@ -240,6 +274,15 @@ body.capture .ctl { display: none; }
     // closing line
     const cp = ease(seg(t, T_SUM + 900, 600));
     $("close").style.opacity = cp; $("close").style.transform = `translateY(${(1 - cp) * 1.2}cqw)`;
+    // tools scene
+    const mo = ease(seg(t, T_TOOLS - 500, 500));
+    $("main").style.opacity = 1 - mo; $("main").style.transform = `scale(${1 - mo * 0.03})`;
+    const th = ease(seg(t, T_TOOLS, 600));
+    $("tools").style.opacity = th;
+    $("tools").querySelector(".th").style.transform = `translateY(${(1 - th) * 1.2}cqw)`;
+    cardEls.forEach((c, i) => { const q = seg(t, T_TOOLS + 1300 + i * CARD, 450); c.style.opacity = q > 0 ? 1 : 0; c.style.transform = `scale(${q > 0 ? 0.92 + 0.08 * back(q) : 0.92})`; });
+    const tf = ease(seg(t, T_TOOLS + 1300 + TOOLS.length * CARD + 300, 600));
+    $("tfoot").style.opacity = tf * 0.6;
     // hud
     const sec = Math.floor(t / 1000), fr = Math.floor((t % 1000) / 1000 * 30);
     $("tc").textContent = `TC 00:${pad(Math.floor(sec / 60))}:${pad(sec % 60)}:${pad(fr)}`;
