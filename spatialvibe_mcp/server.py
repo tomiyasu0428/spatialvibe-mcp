@@ -22,6 +22,7 @@ from ._artifacts import (ARTIFACT, FILE_LIMIT, SpatialVibeError, atomic_bytes as
                          copy_artifacts, safe_bytes, safe_text as _safe_text, write_json as _write_json)
 from ._build import build_in_scratch, prepare_plate
 from ._isolation import run_isolated, sandbox_command
+from ._result import clean_text, failure, parse, stored
 
 REPO = Path(__file__).resolve().parent.parent
 HOME = Path(os.environ.get("SPATIALVIBE_HOME", REPO / "data" / "mcp_projects")).expanduser()
@@ -29,6 +30,7 @@ ICLOUD = Path.home() / "Library/Mobile Documents/com~apple~CloudDocs"
 PUBLISH = os.environ.get("SPATIALVIBE_PUBLISH", "icloud")   # icloud | dir:/path | cloudflare
 TIMEOUT = int(os.environ.get("SPATIALVIBE_TIMEOUT", "180"))
 PROJECT = re.compile(r"[A-Za-z0-9_-]{1,60}")
+MAX_VERSION = 999   # v001..v999: the folder pattern the server lists
 
 
 INSTRUCTIONS = (Path(__file__).parent / "WORKFLOW.md").read_text(encoding="utf-8")
@@ -55,8 +57,8 @@ def _version_dir(project: str, version) -> Path:
         raise SpatialVibeError(f"project {project!r} has no versions yet; call build_model first")
     if version is None:
         return vs[-1]
-    if not isinstance(version, int) or version < 1:
-        raise SpatialVibeError(f"version must be a positive number like 1 or 2; got {version!r}")
+    if isinstance(version, bool) or not isinstance(version, int) or not 1 <= version <= MAX_VERSION:
+        raise SpatialVibeError(f"version must be a number from 1 to {MAX_VERSION} like 1 or 2; got {version!r}")
     v = pdir / f"v{version:03d}"
     if v.is_symlink() or not v.is_dir():
         raise SpatialVibeError(f"{project} has no version {version}; latest is {vs[-1].name}")
@@ -78,11 +80,10 @@ def _built_version_dir(project: str, version) -> Path:
 
 
 def _read_result(vdir: Path) -> dict:
+    """The saved result, sanitized (see _result.stored) before any of its names reach a path."""
     try:
-        r = json.loads(_safe_text(vdir / "result.json"))
+        r = stored(parse(_safe_text(vdir / "result.json")))
     except (OSError, ValueError):
-        return {}
-    if not isinstance(r, dict):
         return {}
     if r.get("ok") is True and "parts_size_mm" not in r:
         size = _overall_size(r.get("parts"))
@@ -113,6 +114,8 @@ def _new_version_dir(pdir: Path) -> Path:
     vs = _versions(pdir)
     n = int(vs[-1].name[1:]) + 1 if vs else 1
     while True:
+        if n > MAX_VERSION:
+            raise SpatialVibeError(f"{pdir.name} already has {MAX_VERSION} versions; start a new project")
         vdir = pdir / f"v{n:03d}"
         try:
             vdir.mkdir()
@@ -170,7 +173,7 @@ def build_model(project: str, code: str, note: str = "", compare_to: int | None 
     except subprocess.TimeoutExpired:
         res = {"ok": False, "error": f"timed out after {TIMEOUT}s; nothing was kept"}
     except (OSError, ValueError, RuntimeError, AttributeError) as exc:
-        res = {"ok": False, "error": f"Unsafe or invalid build output: {exc}"}
+        res = failure(f"Unsafe or invalid build output; nothing was kept: {exc}")
     if res.get("ok") is not True:
         for f in vdir.iterdir():
             if ARTIFACT.fullmatch(f.name):
@@ -342,7 +345,7 @@ def preview(project: str, version: int | None = None) -> list:
                            ("_steps", ["sheet_build.png"])):
             p = run_isolated(scratch, REPO, mod, [scratch], TIMEOUT)
             if p.returncode != 0:
-                raise SpatialVibeError(f"drawing {mod} failed: {p.stderr[-1500:]}")
+                raise SpatialVibeError(f"drawing {mod} failed: {clean_text(p.stderr[-1500:], 1500, multiline=True)}")
             for name in names:
                 if mod == "_steps" and not (scratch / name).exists():
                     (vdir / name).unlink(missing_ok=True)

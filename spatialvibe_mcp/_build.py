@@ -6,6 +6,7 @@ from pathlib import Path
 from . import printing
 from ._artifacts import FILE_LIMIT, TOTAL_LIMIT, atomic_bytes, copy_artifacts, safe_bytes, safe_text
 from ._isolation import configured_bed, run_isolated
+from ._result import admit, admit_plate, artifact_files, failure, parse
 
 
 def build_in_scratch(vdir, code, package_root, timeout):
@@ -19,22 +20,14 @@ def build_in_scratch(vdir, code, package_root, timeout):
         with unchanged_directory(stage):
             p = run_isolated(scratch, package_root, "_runner", [script, stage, result_file], timeout)
         if p.returncode:
-            return {"ok": False, "error": f"build process exited with code {p.returncode}: {p.stderr[-2500:]}"}
-        res = json.loads(safe_text(result_file))
-        if not isinstance(res, dict):
-            raise ValueError("Malformed runner result")
-        if res.get("ok") is True:
-            for key in ("parts", "context"):
-                names = res.get(key, {})
-                if not isinstance(names, dict) or len(names) > 128 or any(not printing.NAME.fullmatch(n) for n in names):
-                    raise ValueError("Unsafe runner part names")
-                if len({n.casefold() for n in names}) != len(names):
-                    raise ValueError("Conflicting runner part names")
-            if not res.get("parts") or (res.get("plate") or {}).get("file") not in (None, "print_plate.3mf"):
-                raise ValueError("Invalid print artifact")
-            copy_artifacts(stage, vdir)
-            if any(not (vdir / f"part_{n}.stl").is_file() for n in res["parts"]):
-                raise ValueError("Missing part STL")
+            return failure(f"build process exited with code {p.returncode}: {p.stderr[-2500:]}")
+        # The result is rebuilt field by field (see _result); only files it names are kept.
+        res = admit(parse(safe_text(result_file)))
+        if res["ok"] is True:
+            must, may = artifact_files(res)
+            copy_artifacts(stage, vdir, allowed=may)
+            if any(not (vdir / f).is_file() for f in must):
+                raise ValueError("Missing build output")
         return res
 
 
@@ -65,6 +58,6 @@ def prepare_plate(vdir, result, package_root, timeout):
         p = run_isolated(scratch, package_root, "_geometry_plate", [scratch], timeout)
         if p.returncode:
             raise ValueError("Could not generate a geometry-only print plate")
-        plate = json.loads(safe_text(scratch / "plate.json"))
+        plate = admit_plate(parse(safe_text(scratch / "plate.json")), parts)
         atomic_bytes(vdir / "print_plate.3mf", safe_bytes(scratch / "print_plate.3mf", FILE_LIMIT))
         return plate

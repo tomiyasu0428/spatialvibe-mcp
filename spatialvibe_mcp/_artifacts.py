@@ -43,12 +43,14 @@ def safe_text(path: Path) -> str:
     return safe_bytes(path, TEXT_LIMIT).decode("utf-8")
 
 
-def copy_artifacts(src: Path, dest: Path, *, render=False):
+def copy_artifacts(src: Path, dest: Path, *, render=False, allowed=None):
+    """Copy model files; `allowed` (a set of names) limits a build to the files its result names."""
     total = count = 0
     if src.is_symlink():
         raise SpatialVibeError("Linked artifact folder")
     for path in src.iterdir():
-        if not ARTIFACT.fullmatch(path.name) or (render and path.suffix != ".stl"):
+        if (not ARTIFACT.fullmatch(path.name) or (render and path.suffix != ".stl")
+                or (allowed is not None and path.name not in allowed)):
             continue
         count += 1
         if count > 1024:

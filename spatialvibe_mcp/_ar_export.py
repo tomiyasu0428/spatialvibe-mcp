@@ -10,6 +10,7 @@ from ._scratch import scratch_directory
 
 from ._artifacts import safe_bytes
 from ._isolation import run_isolated
+from ._result import clean_text
 
 MESH = re.compile(r"(?:part|ctx)_[A-Za-z0-9_-]{1,40}\.stl")
 MAX_BYTES = 64 * 1024 * 1024
@@ -54,7 +55,7 @@ def export_snapshot(version: Path, include_context: bool = True, floor_z: float 
         if r.returncode:
             # Forward only the placement error that the user can fix.
             errors = [s for s in r.stderr.splitlines() if s.startswith("ar_floor ")]
-            raise ValueError(errors[-1][:300] if errors else "AR export failed")
+            raise ValueError(clean_text(errors[-1], 300) if errors else "AR export failed")
         body = safe_bytes(work / "model.usdz", max_bytes)
         size = json.loads(safe_bytes(work / "size.json", 1024))
         if not isinstance(size, list) or len(size) != 3 or not all(
