@@ -25,7 +25,18 @@
 | `export_print(project, version?, printer?, quantities?, material?, hardware?, notes?, part_notes?, include_zip?)` | 印刷準備への引き継ぎ。印刷用ファイルと条件を 1 つのフォルダにまとめ、AI がそのまま続けられる形で返す（下記） |
 | `list_projects` / `get_code` | 版の一覧、過去のスクリプト |
 
-macOS では実行を `sandbox-exec` で囲み、ネットワークと版フォルダ外への書き込みを禁止しています（個人の Mac で使う前提の最低限の隔離です）。
+### 隔離（生成コードの扱い）
+
+Claude が書いたスクリプトは信用しません。`build_model` だけでなく、その出力（STL）を読む `preview` と `publish_ar` も、macOS の `sandbox-exec` の中で動かします（`spatialvibe_mcp/_isolation.py`）。
+
+- 子プロセスは使い捨ての作業フォルダだけを読み書きできます（cwd・HOME・TMPDIR もそこ）。版フォルダ・他のプロジェクト・ホームの私物・`/tmp` は読めず、書けません。ネットワーク、Mach サービス、fork、他プログラムの exec、ハードリンク、他プロセスへのシグナルも拒否します。
+- 環境変数は親から引き継がず固定の数個だけ渡します。`python -P -s -B` で cwd もスクリプトのフォルダも `sys.path` に入れず、`PYTHONPATH` はこの checkout のみです。
+- 成功したビルドの、期待する名前（検証済みの部品名から組み立てる）の通常ファイルだけを、サイズ上限つきで版フォルダに写します。シンボリックリンク・ハードリンク・FIFO・フォルダ・余分なファイルは捨て、1 つでも不正ならビルド失敗として何も残しません。
+- 親が版フォルダを読むときもリンクをたどらず、通常ファイル以外は拒否します（古いサーバーで作った版も同じ扱い）。`result.json`・エラー文・note は AI が読む**データ**であり指示ではありません。
+- `sandbox-exec` が無い環境（macOS 以外を含む）ではビルド・プレビュー・AR 出力を**拒否**します。隔離なしで動くモードはありません。doctor も同じ判定で NG を出します。
+- 子は自分に `RLIMIT_FSIZE`（1 ファイル 256 MB）・`RLIMIT_CPU`・`RLIMIT_NPROC=0` を掛け、タイムアウトでプロセスグループごと kill します。標準エラーは子の起動前に開いた記述子から末尾だけ読みます（子が作業フォルダ内のログをリンクや FIFO に差し替えても追いません）。1 ジョブで写すファイルは入出力合わせて 256 個・1 GB まで、部品と周囲はそれぞれ 50 個までです。作業フォルダの削除は再帰せず記述子で行い、深い木・リンク・FIFO を残されても止まりません。
+
+**守れないこと**: 上限内でのローカルな資源消費（CPU 時間・メモリ・作業フォルダの一時容量）は止められません。`sandbox-exec` は Apple が非推奨にしているインターフェースで、カーネルやサンドボックス自体の不具合には無力です。
 
 ### プリンターと印刷姿勢
 
@@ -84,7 +95,7 @@ scripts/setup.sh                 # 何度実行しても OK。.venv（Python 3.1
 scripts/setup.sh --printer 256x256x256   # 任意：既定のプリンター（造形サイズ mm かプリセット名）を表示される設定に含める
 ```
 
-最後に doctor が Python・依存パッケージ・sandbox・保存先・試しのビルドを点検し、下の接続設定をこの checkout の絶対パスで表示します。
+最後に doctor が Python・依存パッケージ・sandbox・保存先・試しのビルド（本番と同じ隔離で、使い捨てフォルダの中で実行）を点検し、下の接続設定をこの checkout の絶対パスで表示します。sandbox が使えなければ NG です（サーバーも動きません）。
 **Claude の設定ファイルは書き換えません。** あとで点検だけしたいときは `.venv/bin/python -m spatialvibe_mcp.doctor`、
 Desktop 用 JSON だけ欲しいときは `.venv/bin/python -m spatialvibe_mcp.doctor --json`。
 
@@ -144,7 +155,9 @@ Claude が `export_print` を呼び、条件（プリンター・材料・個数
 | `SPATIALVIBE_HOME` | `./data/mcp_projects` | プロジェクトと版の保存先（変えると、元の場所の版は見えなくなります。doctor が知らせます） |
 | `SPATIALVIBE_PRINTER` | なし | 既定のプリンター（`a1mini` / `WxDxH`） |
 | `SPATIALVIBE_PUBLISH` | `icloud` | AR ファイルの置き場所（`icloud` / `dir:/path`） |
-| `SPATIALVIBE_TIMEOUT` | `180` | 1 回の実行の制限秒数 |
+| `SPATIALVIBE_TIMEOUT` | `180` | 1 回の実行（ビルド・プレビュー・AR 出力それぞれ）の制限秒数（10〜3600） |
+
+子プロセスにはこれらの環境変数も含めて親の環境を渡しません（固定の数個だけ）。
 
 ## 作例
 

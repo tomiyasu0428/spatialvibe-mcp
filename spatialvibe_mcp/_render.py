@@ -1,11 +1,17 @@
 """4-view PNG of a version's parts (opaque) and context (translucent).
 
-Usage: python -m spatialvibe_mcp._render <version_dir>
+Usage: python -m spatialvibe_mcp._render <in_dir> <out.png>
+<in_dir> holds the part_*.stl / ctx_*.stl copies the server admitted; the server runs this inside
+the sandbox because the meshes came from generated code.
 """
 import sys
 from pathlib import Path
 
-import matplotlib
+from spatialvibe_mcp._isolation import apply_child_limits
+
+apply_child_limits()
+
+import matplotlib  # noqa: E402
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
@@ -17,12 +23,12 @@ FONT = "Hiragino Sans"
 
 
 def main():
-    vdir = Path(sys.argv[1])
+    vdir, png = Path(sys.argv[1]), Path(sys.argv[2])
     meshes = []
     for i, f in enumerate(sorted(vdir.glob("part_*.stl"))):
-        meshes.append((trimesh.load(f), (*PART_COLORS[i % len(PART_COLORS)], 1.0), f.stem[5:]))
+        meshes.append((trimesh.load(f, force="mesh"), (*PART_COLORS[i % len(PART_COLORS)], 1.0), f.stem[5:]))
     for f in sorted(vdir.glob("ctx_*.stl")):
-        meshes.append((trimesh.load(f), (0.55, 0.60, 0.68, 0.22), f.stem[4:] + "（周囲）"))
+        meshes.append((trimesh.load(f, force="mesh"), (0.55, 0.60, 0.68, 0.22), f.stem[4:] + "（周囲）"))
     lo = min(m.bounds[0].min() for m, _, _ in meshes)
     hi = max(m.bounds[1].max() for m, _, _ in meshes)
 
@@ -41,7 +47,7 @@ def main():
     fig.legend(handles=[plt.Rectangle((0, 0), 1, 1, color=c) for _, c, _ in meshes],
                labels=[n for _, _, n in meshes], loc="lower center", ncol=len(meshes), prop={"family": FONT})
     plt.tight_layout(rect=(0, 0.04, 1, 1))
-    plt.savefig(vdir / "preview.png", dpi=80)
+    plt.savefig(png, dpi=80)
 
 
 if __name__ == "__main__":

@@ -8,12 +8,13 @@ import json
 import math
 import os
 import re
-import shutil
-import stat
 import tempfile
 import zipfile
 from datetime import datetime
 from pathlib import Path
+
+from . import _files as files
+from ._isolation import MAX_MESH_BYTES
 
 PRESETS = {"a1mini": ("Bambu Lab A1 mini", [180.0, 180.0, 180.0])}
 EPS = 1e-6  # mm; float noise only — sizes are compared unrounded
@@ -95,16 +96,24 @@ def fit(pp: dict, printer) -> dict:
 
 # ---- bundle -----------------------------------------------------------------------------
 
-def _own_file(vdir: Path, fname: str) -> Path:
-    """A regular, single-linked file directly inside vdir (no symlink/hardlink tricks from the script)."""
-    p = vdir / fname
+def _own_file(vfd: int, vname: str, fname: str) -> None:
+    """Refuse (with a message for the client) anything that is not a plain, single-linked,
+    bounded file of ours in the version folder: no symlink/hardlink/FIFO tricks from a script
+    or from a version folder written by an older server. The copy re-checks by descriptor."""
     try:
-        st = os.lstat(p)
+        files.plain_stat(fname, vfd, MAX_MESH_BYTES)
     except FileNotFoundError:
-        raise ValueError(f"{vdir.name}/{fname} is missing; rebuild with build_model") from None
-    if not stat.S_ISREG(st.st_mode) or st.st_nlink != 1:
-        raise ValueError(f"{vdir.name}/{fname} is not a plain file; refusing to export it")
-    return p
+        raise ValueError(f"{vname}/{fname} is missing; rebuild with build_model") from None
+    except files.BoundaryError:
+        raise ValueError(f"{vname}/{fname} is not a plain file; refusing to export it") from None
+
+
+def _copy_into(vfd: int, fname: str, folder: Path, dst_name: str) -> None:
+    dfd = files.open_dir(folder)
+    try:
+        files.copy_file(fname, vfd, dst_name, dfd, MAX_MESH_BYTES, replace=False)
+    finally:
+        os.close(dfd)
 
 
 def _text(v, label, limit) -> str:
@@ -172,9 +181,18 @@ def make_bundle(project: str, vdir: Path, result: dict, printer, quantities=None
                 "error": f"not exported: {[o['part'] for o in oversize]} exceed the build volume "
                          f"{vol} mm of {printer['name']} in their print pose"}
 
-    src = {"step": {n: _own_file(vdir, f"part_{n}.step") for n in parts},
-           "stl": {n: _own_file(vdir, f"print_{n}.stl") for n in parts},
-           "model": _own_file(vdir, "model.py")}
+    vfd = files.open_dir(vdir)          # the version folder itself; its files are checked below
+    try:
+        for fname in [*(f"part_{n}.step" for n in parts), *(f"print_{n}.stl" for n in parts), "model.py"]:
+            _own_file(vfd, vdir.name, fname)
+        return _write_bundle(project, vdir, vfd, result, printer, parts, rows, quantities, material, hardware,
+                             notes, part_notes, include_zip)
+    finally:
+        os.close(vfd)
+
+
+def _write_bundle(project, vdir, vfd, result, printer, parts, rows, quantities, material, hardware, notes,
+                  part_notes, include_zip) -> dict:
     bname = f"{project}_{vdir.name}_print"
     manifest_parts, warnings = [], []
     for name, info, f in rows:
@@ -222,9 +240,9 @@ def make_bundle(project: str, vdir: Path, result: dict, printer, quantities=None
         for sub in ("stl", "step", "source"):
             (root / sub).mkdir(parents=True)
         for p in manifest_parts:
-            shutil.copyfile(src["stl"][p["name"]], root / p["stl"])
-            shutil.copyfile(src["step"][p["name"]], root / p["step"])
-        shutil.copyfile(src["model"], root / "source" / "model.py")
+            _copy_into(vfd, f"print_{p['name']}.stl", root / "stl", f"{p['name']}.stl")
+            _copy_into(vfd, f"part_{p['name']}.step", root / "step", f"{p['name']}.step")
+        _copy_into(vfd, "model.py", root / "source", "model.py")
         (root / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
         (root / "PRINT_GUIDE_ja.txt").write_text(guide(manifest), encoding="utf-8")
         handoff_text = handoff(manifest, folder)
@@ -237,8 +255,8 @@ def make_bundle(project: str, vdir: Path, result: dict, printer, quantities=None
                         z.write(f, f"{bname}/{f.relative_to(root).as_posix()}")
         if folder.is_symlink() or folder.is_file():
             folder.unlink()
-        elif folder.exists():
-            shutil.rmtree(folder)
+        elif folder.exists() and not files.wipe(folder):   # an earlier export, or whatever was planted there
+            raise ValueError(f"could not replace the old export folder {folder}")
         os.replace(root, folder)
         # a ZIP from an earlier export would no longer match the folder: replace it or remove it
         if include_zip:
@@ -246,7 +264,7 @@ def make_bundle(project: str, vdir: Path, result: dict, printer, quantities=None
         elif zdest.is_symlink() or zdest.is_file():
             zdest.unlink()
     finally:
-        shutil.rmtree(tmp, ignore_errors=True)
+        files.wipe(tmp)
 
     return {"ok": True, "folder": str(folder), "zip": str(zdest) if include_zip else None,
             "manifest_path": str(folder / "manifest.json"), "guide_path": str(folder / "PRINT_GUIDE_ja.txt"),

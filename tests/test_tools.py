@@ -8,9 +8,9 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-TMP = Path(tempfile.mkdtemp(prefix="svmcp-"))
-os.environ["SPATIALVIBE_HOME"] = str(TMP / "home")
-os.environ["SPATIALVIBE_PUBLISH"] = f"dir:{TMP / 'pub'}"
+# test_isolation.py may already have chosen the suite's temp home (the server module is imported once)
+TMP = Path(os.environ.setdefault("SPATIALVIBE_HOME", str(Path(tempfile.mkdtemp(prefix="svmcp-")) / "home"))).parent
+os.environ.setdefault("SPATIALVIBE_PUBLISH", f"dir:{TMP / 'pub'}")
 os.environ.pop("SPATIALVIBE_PRINTER", None)
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "reel"))
@@ -453,6 +453,40 @@ class DoctorTests(unittest.TestCase):
                 self.assertIn("not writable", detail)
         finally:
             ro.chmod(0o700)
+
+
+class StdioTests(unittest.TestCase):
+    """Over a real MCP stdio connection the tools answer and the server's own error text reaches
+    the client (the API that Claude sees is unchanged by the isolation work)."""
+
+    def test_tools_and_error_text_over_stdio(self):
+        import anyio
+        from mcp.client.session import ClientSession
+        from mcp.client.stdio import StdioServerParameters, stdio_client
+
+        env = dict(os.environ, PYTHONPATH=str(ROOT), SPATIALVIBE_HOME=str(TMP / "stdio-home"))
+        params = StdioServerParameters(command=sys.executable, args=["-m", "spatialvibe_mcp"], env=env, cwd=str(ROOT))
+
+        async def go():
+            async with stdio_client(params) as (r, w):
+                async with ClientSession(r, w) as s:
+                    await s.initialize()
+                    tools = sorted(t.name for t in (await s.list_tools()).tools)
+                    missing = await s.call_tool("preview", {"project": "nothing-here"})
+                    bad = await s.call_tool("build_model", {"project": "../x", "code": "x"})
+                    built = await s.call_tool("build_model", {"project": "stdio", "code": BOX})
+                    listed = await s.call_tool("list_projects", {})
+                    return tools, missing, bad, built, listed
+
+        tools, missing, bad, built, listed = anyio.run(go)
+        self.assertEqual(tools, ["build_model", "export_print", "get_code", "list_projects", "preview", "publish_ar"])
+        self.assertTrue(missing.is_error)
+        self.assertIn("no versions yet", missing.content[0].text)
+        self.assertTrue(bad.is_error)
+        self.assertIn("project must match", bad.content[0].text)
+        self.assertFalse(built.is_error, built)
+        self.assertTrue(json.loads(built.content[0].text)["ok"])
+        self.assertFalse(listed.is_error)
 
 
 class ReelTests(unittest.TestCase):

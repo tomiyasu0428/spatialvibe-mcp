@@ -6,13 +6,13 @@ import argparse
 import json
 import os
 import shlex
-import shutil
-import subprocess
 import sys
-import tempfile
 from importlib import metadata
 from pathlib import Path
 
+from . import _build as build
+from . import _files as files
+from . import _isolation as iso
 from . import printing
 
 REPO = Path(__file__).resolve().parent.parent
@@ -59,10 +59,7 @@ def checks(smoke=True, printer=None):
             yield False, f"package {name}", "not installed — run scripts/setup.sh"
             continue
         yield got == want, f"package {name}", f"{got} (requirements.txt: {want})"
-    if sys.platform == "darwin":
-        yield bool(shutil.which("sandbox-exec")), "sandbox-exec", "isolates model scripts"
-    else:
-        yield None, "sandbox-exec", "not macOS: model scripts run without the sandbox"
+    yield _sandbox()
 
     home = Path(os.environ.get("SPATIALVIBE_HOME", DEFAULT_HOME)).expanduser().absolute()
     yield _data_folder(home)
@@ -91,6 +88,16 @@ def checks(smoke=True, printer=None):
         yield _smoke()
 
 
+def _sandbox():
+    """The sandbox is required: without it the server refuses every build, preview and AR export."""
+    try:
+        path = iso.sandbox_exec()
+        iso.trusted_roots()
+    except files.BoundaryError as e:
+        return False, "sandbox-exec", f"{e} (there is no unsandboxed fallback)"
+    return True, "sandbox-exec", f"{path} isolates model scripts, previews and AR export"
+
+
 def _data_folder(home: Path):
     """OK if home is a writable folder, or does not exist yet but can be created (first install)."""
     if home.is_dir():
@@ -109,22 +116,19 @@ def _data_folder(home: Path):
 
 
 def _smoke():
-    """Build a tiny block through the real runner, outside the user's data folder."""
-    with tempfile.TemporaryDirectory(prefix="svdoctor-") as d:
-        out = Path(d)
-        code = out / "model.py"
-        code.write_text("from build123d import *\nparts = {'block': Box(20, 10, 5)}\n"
-                        "print_orientation = {'block': (0, 90, 0)}\n")
-        env = dict(os.environ, PYTHONPATH=str(REPO), PYTHONDONTWRITEBYTECODE="1")
-        try:
-            p = subprocess.run([sys.executable, "-m", "spatialvibe_mcp._runner", str(code), str(out)],
-                               capture_output=True, text=True, timeout=180, env=env, cwd=out)
-            res = json.loads([ln for ln in p.stdout.splitlines() if ln.startswith("{")][-1])
-        except Exception as e:  # noqa: BLE001 — report any failure as a failed check
-            return False, "test build", repr(e)[:300]
-        ok = res.get("ok") and (out / "print_block.stl").exists()
-        size = res.get("parts", {}).get("block", {}).get("print", {}).get("size_mm_exact")
-        return bool(ok), "test build", f"20x10x5 block, print size {size}" if ok else str(res.get("error"))[:300]
+    """Build a tiny block through the real runner, sandboxed exactly like the server does, in a
+    scratch folder that is deleted afterwards. Refused (NG) when the sandbox is unavailable."""
+    code = ("from build123d import *\nparts = {'block': Box(20, 10, 5)}\n"
+            "print_orientation = {'block': (0, 90, 0)}\n")
+    try:
+        with iso.Job(timeout=180) as job:
+            res = build.result_of(job, build.run_script(job, code), None)
+            if not res["ok"] or not job.output_is_plain("print_block.stl"):
+                return False, "test build", str(res.get("error", "no print file"))[:300]
+    except (files.BoundaryError, OSError, ValueError) as e:  # any failure is a failed check
+        return False, "test build", f"refused: {e}"[:300]
+    size = res.get("parts", {}).get("block", {}).get("print", {}).get("size_mm_exact")
+    return True, "test build", f"20x10x5 block, print size {size}"
 
 
 def main(argv=None):

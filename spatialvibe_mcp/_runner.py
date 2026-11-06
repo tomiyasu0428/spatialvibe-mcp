@@ -1,12 +1,16 @@
 """Runs one model script in a child process and exports its parts.
 
-Usage: python -m spatialvibe_mcp._runner <code.py> <out_dir>
+Usage: python -m spatialvibe_mcp._runner <code.py> <out_dir> <result.json>
 The script must define `parts` (dict name -> build123d Shape, the things to print) and may
 define `context` (dict name -> Shape, surroundings shown translucent, never printed) and
 `print_orientation` (dict part name -> (rx, ry, rz) degrees, applied like build123d Rot).
 part_*.stl/step keep the assembled pose (preview, AR); print_*.stl holds each part turned to
 its print pose (as modelled if not given), centred on X/Y and resting on z=0.
-Prints one JSON object on the last line of stdout.
+Writes one JSON object to <result.json>.
+
+This process runs untrusted code: the server starts it inside the sandbox (see _isolation.py)
+with a scratch folder, and treats everything it writes — files and this JSON — as hostile until
+validated. The script can monkeypatch anything here; nothing below is a security boundary.
 """
 import json
 import math
@@ -16,11 +20,14 @@ import sys
 import traceback
 from pathlib import Path
 
+from spatialvibe_mcp._isolation import apply_child_limits
+
 NAME = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
+RESULT = None
 
 
 def fail(msg):
-    print(json.dumps({"ok": False, "error": msg}, ensure_ascii=False))
+    Path(RESULT).write_text(json.dumps({"ok": False, "error": msg}, ensure_ascii=False), encoding="utf-8")
     sys.exit(0)
 
 
@@ -74,8 +81,10 @@ def bbox(shape):
 
 
 def main():
-    code_path, out = Path(sys.argv[1]), Path(sys.argv[2])
+    global RESULT
+    code_path, out, RESULT = Path(sys.argv[1]), Path(sys.argv[2]), sys.argv[3]
     sys.argv = [str(code_path)]  # the script must not see the runner's arguments
+    apply_child_limits()         # before any untrusted code
     try:
         ns = runpy.run_path(str(code_path), run_name="__main__")
     except SystemExit:
@@ -123,7 +132,7 @@ def main():
             continue
         if v > 1.0:  # mm^3
             result["interference"].append({"a": a, "b": b, "overlap_cm3": round(v / 1000, 3)})
-    print(json.dumps(result, ensure_ascii=False))
+    Path(RESULT).write_text(json.dumps(result, ensure_ascii=False), encoding="utf-8")
 
 
 if __name__ == "__main__":
