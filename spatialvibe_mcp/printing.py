@@ -15,6 +15,9 @@ import zipfile
 from datetime import datetime
 from pathlib import Path
 
+from ._artifacts import FILE_LIMIT, TOTAL_LIMIT, safe_bytes
+
+
 PRESETS = {"a1mini": ("Bambu Lab A1 mini", [180.0, 180.0, 180.0])}
 EPS = 1e-6  # mm; float noise only — sizes are compared unrounded
 NAME = re.compile(r"^[A-Za-z0-9_-]{1,40}$")
@@ -221,10 +224,13 @@ def make_bundle(project: str, vdir: Path, result: dict, printer, quantities=None
         root = tmp / bname
         for sub in ("stl", "step", "source"):
             (root / sub).mkdir(parents=True)
-        for p in manifest_parts:
-            shutil.copyfile(src["stl"][p["name"]], root / p["stl"])
-            shutil.copyfile(src["step"][p["name"]], root / p["step"])
-        shutil.copyfile(src["model"], root / "source" / "model.py")
+        remaining = TOTAL_LIMIT
+        copies = [(src[fmt][p["name"]], root / p[fmt]) for p in manifest_parts for fmt in ("stl", "step")]
+        copies.append((src["model"], root / "source" / "model.py"))
+        for source, dest in copies:
+            data = safe_bytes(source, min(FILE_LIMIT, remaining))
+            remaining -= len(data)
+            dest.write_bytes(data)
         (root / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1), encoding="utf-8")
         (root / "PRINT_GUIDE_ja.txt").write_text(guide(manifest), encoding="utf-8")
         handoff_text = handoff(manifest, folder)

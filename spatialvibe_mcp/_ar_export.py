@@ -1,20 +1,17 @@
-"""Unintegrated candidate: immutable, isolated export for a future AR uploader.
-
-No credentials, network, server changes or persistent project writes. Import with
-the reviewed SpatialVibe checkout on PYTHONPATH. This is an integration candidate,
-not a deployed publisher or a replacement for generated-code isolation.
-"""
+"""Prepare an immutable AR snapshot. Only the trusted parent handles publication credentials."""
 from dataclasses import dataclass
 import hashlib
-import os
+import json
+import math
 from pathlib import Path
 import re
-import stat
-import tempfile
+import subprocess
+from ._scratch import scratch_directory
 
-from .usdz import build_usdz, usdz_size_m
+from ._artifacts import safe_bytes
+from ._isolation import run_isolated
 
-MESH = re.compile(r"(?:part|ctx)_[A-Za-z0-9_-]+\.stl\Z")
+MESH = re.compile(r"(?:part|ctx)_[A-Za-z0-9_-]{1,40}\.stl")
 MAX_BYTES = 64 * 1024 * 1024
 
 
@@ -27,44 +24,40 @@ class Export:
     ar_floor_mm: float | None
 
 
-def export_snapshot(version: Path, include_context: bool = True,
-                    floor_z: float | None = None, max_bytes: int = MAX_BYTES) -> Export:
-    """Snapshot only regular mesh files, export privately, return the exact bytes to upload.
-
-    Each call owns its temporary directory, so context variants never overwrite one
-    another. This protects export integrity; callers must separately authorize which
-    project/version may be published and retain printable dimensions from result.json.
-    """
-    if type(include_context) is not bool or type(max_bytes) is not int or max_bytes < 1:
+def export_snapshot(version: Path, include_context: bool = True, floor_z: float | None = None,
+                    max_bytes: int = MAX_BYTES, *, timeout: int = 180) -> Export:
+    """Parse untrusted mesh data in a separate sandbox; upload the bytes we actually checked."""
+    if type(include_context) is not bool or type(max_bytes) is not int or not 1 <= max_bytes <= MAX_BYTES:
         raise ValueError("Invalid export options")
-    if not include_context:
-        floor_z = None
-    fd = os.open(version, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    try:
-        with tempfile.TemporaryDirectory(prefix="spatialvibe-ar-") as directory:
-            work = Path(directory)
-            names = sorted(name for name in os.listdir(fd) if MESH.fullmatch(name)
-                           and (include_context or name.startswith("part_")))
-            if not any(name.startswith("part_") for name in names):
-                raise ValueError("No printable meshes")
-            total = 0
-            for name in names:
-                source = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=fd)
-                with os.fdopen(source, "rb") as stream:
-                    if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
-                        raise ValueError("Only regular mesh files may be exported")
-                    with (work / name).open("xb") as destination:
-                        while block := stream.read(min(1024 * 1024, max_bytes - total + 1)):
-                            total += len(block)
-                            if total > max_bytes:
-                                raise ValueError("Input meshes exceed export limit")
-                            destination.write(block)
-            package = build_usdz(work, include_context, floor_z)
-            with package.open("rb") as stream:
-                body = stream.read(max_bytes + 1)
-            if len(body) > max_bytes:
-                raise ValueError("USDZ exceeds export limit")
-            return Export(body, hashlib.sha256(body).hexdigest(),
-                          tuple(usdz_size_m(package)), include_context, floor_z)
-    finally:
-        os.close(fd)
+    floor_z = floor_z if include_context else None
+    if floor_z is not None and (type(floor_z) not in (int, float) or not math.isfinite(floor_z)):
+        raise ValueError("ar_floor must be a finite number")
+    with scratch_directory("spatialvibe-ar-") as work:
+        total = count = 0
+        has_parts = False
+        for f in version.iterdir():
+            if MESH.fullmatch(f.name) and (include_context or f.name.startswith("part_")):
+                count += 1
+                if count > 1024:
+                    raise ValueError("Too many mesh files")
+                data = safe_bytes(f, max_bytes - total)
+                total += len(data)
+                (work / f.name).write_bytes(data)
+                has_parts |= f.name.startswith("part_")
+        if not has_parts:
+            raise ValueError("No printable meshes")
+        try:
+            r = run_isolated(work, Path(__file__).resolve().parent.parent, "usdz",
+                             [work, int(include_context), json.dumps(floor_z)], timeout)
+        except subprocess.TimeoutExpired:
+            raise ValueError("AR export timed out") from None
+        if r.returncode:
+            # Forward only the placement error that the user can fix.
+            errors = [s for s in r.stderr.splitlines() if s.startswith("ar_floor ")]
+            raise ValueError(errors[-1][:300] if errors else "AR export failed")
+        body = safe_bytes(work / "model.usdz", max_bytes)
+        size = json.loads(safe_bytes(work / "size.json", 1024))
+        if not isinstance(size, list) or len(size) != 3 or not all(
+                type(n) in (int, float) and math.isfinite(n) and n >= 0 for n in size):
+            raise ValueError("AR export produced invalid extents")
+        return Export(body, hashlib.sha256(body).hexdigest(), tuple(size), include_context, floor_z)

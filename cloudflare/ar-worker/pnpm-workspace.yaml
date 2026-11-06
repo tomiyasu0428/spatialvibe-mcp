@@ -1,0 +1,4 @@
+# Miniflare currently pins older releases of these local test dependencies.
+overrides:
+  "miniflare>sharp": "0.35.5"
+  "miniflare>undici": "7.30.2"
