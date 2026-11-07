@@ -45,6 +45,25 @@ body.capture .stage { width: 100vw; height: 100vh; aspect-ratio: auto; }
 .wish div { font-size: 3.4cqw; font-weight: 900; letter-spacing: -0.04em; text-shadow: 0 0.2cqw 1.2cqw rgba(0,0,0,.7); }
 .wish div b { color: var(--orange); font-weight: 900; }
 
+/* problems card */
+.problems { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; padding: 0 12cqw; gap: 1.6cqw; }
+.pr { font-size: 3cqw; font-weight: 800; letter-spacing: -0.04em; display: flex; align-items: center; gap: 1.4cqw; }
+.pr i { font: 800 1.6cqw var(--lat); font-style: normal; width: 3cqw; height: 3cqw; border-radius: 50%; border: 0.2cqw solid var(--orange); color: var(--orange); display: flex; align-items: center; justify-content: center; flex: none; }
+.so { font-size: 2cqw; font-weight: 500; opacity: 0.8; margin-top: 2.4cqw; }
+.brand { font-size: 8cqw; font-weight: 900; letter-spacing: -0.045em; line-height: 1; } .brand b { color: var(--orange); font-family: var(--lat); letter-spacing: -0.02em; font-weight: 900; }
+.problems .sub { font-size: 1.7cqw; font-weight: 500; opacity: 0.8; }
+/* how scene (instructions + tools) */
+.how { position: absolute; left: 6cqw; right: 6cqw; top: 7cqw; bottom: 6cqw; display: flex; flex-direction: column; gap: 1.6cqw; }
+.how .h { font-size: 3.2cqw; font-weight: 900; letter-spacing: -0.045em; line-height: 1.1; } .how .h b { color: var(--orange); font-weight: 900; }
+.how .s { font-size: 1.45cqw; font-weight: 500; opacity: 0.8; }
+.rules { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2cqw; margin-top: 0.6cqw; }
+.rule { border: 1px solid color-mix(in srgb, var(--orange) 55%, transparent); background: color-mix(in srgb, var(--orange) 8%, transparent); padding: 1.3cqw 1.4cqw; display: flex; flex-direction: column; gap: 0.6cqw; min-height: 11cqw; }
+.rule .n { font: 800 1.1cqw var(--mono); color: var(--orange); letter-spacing: 0.1em; }
+.rule .t { font-size: 1.55cqw; font-weight: 800; letter-spacing: -0.03em; line-height: 1.3; }
+.rule .d { font-size: 1.1cqw; font-weight: 500; opacity: 0.8; line-height: 1.5; }
+.eq { margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 1.6cqw; font-size: 2.2cqw; font-weight: 800; letter-spacing: -0.03em; }
+.eq span { padding: 0.6cqw 1.4cqw; border: 0.2cqw solid; } .eq .o { border-color: var(--orange); color: var(--orange); } .eq .b { border-color: var(--blue); color: var(--blue); }
+.eq em { font-style: normal; opacity: 0.6; }
 /* chat scene */
 .chat { position: absolute; left: 6cqw; right: 6cqw; top: 7cqw; bottom: 5cqw; display: flex; flex-direction: column; gap: 1.1cqw; }
 .msg { display: flex; gap: 1.2cqw; align-items: flex-start; max-width: 92%; }
@@ -114,13 +133,34 @@ body.capture .ctl { display: none; }
   <!-- Chapter 1: opening photos -->
   <div class="scene" id="s-open1"><div class="photo" style="background-image:url(assets/IMG_4623.jpg)"></div><div class="shade"></div><div class="cap">トラクターに、乗る。</div></div>
   <div class="scene" id="s-open2"><div class="photo" style="background-image:url(assets/IMG_4625.jpg)"></div><div class="shade"></div>
-    <div class="wish"><div>スマホを置きたい。</div><div><b>ラズパイ</b>を置きたい。</div><div>この箱も付けたい。</div></div></div>
+    <div class="wish"><div>ここに、<b>ラズパイ</b>のマウントを。</div><div><b>スマホホルダー</b>も。</div></div></div>
   <div class="scene" id="s-open3"><div class="photo" style="background-image:url(assets/IMG_4592.jpg)"></div><div class="shade"></div>
     <div class="q" style="left:19%;top:33%">?<span>ピラーのネジ穴</span></div><div class="q" style="left:70%;top:60%">?<span>ダッシュのトレイ</span></div>
-    <div class="cap small">付けられそうな場所は、いくつかある。</div></div>
+    <div class="cap small">現場のオーダーメイドを支える、3D プリンター。</div></div>
   <div class="scene" id="s-open4"><div class="photo" style="background-image:url(assets/IMG_4621.jpg)"></div><div class="shade"></div>
     <div class="q" style="left:40%;top:52%">?<span>ハンドレール</span></div>
     <div class="cap">でも、<b>何を作ればいいか</b>分からない。</div></div>
+  <div class="scene" id="s-open5"><div class="problems">
+    <div class="pr" data-at="0"><i>1</i>何を作ればいいか、分からない。</div>
+    <div class="pr" data-at="1500"><i>2</i>ぴったりの寸法に合わせるのが、難しい。</div>
+    <div class="pr" data-at="3000"><i>3</i>AI とのやりとりが、面倒。</div>
+    <div class="so" data-at="5200">そんな問題を解決する、</div>
+    <div class="brand" data-at="6000"><b>Pittari</b> MCP</div>
+    <div class="sub" data-at="6600">ぴったり — 写真から、3D プリントまで。</div>
+  </div></div>
+
+  <!-- Chapter 1b: how (instructions + tools) -->
+  <div class="scene" id="s-how"><div class="how">
+    <div class="h" data-at="0">ツールだけじゃない。<b>進め方の指示書</b>ごと、Claude に渡す。</div>
+    <div class="s" data-at="500">WORKFLOW.md が MCP の instructions として届く。だから、どの Claude でも同じ聞き方・同じ確かめ方になる。</div>
+    <div class="rules">
+      <div class="rule" data-at="1300"><div class="n">RULE 01</div><div class="t">まず、プリンターを聞く</div><div class="d">機種か造形サイズ。勝手に仮定しない。分からなければ「未確認」と返す。</div></div>
+      <div class="rule" data-at="2000"><div class="n">RULE 02</div><div class="t">選択肢で、2〜4 問を一度に</div><div class="d">現場で判断できることだけ聞く。構造の細部は Claude が決める。自由記入もできる。</div></div>
+      <div class="rule" data-at="2700"><div class="n">RULE 03</div><div class="t">寸法は測らせる前に、資料から</div><div class="d">公式図面・手順書・規格。推定した値は推定と書き、出典を残す。</div></div>
+      <div class="rule" data-at="3400"><div class="n">RULE 04</div><div class="t">自分でプレビューを見て、直す</div><div class="d">人に見せる前に 4 方向を確認。干渉・造形範囲・寸法の判定を読んでから答える。</div></div>
+    </div>
+    <div class="eq" data-at="4600"><span class="b">ツール 6 つ</span><em>+</em><span class="o">指示書</span><em>=</em><span>Pittari MCP</span></div>
+  </div></div>
 
   <!-- Chapter 2: conversation -->
   <div class="scene" id="s-chat">
@@ -213,7 +253,7 @@ body.capture .ctl { display: none; }
 
   // Chapters: [id, duration ms]. render.py renders each as its own clip and splices the process clip in between.
   const CHAPTERS = [
-    ["open", 15000], ["chat", 12500], ["build", 13000], ["ar", 9000], ["export", 9000], ["close", 7000],
+    ["open", 27000], ["how", 10000], ["chat", 12500], ["build", 13000], ["ar", 9000], ["export", 9000], ["close", 7000],
   ];
   const starts = {}; let acc = 0;
   for (const [id, d] of CHAPTERS) { starts[id] = acc; acc += d; }
@@ -228,10 +268,11 @@ body.capture .ctl { display: none; }
   function render(t) {
     // --- open: 4 photos, hard cuts, slow zoom
     const o = starts.open;
-    const cuts = [[0, 3200], [3200, 4300], [7500, 3700], [11200, 3800]];
-    ["s-open1", "s-open2", "s-open3", "s-open4"].forEach((id, i) => {
-      const [a, d] = cuts[i]; const on = t >= o + a && t < o + a + d && t < o + 15000;
-      const e = $(id); e.style.opacity = on ? (i === 3 ? 1 - ease(seg(t, o + 15000 - 400, 400)) : 1) : 0; e.style.zIndex = on ? 2 : 0;
+    const cuts = [[0, 3200], [3200, 4800], [8000, 4000], [12000, 4000], [16000, 11000]];
+    ["s-open1", "s-open2", "s-open3", "s-open4", "s-open5"].forEach((id, i) => {
+      const [a, d] = cuts[i]; const on = t >= o + a && t < o + a + d && t < o + 27000;
+      const e = $(id); e.style.opacity = on ? (i === 4 ? inFade(t, o + a, d, 400, 500) : 1) : 0; e.style.zIndex = on ? 2 : 0;
+      if (on && i === 4) { staged(e, o + a, t); return; }
       if (on) {
         const p = seg(t, o + a, d);
         e.querySelector(".photo").style.transform = `scale(${1.04 + p * 0.06})`;
@@ -240,6 +281,10 @@ body.capture .ctl { display: none; }
         e.querySelectorAll(".q").forEach((q, k) => { const s = ease(seg(t, o + a + 500 + k * 700, 400)); q.style.transform = `translate(-50%, -50%) scale(${s})`; q.style.opacity = s; });
       }
     });
+    // --- how
+    const hw = starts.how; const howOn = t >= hw && t < hw + 10000;
+    show("s-how", howOn, inFade(t, hw, 10000));
+    if (howOn) staged($("s-how"), hw, t);
     // --- chat
     const c = starts.chat; const chatOn = t >= c && t < c + 12500;
     show("s-chat", chatOn, inFade(t, c, 12500));

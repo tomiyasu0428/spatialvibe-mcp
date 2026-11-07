@@ -20,7 +20,7 @@ HERE = Path(__file__).resolve().parent
 PROCESS = HERE.parent / "process" / "process.mp4"
 FPS, W, H = 30, 1920, 1080
 # Final order: page chapters by id, or ("process", start_s, end_s) segments of the process clip.
-ORDER = ["open", ("process", 0, 31.05), "chat", "build", "ar", ("process", 31.05, None), "export", "close"]
+ORDER = ["open", ("process", 0, 31.05), "how", "chat", "build", "ar", ("process", 31.05, None), "export", "close"]
 
 
 def open_page(p):
