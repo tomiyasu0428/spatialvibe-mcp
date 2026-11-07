@@ -980,10 +980,6 @@ def main():
     _loads(ns.get("loads"), context, result, warn)
     _print_settings(ns.get("print_settings"), parts, result)
     _steps(ns.get("steps"), parts, context, result)
-    try:
-        _plate_3mf(parts, result, out, bed)
-    except Exception as e:   # the STLs are still there; the plate is a convenience
-        warn.append(f"print_plate.3mf を作れなかった: {type(e).__name__}: {str(e)[:80]}")
     if result.get("ar_floor_z") is not None:   # the AR floor must be below everything that is not the floor
         fz = result["ar_floor_z"]
         for n_, shp_ in list(parts.items()) + list(context.items()):

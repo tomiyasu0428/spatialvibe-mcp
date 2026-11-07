@@ -177,11 +177,19 @@ export function byteRange(header,size) {
   return {offset:start,length:Math.min(end,size-1)-start+1};
 }
 const SVG='<svg xmlns="http://www.w3.org/2000/svg" width="320" height="200" viewBox="0 0 320 200"><rect width="320" height="200" fill="#f4f2ec"/><path d="M100 80l60-30 60 30v60l-60 30-60-30zM100 80l60 30 60-30M160 110v60" fill="#ed9c4e" stroke="#372f28" stroke-width="3"/><text x="160" y="190" text-anchor="middle" font-family="sans-serif" font-size="16">AR Quick Look</text></svg>';
-function page(cap,expiry,model,nonce) {
+function page(cap,expiry,model) {
   const part=model.parts_size_m;
   const dimensions=[part.x_width,part.y_depth,part.z_height].map(n=>Number((n*1000).toFixed(2))).join(' × ');
   const floor=model.ar_floor_mm!==null ? `<p>床の位置: ${model.ar_floor_mm} mm。床にスマホを向けてから AR を開き、周囲の形を実物に合わせてください。</p>` : '';
-  return `<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex,nofollow"><title>SpatialVibe AR</title><h1>AR で形を確認</h1><p>印刷する部品の外形: ${dimensions} mm</p><p>有効期限: ${new Date(expiry*1000).toISOString()}</p><p>リンクを知っている人は期限内に閲覧できます。保存したコピーは期限後も残ります。</p><p id="guide">iPhone の Safari でこのリンクを開いてください。</p><a id="ar" hidden rel="ar" href="/ar/${cap}/model.usdz#allowsContentScaling=0"><img src="/ar/${cap}/thumbnail.svg" alt="AR を開く" width="320" height="200"></a>${floor}<p>縮尺変更を制限する設定です。実機での縮尺・位置精度は未検証です。大切な寸法は実測してください。</p><script nonce="${nonce}">const a=document.getElementById('ar');try{if(a.relList.supports('ar')){a.hidden=false;document.getElementById('guide').textContent='画像をタップして AR を開いてください。';}}catch{}</script></html>`;
+  const modelUrl=`/ar/${cap}/model.usdz#allowsContentScaling=0`;
+  return `<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta name="referrer" content="no-referrer"><meta name="robots" content="noindex,nofollow"><title>SpatialVibe AR</title>
+<h1>AR で形を確認</h1>
+<p>iPhoneのSafariで、下の画像をタップしてください。</p>
+<a id="ar" rel="ar" href="${modelUrl}"><img src="/ar/${cap}/thumbnail.svg" alt="ARで開く" width="320" height="200"></a>
+<p><a href="${modelUrl}">USDZファイルを直接開く</a></p>
+<p>アプリ内でモデルを開けない場合は、このページのリンクをSafariで開いてください。</p>
+<p>印刷する部品の外形: ${dimensions} mm</p>${floor}
+<p>有効期限: ${new Date(expiry*1000).toISOString()}</p><p>リンクを知っている人は期限内に閲覧できます。保存したコピーは期限後も残ります。</p><p>縮尺変更を制限する設定です。実機での縮尺・位置精度は未検証です。大切な寸法は実測してください。</p></html>`;
 }
 async function view(request,env,path,now) {
   const [,cap,asset]=/^\/ar\/([A-Za-z0-9_-]{86})(?:\/(model\.usdz|thumbnail\.svg))?$/.exec(path) ?? [];
@@ -206,16 +214,14 @@ async function view(request,env,path,now) {
     if (!permitted(got)) { if(got?.body) await got.body.cancel(); fail(404,'Not found'); }
     return response(got.body,range?206:200,MIME,headers);
   }
-  let body,type,extra={};
+  let body,type;
   if (asset==='thumbnail.svg') { body=SVG; type='image/svg+xml'; }
   else {
-    const nonce=b64(crypto.getRandomValues(new Uint8Array(16)));
-    body=page(cap,Number(object.customMetadata.expires_at),JSON.parse(object.customMetadata.model),nonce);
+    body=page(cap,Number(object.customMetadata.expires_at),JSON.parse(object.customMetadata.model));
     type='text/html; charset=utf-8';
-    extra['Content-Security-Policy']=`default-src 'none'; img-src 'self'; script-src 'nonce-${nonce}'; style-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'`;
   }
   if (!live(object,now)) fail(404,'Not found');
-  return response(request.method==='HEAD'?null:body,200,type,{...extra,'Content-Length':encoder.encode(body).length});
+  return response(request.method==='HEAD'?null:body,200,type,{'Content-Length':encoder.encode(body).length});
 }
 export function createWorker({now=()=>Math.floor(Date.now()/1000)}={}) {
   return {async fetch(request,env) {
