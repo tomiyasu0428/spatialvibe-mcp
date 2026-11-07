@@ -12,10 +12,11 @@ FIX = str(HERE / "assets" / "narration_fix.wav")   # the three re-recorded lines
 OUT = str(HERE / "demo_narrated.mp4")
 VIDEO_DUR = 139.25
 # (video_start_s, src_start_s, src_end_s, label[, 'fix'])  — 'fix' = assets/narration_fix.wav, else assets/narration.wav
-# chapter starts: tease 0, tractor 8.8, open 11.3 (holes 11.3, handrail 20.3, problems 24.3), process 37.3, how 46.3,
+# chapter starts: tractor 0, tease 2.5 (Pi 2.5, holes 5.5), open 11.3 (holes 11.3, handrail 20.3, problems 24.3), process 37.3, how 46.3,
 # field 52.8, phone 57.8..92.3, ar 92.3, done 101.3, tools 111.8, export 119.25, close 128.25
 CUES = [
-        (0.3, 0.00, 8.42, "【録り直し1】トラクターの柱に…作れるでしょうか", "fix"),
+        (0.3, 0.00, 2.60, "【録り直し1a】トラクターの柱に、ラズベリーパイ", "fix"),
+    (5.9, 3.36, 8.42, "【録り直し1b】この穴に合う部品…作れるでしょうか", "fix"),
     (11.7, 8.35, 10.86, "ここに、ラズベリーパイのマウントを置きたい"),
     (14.4, 11.58, 12.99, "スマホホルダーも作りたい"),
     (16.0, 14.30, 18.28, "現場のオーダーメイド…3Dプリンター"),
@@ -69,7 +70,7 @@ for i, cue in enumerate(CUES):
     mixes.append(f"[n{i}]")
 n = len(CUES)
 # music: 0.28 under speech, 0.55 in the speech-free stretches (AR footage, tail), fade out at the end
-quiet = [(8.8, 11.3), (86.8, 92.3), (138.3, VIDEO_DUR)]
+quiet = [(86.8, 92.3), (138.3, VIDEO_DUR)]
 expr = "+".join([f"0.27*between(t,{a},{b})" for a, b in quiet])
 music = (f"[2:a]atrim=0:{VIDEO_DUR},asetpts=PTS-STARTPTS,afade=t=in:d=1,afade=t=out:st={VIDEO_DUR - 4}:d=4,"
          f"volume='0.28+{expr}':eval=frame[m]")

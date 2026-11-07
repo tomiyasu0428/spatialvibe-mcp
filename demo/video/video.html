@@ -354,9 +354,9 @@ body.capture .ctl { display: none; }
     const te = starts.tease; const teOn = t >= te && t < te + 8800;
     { const e = $("s-tease"); e.style.opacity = teOn ? 1 - ease(seg(t, te + 8400, 400)) : 0; e.style.zIndex = teOn ? 2 : 0;
       if (teOn) { e.querySelector(".photo").style.transform = `scale(${1.08 - seg(t, te, 8800) * 0.06})`; e.querySelector(".cap").style.opacity = 1;
-        const hp = ease(seg(t, te + 2900, 500)); const holes = $("tease-holes"); holes.style.opacity = hp; holes.style.transform = `scale(${1.02 + seg(t, te + 2900, 5900) * 0.06})`;
+        const hp = ease(seg(t, te + 2700, 500)); const holes = $("tease-holes"); holes.style.opacity = hp; holes.style.transform = `scale(${1.02 + seg(t, te + 2700, 6100) * 0.06})`;
         const sm = $("tease-small"); rise(sm, ease(seg(t, te + 300, 450))); sm.style.opacity = Math.min(sm.style.opacity, 1 - hp);
-        const q = $("tease-q"); const qp = ease(seg(t, te + 3300, 500)); q.style.display = "block"; q.style.opacity = qp; q.style.transform = `translateY(${(1 - qp) * 1.2}cqw)`; } }
+        const q = $("tease-q"); const qp = ease(seg(t, te + 3200, 500)); q.style.display = "block"; q.style.opacity = qp; q.style.transform = `translateY(${(1 - qp) * 1.2}cqw)`; } }
     // --- chat
     const c = starts.chat; const chatOn = t >= c && t < c + 12500;
     show("s-chat", chatOn, inFade(t, c, 12500));
