@@ -256,14 +256,19 @@ body.capture .ctl { display: none; }
 
   <!-- Chapter 4: AR -->
   <div class="scene" id="s-ar"><div class="ar">
-    <div class="phone" id="phone"><div class="scr sim" style="background-image:url(assets/ar_sim.png)"></div><div class="tag" id="phonetag">AR 見え方の模擬（実機スクショに差し替え）</div></div>
+    <div class="phone" id="phone"><div class="scr" style="background-image:url(assets/ar_real.jpg)"></div><div class="tag" id="phonetag">iPhone 実機 · AR Quick Look</div></div>
     <div class="artext">
       <div class="h" data-at="0">現場で、<b>実寸</b>で重ねる。</div>
-      <div class="p" data-at="900"><span class="mono">publish_ar</span> が実寸の USDZ を作り、iPhone に届ける。iCloud Drive か、期限付きのリンク。</div>
+      <div class="p" data-at="600">ピラーの「？」の場所に、青い実寸モデル。黄色い板は床、柱の先が取付け点。</div>
+      
       <div class="p" data-at="1800">実物に重ねて、ずれを一言。それが次の版になる。</div>
       <div class="p lim" data-at="2600">AR は形と置き場所の目安。強度や公差は保証しない。1 個試し刷りして、実物で確かめる。</div>
-      <div class="st" data-at="3200"><span>iPhone 実機: 実寸で表示 確認済み</span></div>
+      <div class="st" data-at="3200"><span>実機で実寸 確認済み</span><span>縮尺ロック 確認済み</span></div>
     </div></div></div>
+
+  <!-- Chapter 4b: printed and mounted -->
+  <div class="scene" id="s-done1"><div class="photo" style="background-image:url(assets/bracket.jpg)"></div><div class="shade"></div><div class="cap">印刷して、ピラーのネジ穴に。</div></div>
+  <div class="scene" id="s-done2"><div class="photo" style="background-image:url(assets/pi_mounted.jpg)"></div><div class="shade"></div><div class="cap">「？」だった場所に、<b>ぴったり。</b></div></div>
 
   <!-- Chapter 5: export -->
   <div class="scene" id="s-export"><div class="ex">
@@ -309,7 +314,7 @@ body.capture .ctl { display: none; }
 
   // Chapters: [id, duration ms]. render.py renders each as its own clip and splices the process clip in between.
   const CHAPTERS = [
-    ["open", 27000], ["ba", 8000], ["how", 8000], ["chat", 12500], ["build", 13000], ["field", 11000], ["ar", 9000], ["export", 9000], ["close", 11000],
+    ["open", 27000], ["ba", 8000], ["how", 8000], ["chat", 12500], ["build", 13000], ["field", 11000], ["ar", 9000], ["done", 8000], ["export", 9000], ["close", 11000],
   ];
   const starts = {}; let acc = 0;
   for (const [id, d] of CHAPTERS) { starts[id] = acc; acc += d; }
@@ -365,6 +370,13 @@ body.capture .ctl { display: none; }
     const a = starts.ar; const arOn = t >= a && t < a + 9000;
     show("s-ar", arOn, inFade(t, a, 9000));
     if (arOn) { staged($("s-ar"), a, t); const ph = ease(seg(t, a, 700)); $("phone").style.transform = `translateY(${(1 - ph) * 3}cqw)`; $("phone").style.opacity = ph; }
+    // --- done: two real photos
+    const dn = starts.done;
+    [["s-done1", 0, 4000], ["s-done2", 4000, 4000]].forEach(([id, a0, d0], i) => {
+      const on = t >= dn + a0 && t < dn + a0 + d0;
+      const e = $(id); e.style.opacity = on ? (i === 1 ? 1 - ease(seg(t, dn + 8000 - 400, 400)) : 1) : 0; e.style.zIndex = on ? 2 : 0;
+      if (on) { const q = seg(t, dn + a0, d0); e.querySelector(".photo").style.transform = `scale(${1.03 + q * 0.05})`; rise(e.querySelector(".cap"), ease(seg(t, dn + a0 + 350, 500))); }
+    });
     // --- export
     const x = starts.export; const exOn = t >= x && t < x + 9000;
     show("s-export", exOn, inFade(t, x, 9000));
