@@ -179,11 +179,11 @@ body.capture .ctl { display: none; }
     <div class="pr" data-at="0"><i>1</i>何を作ればいいか、分からない。</div>
     <div class="pr" data-at="1100"><i>2</i>ぴったりの寸法に合わせるのが、難しい。</div>
     <div class="pr" data-at="2200"><i>3</i>AI とのやりとりが、面倒。</div>
-    <div class="so" data-at="3600">そんな問題を解決する、</div>
-    <div class="brand" data-at="4200"><b>Pittari</b> MCP</div>
-    <div class="sub" data-at="5200">現場の写真と、数か所の寸法から。ぴったり取り付けられる部品を、3D プリントへ。</div>
-    <div class="def" data-at="5800">MCP ＝ Claude に道具と進め方を足す仕組み。必要なのは Mac の Claude Code と、iPhone と、3D プリンター。</div>
-    <div class="steps" data-at="6400"><span>写真を送る</span><em>→</em><span>質問に答える</span><em>→</em><span>数か所だけ測る</span><em>→</em><span>プレビューを見る</span><em>→</em><span>印刷する</span></div>
+    <div class="so" data-at="4800">そんな問題を解決する、</div>
+    <div class="brand" data-at="5400"><b>Pittari</b> MCP</div>
+    <div class="sub" data-at="6600">現場の写真と、数か所の寸法から。ぴったり取り付けられる部品を、3D プリントへ。</div>
+    <div class="def" data-at="7200">MCP ＝ Claude に道具と進め方を足す仕組み。必要なのは Mac の Claude Code と、iPhone と、3D プリンター。</div>
+    <div class="steps" data-at="7800"><span>写真を送る</span><em>→</em><span>質問に答える</span><em>→</em><span>数か所だけ測る</span><em>→</em><span>プレビューを見る</span><em>→</em><span>印刷する</span></div>
   </div></div>
 
   <!-- Chapter 1a: before / after -->
@@ -194,9 +194,9 @@ body.capture .ctl { display: none; }
       <div class="it" data-at="3600"><i>✕</i><span>実行は自分。壊れていても気づけない。</span></div>
     </div>
     <div class="col now"><div class="ch" data-at="400">Pittari なら<small>Claude + MCP</small></div>
-      <div class="it" data-at="1400"><i>✓</i><span>聞かれるのは、<b>選択肢と、数か所の寸法だけ</b>。</span></div>
-      <div class="it" data-at="2800"><i>✓</i><span>推定は、<b>推定と書く</b>。</span></div>
-      <div class="it" data-at="4200"><i>✓</i><span>実行して検査し、<b>実寸で重ねてから</b>印刷。</span></div>
+      <div class="it" data-at="5200"><i>✓</i><span>聞かれるのは、<b>選択肢と、数か所の寸法だけ</b>。</span></div>
+      <div class="it" data-at="9500"><i>✓</i><span>推定は、<b>推定と書く</b>。</span></div>
+      <div class="it" data-at="11000"><i>✓</i><span>実行して検査し、<b>実寸で重ねてから</b>印刷。</span></div>
     </div>
   </div></div>
 
@@ -314,7 +314,7 @@ body.capture .ctl { display: none; }
 
   // Chapters: [id, duration ms]. render.py renders each as its own clip and splices the process clip in between.
   const CHAPTERS = [
-    ["tease", 8800], ["open", 26000], ["ba", 8000], ["how", 8000], ["chat", 12500], ["build", 13000], ["field", 5000], ["ar", 9000], ["done", 10500], ["export", 9000], ["close", 11000],
+    ["tease", 8800], ["open", 26000], ["ba", 12000], ["how", 8000], ["chat", 12500], ["build", 13000], ["field", 5000], ["ar", 9000], ["done", 10500], ["export", 9000], ["close", 11000],
   ];
   const starts = {}; let acc = 0;
   for (const [id, d] of CHAPTERS) { starts[id] = acc; acc += d; }
@@ -343,8 +343,8 @@ body.capture .ctl { display: none; }
       }
     });
     // --- before / after
-    const ba = starts.ba; const baOn = t >= ba && t < ba + 8000;
-    show("s-ba", baOn, inFade(t, ba, 8000));
+    const ba = starts.ba; const baOn = t >= ba && t < ba + 12000;
+    show("s-ba", baOn, inFade(t, ba, 12000));
     if (baOn) staged($("s-ba"), ba, t);
     // --- how
     const hw = starts.how; const howOn = t >= hw && t < hw + 8000;
