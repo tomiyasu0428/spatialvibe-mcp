@@ -25,9 +25,8 @@ FPS, W, H = 30, 1920, 1080
 # Final order: page chapters by id, ("process", start_s, end_s, speed) segments of the process clip,
 # or ("footage", path, start_s, end_s, speed) for real footage under demo/video/assets/ (local only).
 ORDER = [
-    "tease",                                                  # the finished part, first
-    ("footage", "assets/board.mov", 0, 4.5, 1.0),            # real: boarding the tractor
-    "open", "ba", ("process", 0, 20.5, 1.35), "how", "field",
+    "tease",                                                  # the finished part, then the bare holes + the question
+    "open", ("process", 0, 12.2, 1.35), "how", "field",
     # real: the phone recording (Remote Control -> Claude -> questions -> dims -> preview -> AR link -> AR), captioned
     ("footage", "assets/phone.mov", 1.0, 4.5, 1.0, "写真と一言を送る"),
     ("footage", "assets/phone.mov", 10.5, 13.5, 1.0, "Claude が選択肢で聞く：どんな状態で付ける？"),
@@ -39,7 +38,7 @@ ORDER = [
     ("footage", "assets/phone.mov", 177.0, 180.5, 1.0, "推定した値は「推定」と明記"),
     ("footage", "assets/phone.mov", 183.0, 187.0, 1.0, "届いたリンクをタップ"),
     ("footage", "assets/phone.mov", 192.0, 194.5, 1.0, "AR ページ"),
-    ("footage", "assets/phone.mov", 198.0, 205.0, 1.0, "実寸で立つ（自宅の壁で試した版）"),
+    ("footage", "assets/phone.mov", 201.0, 204.0, 1.0, "自宅で試した AR。現場の画面は、次"),
     "ar", "done", ("process", 31.05, 38.5, 1.0), "export", "close",
 ]
 
