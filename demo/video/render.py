@@ -25,13 +25,15 @@ FPS, W, H = 30, 1920, 1080
 # Final order: page chapters by id, ("process", start_s, end_s, speed) segments of the process clip,
 # or ("footage", path, start_s, end_s, speed) for real footage under demo/video/assets/ (local only).
 ORDER = [
+    "tease",                                                  # the finished part, first
     ("footage", "assets/board.mov", 0, 4.5, 1.0),            # real: boarding the tractor
     "open", "ba", ("process", 0, 26.5, 1.25), "how", "field",
     # real: the phone recording (Remote Control -> Claude -> questions -> dims -> preview -> AR link -> AR)
     ("footage", "assets/phone.mov", 1.0, 4.5, 1.0), ("footage", "assets/phone.mov", 10.5, 13.5, 1.0),
     ("footage", "assets/phone.mov", 21.0, 23.5, 1.0), ("footage", "assets/phone.mov", 38.5, 42.0, 1.0),
     ("footage", "assets/phone.mov", 108.0, 111.0, 1.0), ("footage", "assets/phone.mov", 148.0, 151.0, 1.0),
-    ("footage", "assets/phone.mov", 166.0, 169.0, 1.0), ("footage", "assets/phone.mov", 183.0, 187.0, 1.0),
+    ("footage", "assets/phone.mov", 166.0, 169.0, 1.0), ("footage", "assets/phone.mov", 177.0, 180.5, 1.0),
+    ("footage", "assets/phone.mov", 183.0, 187.0, 1.0),
     ("footage", "assets/phone.mov", 192.0, 194.5, 1.0), ("footage", "assets/phone.mov", 198.0, 205.0, 1.0),
     "ar", "done", ("process", 31.05, None, 1.0), "export", "close",
 ]

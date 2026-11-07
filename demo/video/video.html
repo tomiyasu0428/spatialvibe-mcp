@@ -52,7 +52,10 @@ body.capture .stage { width: 100vw; height: 100vh; aspect-ratio: auto; }
 .pr i { font: 800 1.6cqw var(--lat); font-style: normal; width: 3cqw; height: 3cqw; border-radius: 50%; border: 0.2cqw solid var(--orange); color: var(--orange); display: flex; align-items: center; justify-content: center; flex: none; }
 .so { font-size: 2cqw; font-weight: 500; opacity: 0.8; margin-top: 2.4cqw; }
 .brand { font-size: 8cqw; font-weight: 900; letter-spacing: -0.045em; line-height: 1; } .brand b { color: var(--orange); font-family: var(--lat); letter-spacing: -0.02em; font-weight: 900; }
-.problems .sub { font-size: 1.7cqw; font-weight: 500; opacity: 0.8; }
+.problems .sub { font-size: 2cqw; font-weight: 700; }
+.steps { display: flex; align-items: center; gap: 0.9cqw; font-size: 1.5cqw; font-weight: 700; margin-top: 0.4cqw; }
+.steps span { border: 1px solid var(--orange); color: var(--orange); padding: 0.35cqw 1cqw; border-radius: 99px; }
+.steps em { font-style: normal; opacity: 0.6; }
 /* before / after */
 .ba { position: absolute; left: 6cqw; right: 6cqw; top: 7cqw; bottom: 6cqw; display: grid; grid-template-columns: 1fr 1fr; gap: 2.4cqw; }
 .col { display: flex; flex-direction: column; gap: 1.8cqw; justify-content: center; padding: 1.8cqw 2cqw; border: 1px solid #2a2c33; }
@@ -162,6 +165,8 @@ body.capture .ctl { display: none; }
 <div class="stage" id="stage">
   <!-- Chapter 1: opening photos -->
   <div class="scene" id="s-open1"><div class="photo" style="background-image:url(assets/IMG_4623.jpg)"></div><div class="shade"></div><div class="cap">トラクターに、乗る。</div></div>
+  <div class="scene" id="s-tease"><div class="photo" style="background-image:url(assets/pi_mounted.jpg)"></div><div class="shade"></div>
+    <div class="cap"><small>トラクターのピラーに、ラズパイ。</small>この部品を、写真から作る話。</div></div>
   <div class="scene" id="s-open2"><div class="photo" style="background-image:url(assets/IMG_4625.jpg)"></div><div class="shade"></div>
     <div class="wish"><div>ここに、<b>ラズパイ</b>のマウントを。</div><div><b>スマホホルダー</b>も。</div></div></div>
   <div class="scene" id="s-open3"><div class="photo" style="background-image:url(assets/IMG_4592.jpg)"></div><div class="shade"></div>
@@ -174,9 +179,10 @@ body.capture .ctl { display: none; }
     <div class="pr" data-at="0"><i>1</i>何を作ればいいか、分からない。</div>
     <div class="pr" data-at="1500"><i>2</i>ぴったりの寸法に合わせるのが、難しい。</div>
     <div class="pr" data-at="3000"><i>3</i>AI とのやりとりが、面倒。</div>
-    <div class="so" data-at="5200">そんな問題を解決する、</div>
-    <div class="brand" data-at="6000"><b>Pittari</b> MCP</div>
-    <div class="sub" data-at="6600">MCP ＝ Claude に、道具と進め方を足す仕組み。写真から、3D プリントまで。</div>
+    <div class="so" data-at="4800">そんな問題を解決する、</div>
+    <div class="brand" data-at="5400"><b>Pittari</b> MCP</div>
+    <div class="sub" data-at="6600">現場の写真から、ぴったり取り付けられる部品を、3D プリントへ。</div>
+    <div class="steps" data-at="7600"><span>写真を送る</span><em>→</em><span>質問に答える</span><em>→</em><span>プレビューを見る</span><em>→</em><span>印刷する</span></div>
   </div></div>
 
   <!-- Chapter 1a: before / after -->
@@ -259,7 +265,7 @@ body.capture .ctl { display: none; }
 
   <!-- Chapter 4b: printed and mounted -->
   <div class="scene" id="s-done1"><div class="photo" style="background-image:url(assets/bracket.jpg)"></div><div class="shade"></div><div class="cap"><small>素材を変えたので、取付け位置もハンドレールからピラーのネジ穴へ。版を重ねて、</small>印刷して、ネジ穴に。</div></div>
-  <div class="scene" id="s-done2"><div class="photo" style="background-image:url(assets/pi_mounted.jpg)"></div><div class="shade"></div><div class="cap">「？」だった場所に、<b>ぴったり。</b></div></div>
+  <div class="scene" id="s-done2"><div class="photo" style="background-image:url(assets/pi_mounted.jpg)"></div><div class="shade"></div><div class="cap">「？」だった場所に、<b>ぴったり。</b><small style="margin-top:0.8cqw;margin-bottom:0">使ったもの: iPhone、Mac の Claude Code、3D プリンター 1 台</small></div></div>
 
   <!-- Chapter 5: export -->
   <div class="scene" id="s-export"><div class="ex">
@@ -278,9 +284,10 @@ body.capture .ctl { display: none; }
     <div class="l1" data-at="0">この MCP サーバーを入れれば、普段の環境からそれができる。</div>
     <div class="l1" data-at="1400">あとは、印刷するだけ。</div>
     <div class="l2" data-at="3200">現場で必要なものを、最小限の手間で。</div>
-    <div class="big" data-at="4200"><b>Pittari</b>（ぴったり）</div>
-    <div class="url" data-at="5400">github.com/tomiyasu0428/spatialvibe-mcp</div>
-    <div class="meta" data-at="5400">PITTARI — CLAUDE + MCP — BUILT 2026.11.04–11.08</div>
+    <div class="l1" data-at="5000">現場の写真から、ぴったりの部品を 3D プリントへ。</div>
+    <div class="big" data-at="5600"><b>Pittari</b>（ぴったり）</div>
+    <div class="url" data-at="6400">github.com/tomiyasu0428/spatialvibe-mcp</div>
+    <div class="meta" data-at="6400">PITTARI — CLAUDE + MCP — BUILT 2026.11.04–11.08</div>
   </div></div>
 
   <div class="hud" aria-hidden="true">
@@ -305,7 +312,7 @@ body.capture .ctl { display: none; }
 
   // Chapters: [id, duration ms]. render.py renders each as its own clip and splices the process clip in between.
   const CHAPTERS = [
-    ["open", 23800], ["ba", 8000], ["how", 8000], ["chat", 12500], ["build", 13000], ["field", 5000], ["ar", 9000], ["done", 8000], ["export", 9000], ["close", 11000],
+    ["tease", 3500], ["open", 25300], ["ba", 8000], ["how", 8000], ["chat", 12500], ["build", 13000], ["field", 5000], ["ar", 9000], ["done", 10500], ["export", 9000], ["close", 11000],
   ];
   const starts = {}; let acc = 0;
   for (const [id, d] of CHAPTERS) { starts[id] = acc; acc += d; }
@@ -320,9 +327,9 @@ body.capture .ctl { display: none; }
   function render(t) {
     // --- open: 4 photos, hard cuts, slow zoom
     const o = starts.open;
-    const cuts = [[0, 4800], [4800, 4000], [8800, 4000], [12800, 11000]];
+    const cuts = [[0, 4800], [4800, 4000], [8800, 4000], [12800, 12500]];
     ["s-open2", "s-open3", "s-open4", "s-open5"].forEach((id, i) => {
-      const [a, d] = cuts[i]; const on = t >= o + a && t < o + a + d && t < o + 23800;
+      const [a, d] = cuts[i]; const on = t >= o + a && t < o + a + d && t < o + 25300;
       const e = $(id); e.style.opacity = on ? (i === 3 ? inFade(t, o + a, d, 400, 500) : 1) : 0; e.style.zIndex = on ? 2 : 0;
       if (on && i === 3) { staged(e, o + a, t); return; }
       if (on) {
@@ -341,6 +348,10 @@ body.capture .ctl { display: none; }
     const hw = starts.how; const howOn = t >= hw && t < hw + 8000;
     show("s-how", howOn, inFade(t, hw, 8000));
     if (howOn) staged($("s-how"), hw, t);
+    // --- tease
+    const te = starts.tease; const teOn = t >= te && t < te + 3500;
+    { const e = $("s-tease"); e.style.opacity = teOn ? 1 - ease(seg(t, te + 3100, 400)) : 0; e.style.zIndex = teOn ? 2 : 0;
+      if (teOn) { e.querySelector(".photo").style.transform = `scale(${1.08 - seg(t, te, 3500) * 0.05})`; rise(e.querySelector(".cap"), ease(seg(t, te + 300, 450))); } }
     // --- chat
     const c = starts.chat; const chatOn = t >= c && t < c + 12500;
     show("s-chat", chatOn, inFade(t, c, 12500));
@@ -363,9 +374,9 @@ body.capture .ctl { display: none; }
     if (arOn) { staged($("s-ar"), a, t); const ph = ease(seg(t, a, 700)); $("phone").style.transform = `translateY(${(1 - ph) * 3}cqw)`; $("phone").style.opacity = ph; }
     // --- done: two real photos
     const dn = starts.done;
-    [["s-done1", 0, 4000], ["s-done2", 4000, 4000]].forEach(([id, a0, d0], i) => {
+    [["s-done1", 0, 4500], ["s-done2", 4500, 6000]].forEach(([id, a0, d0], i) => {
       const on = t >= dn + a0 && t < dn + a0 + d0;
-      const e = $(id); e.style.opacity = on ? (i === 1 ? 1 - ease(seg(t, dn + 8000 - 400, 400)) : 1) : 0; e.style.zIndex = on ? 2 : 0;
+      const e = $(id); e.style.opacity = on ? (i === 1 ? 1 - ease(seg(t, dn + 10500 - 400, 400)) : 1) : 0; e.style.zIndex = on ? 2 : 0;
       if (on) { const q = seg(t, dn + a0, d0); e.querySelector(".photo").style.transform = `scale(${1.03 + q * 0.05})`; rise(e.querySelector(".cap"), ease(seg(t, dn + a0 + 350, 500))); }
     });
     // --- export
