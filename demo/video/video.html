@@ -166,7 +166,7 @@ body.capture .ctl { display: none; }
 <div class="stage" id="stage">
   <!-- Chapter 1: opening photos -->
   <div class="scene" id="s-open1"><div class="photo" style="background-image:url(assets/IMG_4623.jpg)"></div><div class="shade"></div><div class="cap">トラクターに、乗る。</div></div>
-  <div class="scene" id="s-tease"><div class="photo" style="background-image:url(assets/pi_mounted.jpg)"></div><div class="shade"></div>
+  <div class="scene" id="s-tease"><div class="photo" style="background-image:url(assets/pi_mounted.jpg)"></div><div class="photo" id="tease-holes" style="background-image:url(assets/IMG_4593.jpg)"></div><div class="shade"></div>
     <div class="cap"><small id="tease-small">トラクターの柱に、ラズパイ。</small><span id="tease-q">この穴に合う部品、<b>写真と 2 か所の寸法</b>で？</span></div></div>
   <div class="scene" id="s-open3"><div class="photo" style="background-image:url(assets/IMG_4592.jpg)"></div><div class="shade"></div>
     <div class="wish" style="left:auto;right:6cqw;align-items:flex-end;text-align:right"><div>ここに、<b>ラズパイ</b>のマウントを。</div><div><b>スマホホルダー</b>も。</div></div>
@@ -354,7 +354,9 @@ body.capture .ctl { display: none; }
     const te = starts.tease; const teOn = t >= te && t < te + 8800;
     { const e = $("s-tease"); e.style.opacity = teOn ? 1 - ease(seg(t, te + 8400, 400)) : 0; e.style.zIndex = teOn ? 2 : 0;
       if (teOn) { e.querySelector(".photo").style.transform = `scale(${1.08 - seg(t, te, 8800) * 0.06})`; e.querySelector(".cap").style.opacity = 1;
-        rise($("tease-small"), ease(seg(t, te + 300, 450))); const q = $("tease-q"); const qp = ease(seg(t, te + 3300, 500)); q.style.display = "block"; q.style.opacity = qp; q.style.transform = `translateY(${(1 - qp) * 1.2}cqw)`; } }
+        const hp = ease(seg(t, te + 2900, 500)); const holes = $("tease-holes"); holes.style.opacity = hp; holes.style.transform = `scale(${1.02 + seg(t, te + 2900, 5900) * 0.06})`;
+        const sm = $("tease-small"); rise(sm, ease(seg(t, te + 300, 450))); sm.style.opacity = Math.min(sm.style.opacity, 1 - hp);
+        const q = $("tease-q"); const qp = ease(seg(t, te + 3300, 500)); q.style.display = "block"; q.style.opacity = qp; q.style.transform = `translateY(${(1 - qp) * 1.2}cqw)`; } }
     // --- chat
     const c = starts.chat; const chatOn = t >= c && t < c + 12500;
     show("s-chat", chatOn, inFade(t, c, 12500));
