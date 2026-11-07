@@ -12,7 +12,7 @@ OUT = str(HERE / "demo_narrated.mp4")
 VIDEO_DUR = 163.5
 # (video_start_s, narration_start_s, narration_end_s, label)
 CUES = [
-    (0.3, 0.00, 5.63, "トラクターのピラーに…作る話です"),
+    # dropped: 0.00-5.63 「この部品を、写真から作る話です」(冒頭を問いに変えたため。差し替えの録音があれば assets/narration_open.wav)
     (6.3, 6.76, 7.61, "トラクターに乗る"),
     (8.3, 8.35, 10.86, "ここに、ラズベリーパイのマウントを置きたい"),
     (11.0, 11.58, 12.99, "スマホホルダーも作りたい"),
