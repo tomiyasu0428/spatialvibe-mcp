@@ -19,7 +19,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 PROCESS = HERE.parent / "process" / "process.mp4"
 FPS, W, H = 30, 1920, 1080
-# Final order: page chapters by id, or ("process", start_s, end_s, speed) segments of the process clip.
+# Final order: page chapters by id, ("process", start_s, end_s, speed) segments of the process clip,
+# or ("footage", path, start_s, end_s, speed) for real footage under demo/video/assets/ (local only).
 ORDER = ["open", "ba", ("process", 0, 26.5, 1.25), "how", "chat", "build", "field", "ar", "done", ("process", 31.05, None, 1.0), "export", "close"]
 
 
@@ -51,13 +52,27 @@ def join(out: Path):
     ff = imageio_ffmpeg.get_ffmpeg_exe()
     clips = HERE / "clips"
     inputs, n = [], 0
-    for item in ORDER:
-        if isinstance(item, tuple):
+    for k, item in enumerate(ORDER):
+        if isinstance(item, tuple) and item[0] == "process":
             _, a, b, speed = item
             seg = clips / f"process_{int(a * 1000)}.mp4"
             cmd = [ff, "-v", "error", "-y", "-ss", str(a)] + (["-to", str(b)] if b else []) + \
                   ["-i", str(PROCESS), "-an", "-filter:v", f"setpts=PTS/{speed}", "-c:v", "libx264", "-crf", "17", "-preset", "medium",
                    "-pix_fmt", "yuv420p", "-r", str(FPS), str(seg)]
+            subprocess.run(cmd, check=True)
+            inputs.append(seg)
+        elif isinstance(item, tuple) and item[0] == "footage":
+            # ("footage", path, start_s, end_s, speed): real footage (phone video, screen recording),
+            # scaled to fit 1920x1080 with black bars, audio dropped, same codec as the chapters.
+            _, src, a, b, speed = item
+            src = Path(src) if Path(src).is_absolute() else HERE / src
+            if not src.exists():
+                sys.exit(f"missing footage {src}")
+            seg = clips / f"footage_{k}.mp4"
+            vf = (f"setpts=PTS/{speed},scale={W}:{H}:force_original_aspect_ratio=decrease,"
+                  f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:color=0x0d0e10,fps={FPS}")
+            cmd = [ff, "-v", "error", "-y", "-ss", str(a)] + (["-to", str(b)] if b else []) + \
+                  ["-i", str(src), "-an", "-vf", vf, "-c:v", "libx264", "-crf", "17", "-preset", "medium", "-pix_fmt", "yuv420p", str(seg)]
             subprocess.run(cmd, check=True)
             inputs.append(seg)
         else:
