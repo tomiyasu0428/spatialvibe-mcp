@@ -78,15 +78,16 @@ test('authenticated atomic publication retains dimensions and uses an opaque URL
   assert.equal(p.ar_floor_mm,null);
   assert.equal(s.bucket.records.size,1);
 });
-test('page has nonce CSP, supported-browser gate, AR image child and scaling flag',async()=>{
+test('page offers an AR image and direct model link without JavaScript or capability detection',async()=>{
   const s=setup(),p=await publish(s),r=await get(s,p.url),html=await r.text();
   assert.equal(r.status,200);securityHeaders(r);
   assert.match(html,/rel="ar" href="[^\"]+#allowsContentScaling=0"><img/);
-  assert.match(html,/id="ar" hidden/);assert.match(html,/relList.supports\('ar'\)/);
+  assert.doesNotMatch(html,/<script\b|\bhidden\b/);
+  const modelPath=new URL(p.url).pathname+'/model.usdz#allowsContentScaling=0';
+  assert.ok(html.includes(`<a href="${modelPath}">USDZファイルを直接開く</a>`));
   assert.match(html,/Safari/);assert.match(html,/100 × 50 × 10 mm/);
   assert.match(html,/未検証/);
-  const nonce=/script nonce="([^\"]+)"/.exec(html)[1];
-  assert.ok(r.headers.get('Content-Security-Policy').includes(`'nonce-${nonce}'`));
+  assert.match(r.headers.get('Content-Security-Policy'),/script-src 'none'/);
   assert.doesNotMatch(html,/https:\/\/(?!ar\.example\.test)/);
 });
 test('full USDZ response and HEAD have matching MIME/length and HEAD has no R2 body read',async()=>{

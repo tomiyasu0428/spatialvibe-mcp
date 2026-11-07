@@ -33,17 +33,22 @@ class LaunchError(RuntimeError):
 
 def load_config(path: Path) -> dict:
     try:
-        info = os.lstat(path)
+        fd = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
     except FileNotFoundError:
         raise LaunchError(f"config not found: {path.name}") from None
-    if not stat.S_ISREG(info.st_mode):
-        raise LaunchError("config must be a regular file (no symlink)")
-    if info.st_uid != os.getuid() or info.st_mode & 0o077:
-        raise LaunchError("config must be owned by you with mode 0600")
-    if info.st_size > 4096:
+    except OSError:
+        raise LaunchError("config must be a readable regular file (no symlink)") from None
+    with os.fdopen(fd, "rb") as stream:
+        info = os.fstat(fd)
+        if not stat.S_ISREG(info.st_mode) or info.st_nlink != 1:
+            raise LaunchError("config must be a regular file (no links)")
+        if info.st_uid != os.getuid() or info.st_mode & 0o077:
+            raise LaunchError("config must be owned by you with mode 0600")
+        raw = stream.read(4097)
+    if len(raw) > 4096:
         raise LaunchError("config is unexpectedly large")
     try:
-        value = json.loads(path.read_text(encoding="utf-8"))
+        value = json.loads(raw.decode("utf-8"))
     except ValueError:
         raise LaunchError("config is not valid JSON") from None
     if not isinstance(value, dict) or set(value) - ALLOWED or not {"origin", "keychain_service"} <= set(value):

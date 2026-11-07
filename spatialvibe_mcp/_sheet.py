@@ -313,6 +313,8 @@ def _angle_marks(ax, d, a, b, zoom):
 
 def main():
     vdir = Path(sys.argv[1])
+    # Drawn in a scratch copy, so the parent passes the real project and version for the titles.
+    project, version = sys.argv[2:4] if len(sys.argv) >= 4 else (vdir.parent.name, vdir.name)
     res = json.loads((vdir / "result.json").read_text(encoding="utf-8"))
     files = sorted(vdir.glob("part_*.stl"))  # same order (and colours) as preview and USDZ
     if FONT:
@@ -548,7 +550,7 @@ def main():
     def y(inch):  # figure fraction from top, in inches
         return 1 - inch / H
 
-    fig.text(0.04, y(0.45), f"{vdir.parent.name}  {vdir.name}", fontsize=20, fontweight="bold")
+    fig.text(0.04, y(0.45), f"{project}  {version}", fontsize=20, fontweight="bold")
     overall = res.get("parts_size_mm")
     fig.text(0.04, y(0.95), t("parts", n=n) + ("   " + t("overall" if n == 1 else "overall_n", s=size_text(overall))
                                                 if overall else ""), fontsize=13)
@@ -683,7 +685,7 @@ def main():
     # page 2: every part with all its fit dimensions, panels and details
     H = 1.1 + sum(b[3] for b in blocks) + axes_h
     fig = plt.figure(figsize=(9, H), dpi=120)
-    fig.text(0.04, y(0.5), t("detail_title", p=vdir.parent.name, v=vdir.name), fontsize=16, fontweight="bold")
+    fig.text(0.04, y(0.5), t("detail_title", p=project, v=version), fontsize=16, fontweight="bold")
     fig.text(0.04, y(0.8), t("origin", o=res["origin"]) if res.get("origin") else t("noorigin"),
              fontsize=9.5, color="0.3")
     VIEWS = (((0, 1), "top", 2), ((0, 2), "front", 1), ((1, 2), "side", 0))  # (plane axes, label, normal axis)

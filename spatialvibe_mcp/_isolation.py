@@ -8,6 +8,9 @@ import json
 import os
 from pathlib import Path
 import shutil
+import tempfile
+from ._scratch import unchanged_directory
+import subprocess
 import sys
 
 
@@ -38,7 +41,8 @@ def sandbox_command(version: Path, package_root: Path, argv: list[str]) -> list[
     source = package_root.resolve(strict=True) / "spatialvibe_mcp"
     # Trusted roots contain code/dependencies only. Never store tokens in them.
     roots = [Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve(), source]
-    if any(root in (Path("/"), Path("/Users"), Path.home(), package_root.resolve())
+    if any(root in (Path("/"), Path("/Users"), Path("/private"), Path("/usr"), Path("/usr/local"),
+                    Path("/opt/homebrew"), Path.home(), package_root.resolve())
            for root in roots):
         raise ValueError("Refusing a broad trusted runtime root")
     if any(version == root or root in version.parents for root in roots):
@@ -51,8 +55,8 @@ def sandbox_command(version: Path, package_root: Path, argv: list[str]) -> list[
                      Path("/usr/share/zoneinfo"), Path("/private/var/db/timezone")]
     profile = [
         "(version 1)(allow default)",
-        "(deny network*)(deny file-read*)(deny file-write*)",
-        "(deny mach-lookup)(deny process-info*)(deny process-exec)",
+        "(deny network*)(deny file-read*)(deny file-write*)(deny file-link)",
+        "(deny mach-lookup)(deny process-info*)(allow process-info* (target self))(deny process-exec)(deny process-fork)(deny signal)(allow signal (target self))",
         # Metadata supports Python path resolution but grants no file content.
         "(allow file-read-metadata)",
         # libSystem startup reads the root directory itself; no descendants.
@@ -65,4 +69,36 @@ def sandbox_command(version: Path, package_root: Path, argv: list[str]) -> list[
         f"(allow process-exec (literal {quote(Path(sys.executable).resolve())})"
         f" (literal {quote(sys.executable)}))",
     ]
-    return ["sandbox-exec", "-p", "".join(profile), *argv]
+    return ["/usr/bin/sandbox-exec", "-p", "".join(profile), *argv]
+
+
+def configured_bed():
+    """The server's layout setting. A default here is not evidence of a known printer."""
+    try:
+        dims = [float(v) for v in os.environ.get("SPATIALVIBE_BED", "").split(",")]
+        if len(dims) == 3 and all(0 < v <= 10000 for v in dims):
+            return dims
+    except ValueError:
+        pass
+    return [256.0, 256.0, 256.0]
+
+
+def _runtime_environment(runtime: Path, package_root: Path):
+    env = child_environment(runtime, package_root)
+    env["SPATIALVIBE_BED"] = ",".join(map(str, configured_bed()))
+    return env
+
+
+def run_isolated(scratch: Path, package_root: Path, module: str, args, timeout: int):
+    # -P prevents cwd shadowing. A fresh private cwd contains no importable model files.
+    command = sandbox_command(scratch, package_root, [sys.executable, "-P", "-m", "spatialvibe_mcp._limited_run",
+                                  module, *map(str, args)])
+    runtime = Path(tempfile.mkdtemp(prefix=".runtime-", dir=scratch))
+    with unchanged_directory(scratch):
+        with tempfile.TemporaryFile(dir=runtime) as err:
+            p = subprocess.run(command, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                               stderr=err, timeout=timeout, cwd=runtime,
+                               env=_runtime_environment(Path(runtime), package_root), close_fds=True)
+            err.seek(max(0, err.tell() - 4096))
+            p.stderr = err.read(4096).decode("utf-8", errors="replace")
+            return p

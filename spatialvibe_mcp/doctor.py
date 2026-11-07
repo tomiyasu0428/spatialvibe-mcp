@@ -14,6 +14,7 @@ from importlib import metadata
 from pathlib import Path
 
 from . import printing
+from ._build import build_in_scratch
 
 REPO = Path(__file__).resolve().parent.parent
 PY = REPO / ".venv" / "bin" / "python"
@@ -111,24 +112,17 @@ def _data_folder(home: Path):
 
 
 def _smoke():
-    """Build a tiny block through the real runner, outside the user's data folder."""
+    """Check a minimal build through the same isolated path as the MCP tool."""
+    code = ("from build123d import Box\nparts = {'block': Box(20, 10, 5)}\n"
+            "print_orientation = {'block': (0, 90, 0)}\n")
     with tempfile.TemporaryDirectory(prefix="svdoctor-") as d:
-        out = Path(d)
-        code = out / "model.py"
-        code.write_text("from build123d import *\nparts = {'block': Box(20, 10, 5)}\n"
-                        "print_orientation = {'block': (0, 90, 0)}\n")
-        env = dict(os.environ, PYTHONPATH=str(REPO), PYTHONDONTWRITEBYTECODE="1", MPLBACKEND="Agg",
-                   MPLCONFIGDIR=str(out / ".mpl"))
-        result_file = out / "_result.json"
         try:
-            subprocess.run([sys.executable, "-m", "spatialvibe_mcp._runner", str(code), str(out), str(result_file)],
-                           capture_output=True, text=True, timeout=180, env=env, cwd=out)
-            res = json.loads(result_file.read_text(encoding="utf-8"))
-        except Exception as e:  # noqa: BLE001 — report any failure as a failed check
-            return False, "test build", repr(e)[:300]
-        ok = res.get("ok") and (out / "print_block.stl").exists()
-        size = res.get("parts", {}).get("block", {}).get("print", {}).get("size_mm_exact")
-        return bool(ok), "test build", f"20x10x5 block, print size {size}" if ok else str(res.get("error"))[:300]
+            r = build_in_scratch(Path(d), code, REPO, 180)
+        except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+            return False, "test build", str(exc)[:300]
+        ok = r.get("ok") and (Path(d) / "print_block.stl").is_file()
+        size = r.get("parts", {}).get("block", {}).get("print", {}).get("size_mm_exact")
+        return bool(ok), "test build", f"20x10x5 block, print size {size}" if ok else str(r.get("error"))[:300]
 
 
 def main(argv=None):

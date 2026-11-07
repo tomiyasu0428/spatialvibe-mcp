@@ -8,21 +8,21 @@ import json
 import math
 import os
 import re
-import shutil
-import stat
 import subprocess
 import sys
-import tempfile
-import secrets
+from ._scratch import scratch_directory
 from pathlib import Path
 
 from mcp.server.mcpserver import Image, MCPServer
-from mcp.server.mcpserver.exceptions import ToolError
 
 from . import printing
 from ._ar_export import export_snapshot
 from ._ar_publish import PublicationError, publish as cloud_publish, settings as cloud_settings
-from ._isolation import child_environment, sandbox_command
+from ._artifacts import (ARTIFACT, FILE_LIMIT, SpatialVibeError, atomic_bytes as _atomic_bytes,
+                         copy_artifacts, safe_bytes, safe_text as _safe_text, write_json as _write_json)
+from ._build import build_in_scratch, prepare_plate
+from ._isolation import run_isolated, sandbox_command
+from ._result import clean_text, failure, parse, stored
 
 REPO = Path(__file__).resolve().parent.parent
 HOME = Path(os.environ.get("SPATIALVIBE_HOME", REPO / "data" / "mcp_projects")).expanduser()
@@ -31,14 +31,8 @@ PUBLISH = os.environ.get("SPATIALVIBE_PUBLISH", "icloud")   # icloud | dir:/path
 KEEP = os.environ.get("SPATIALVIBE_AR_KEEP", "")           # with cloudflare: also keep a copy: icloud | dir:/path
 TIMEOUT = int(os.environ.get("SPATIALVIBE_TIMEOUT", "180"))
 PROJECT = re.compile(r"[A-Za-z0-9_-]{1,60}")
+MAX_VERSION = 999   # v001..v999: the folder pattern the server lists
 
-
-class SpatialVibeError(ToolError, ValueError):
-    """An expected failure whose message must reach the client.
-
-    The MCP SDK hides the text of any other exception (the model only sees "Error executing tool
-    X"), so every guard below raises this. It is also a ValueError for direct Python callers.
-    """
 
 INSTRUCTIONS = (Path(__file__).parent / "WORKFLOW.md").read_text(encoding="utf-8")
 mcp = MCPServer("spatialvibe", instructions=INSTRUCTIONS)
@@ -47,11 +41,14 @@ mcp = MCPServer("spatialvibe", instructions=INSTRUCTIONS)
 def _project_dir(project: str) -> Path:
     if not isinstance(project, str) or not PROJECT.fullmatch(project):
         raise SpatialVibeError(f"project must be 1-60 ASCII letters, digits, _ or - (e.g. 'aio-mount'); got {project!r}")
-    return HOME / project
+    pdir = HOME / project
+    if pdir.is_symlink():
+        raise SpatialVibeError("Refusing linked project folder")
+    return pdir
 
 
 def _versions(pdir: Path):
-    return sorted(p for p in pdir.glob("v[0-9][0-9][0-9]") if p.is_dir())
+    return sorted(p for p in pdir.glob("v[0-9][0-9][0-9]") if not p.is_symlink() and p.is_dir())
 
 
 def _version_dir(project: str, version) -> Path:
@@ -61,10 +58,10 @@ def _version_dir(project: str, version) -> Path:
         raise SpatialVibeError(f"project {project!r} has no versions yet; call build_model first")
     if version is None:
         return vs[-1]
-    if not isinstance(version, int) or version < 1:
-        raise SpatialVibeError(f"version must be a positive number like 1 or 2; got {version!r}")
+    if isinstance(version, bool) or not isinstance(version, int) or not 1 <= version <= MAX_VERSION:
+        raise SpatialVibeError(f"version must be a number from 1 to {MAX_VERSION} like 1 or 2; got {version!r}")
     v = pdir / f"v{version:03d}"
-    if not v.exists():
+    if v.is_symlink() or not v.is_dir():
         raise SpatialVibeError(f"{project} has no version {version}; latest is {vs[-1].name}")
     return v
 
@@ -84,11 +81,10 @@ def _built_version_dir(project: str, version) -> Path:
 
 
 def _read_result(vdir: Path) -> dict:
+    """The saved result, sanitized (see _result.stored) before any of its names reach a path."""
     try:
-        r = json.loads(_safe_text(vdir / "result.json"))
+        r = stored(parse(_safe_text(vdir / "result.json")))
     except (OSError, ValueError):
-        return {}
-    if not isinstance(r, dict):
         return {}
     if r.get("ok") is True and "parts_size_mm" not in r:
         size = _overall_size(r.get("parts"))
@@ -113,49 +109,14 @@ def _overall_size(parts) -> list | None:
     return [round(max(h[i] for _, h in boxes) - min(l[i] for l, _ in boxes), 1) for i in range(3)]
 
 
-def _safe_text(path: Path) -> str:
-    """Never let a generated symlink redirect a trusted-parent file read."""
-    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    try:
-        fd = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=directory)
-        with os.fdopen(fd, "rb") as stream:
-            if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
-                raise SpatialVibeError("Project file is not a regular file")
-            text = stream.read(8 * 1024 * 1024 + 1)
-            if len(text) > 8 * 1024 * 1024:
-                raise SpatialVibeError("Project file is too large")
-            return text.decode("utf-8")
-    finally:
-        os.close(directory)
-
-
-def _atomic_bytes(path: Path, body: bytes) -> None:
-    """Replace a destination entry instead of following its possibly hostile symlink."""
-    directory = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
-    name = ".parent-write-" + secrets.token_hex(16)
-    try:
-        fd = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=directory)
-        with os.fdopen(fd, "wb") as stream:
-            stream.write(body)
-        os.replace(name, path.name, src_dir_fd=directory, dst_dir_fd=directory)
-    finally:
-        try:
-            os.unlink(name, dir_fd=directory)
-        except FileNotFoundError:
-            pass
-        os.close(directory)
-
-
-def _write_json(path: Path, value) -> None:
-    _atomic_bytes(path, json.dumps(value, ensure_ascii=False, indent=1).encode("utf-8"))
-
-
 def _new_version_dir(pdir: Path) -> Path:
     """Claim the next free vNNN atomically (parallel calls each get their own folder)."""
     pdir.mkdir(parents=True, exist_ok=True)
     vs = _versions(pdir)
     n = int(vs[-1].name[1:]) + 1 if vs else 1
     while True:
+        if n > MAX_VERSION:
+            raise SpatialVibeError(f"{pdir.name} already has {MAX_VERSION} versions; start a new project")
         vdir = pdir / f"v{n:03d}"
         try:
             vdir.mkdir()
@@ -170,26 +131,6 @@ def _sandbox_cmd(out: Path, argv):
         return sandbox_command(out, REPO, argv)
     except (RuntimeError, ValueError) as exc:
         raise SpatialVibeError(str(exc)) from None
-
-
-def _child_env(runtime: Path):
-    env = child_environment(runtime, REPO)
-    # The build's only nonsecret user setting; never inherit arbitrary parent env.
-    raw = os.environ.get("SPATIALVIBE_BED", "256,256,256")
-    try:
-        dimensions = [float(value) for value in raw.split(",")]
-        if len(dimensions) == 3 and all(0 < value <= 10000 for value in dimensions):
-            env["SPATIALVIBE_BED"] = ",".join(map(str, dimensions))
-    except ValueError:
-        pass
-    return env
-
-
-def _run_isolated(vdir: Path, argv):
-    command = _sandbox_cmd(vdir, argv)
-    with tempfile.TemporaryDirectory(prefix=".runtime-", dir=vdir) as runtime:
-        return subprocess.run(command, capture_output=True, text=True, stdin=subprocess.DEVNULL,
-                              timeout=TIMEOUT, cwd=vdir, env=_child_env(Path(runtime)), close_fds=True)
 
 
 @mcp.tool()
@@ -228,31 +169,16 @@ def build_model(project: str, code: str, note: str = "", compare_to: int | None 
     vdir = _new_version_dir(_project_dir(project))
     (vdir / "model.py").write_text(code, encoding="utf-8")
     (vdir / "note.txt").write_text(note, encoding="utf-8")
-    stage = vdir / "_build"           # the runner writes here; files move up only on success
-    stage.mkdir()
-    result_file = stage / "_result.json"
-    argv = [sys.executable, "-m", "spatialvibe_mcp._runner", str(vdir / "model.py"), str(stage), str(result_file)]
     try:
-        p = _run_isolated(vdir, argv)
+        res = build_in_scratch(vdir, code, REPO, TIMEOUT)
     except subprocess.TimeoutExpired:
         res = {"ok": False, "error": f"timed out after {TIMEOUT}s; nothing was kept"}
-    else:
-        try:
-            res = json.loads(_safe_text(result_file))
-        except (OSError, ValueError):
-            res = None
-        if p.returncode != 0 or not isinstance(res, dict):
-            tail = (p.stderr or "").strip()[-2500:] or "no output"
-            res = {"ok": False, "error": f"the build process exited with code {p.returncode} before finishing. {tail}"}
-    if res.get("ok") is True:
-        candidates = [] if stage.is_symlink() else [f for f in stage.iterdir()
-                        if f.name.startswith(("part_", "ctx_", "print_", "pose"))]
-        if not candidates or any(not stat.S_ISREG(f.lstat().st_mode) for f in candidates):
-            res = {"ok": False, "error": "Unsafe or missing generated output; nothing was kept"}
-        else:
-            for f in candidates:
-                f.replace(vdir / f.name)
-    shutil.rmtree(stage, ignore_errors=True)
+    except (OSError, ValueError, RuntimeError, AttributeError) as exc:
+        res = failure(f"Unsafe or invalid build output; nothing was kept: {exc}")
+    if res.get("ok") is not True:
+        for f in vdir.iterdir():
+            if ARTIFACT.fullmatch(f.name):
+                f.unlink()
     if res.get("ok") is True:
         try:
             res["printer"] = pr
@@ -263,6 +189,12 @@ def build_model(project: str, code: str, note: str = "", compare_to: int | None 
             for f in vdir.iterdir():
                 if f.name.startswith(("part_", "ctx_", "print_", "pose")) and (f.is_symlink() or not f.is_dir()):
                     f.unlink()
+    if res.get("ok") is True:
+        try:
+            res["plate"] = prepare_plate(vdir, res, REPO, TIMEOUT)
+        except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired):
+            res.pop("plate", None)
+            res.setdefault("warnings", []).append("3MFを生成できませんでした。印刷用STLを使用してください。")
     _write_json(vdir / "result.json", res)
     res.update(project=project, version=int(vdir.name[1:]), folder=str(vdir))
     if res.get("ok") is True:
@@ -296,6 +228,8 @@ def _write_print_job(project: str, vdir: Path, res: dict) -> None:
     sup = set(ps.get("supports") or [])
     parts = []
     for name, info in (res.get("parts") or {}).items():
+        if not printing.NAME.fullmatch(name):
+            raise SpatialVibeError("Invalid part name")
         stl = f"print_{name}.stl" if (vdir / f"print_{name}.stl").exists() else f"part_{name}.stl"
         fits = [{k: d[k] for k in ("label", "kind", "value", "unit", "expect", "tol", "min", "max", "vs", "vs_label")
                  if d.get(k) is not None}
@@ -404,27 +338,28 @@ def preview(project: str, version: int | None = None) -> list:
        (print_plate.3mf + settings + time) and one numbered picture per assembly step.
     """
     vdir = _built_version_dir(project, version)
-    out = []
-    for mod, name in (("_render", "preview.png"), ("_sheet", "sheet.png")):
-        argv = [sys.executable, "-m", f"spatialvibe_mcp.{mod}", str(vdir)]
-        p = _run_isolated(vdir, argv)
-        png = vdir / name
-        if p.returncode != 0 or not png.exists():
-            raise SpatialVibeError(f"drawing the {name} failed: {p.stderr.strip()[-1500:] or 'no output'}")
-        out.append(png)
-    detail = vdir / "sheet_detail.png"
-    imgs = [Image(path=str(out[0])), Image(path=str(out[1])), Image(path=str(detail))]
-    text = f"{project} {vdir.name}: views {out[0]} / summary sheet {out[1]} / detailed sheet {detail}"
-    build = vdir / "sheet_build.png"   # page 3 (print plate + assembly steps), when the script has them
-    build.unlink(missing_ok=True)
-    argv = [sys.executable, "-m", "spatialvibe_mcp._steps", str(vdir)]
-    p = _run_isolated(vdir, argv)
-    if p.returncode != 0:
-        raise SpatialVibeError(f"drawing sheet_build.png failed: {p.stderr.strip()[-1500:] or 'no output'}")
-    if build.exists():
-        imgs.append(Image(path=str(build)))
-        text += f" / print and assembly {build}"
-    return imgs + [text]
+    images = []
+    with scratch_directory("sv-preview-") as scratch:
+        copy_artifacts(vdir, scratch, render=True)
+        _write_json(scratch / "result.json", _read_result(vdir))
+        for mod, names in (("_render", ["preview.png"]), ("_sheet", ["sheet.png", "sheet_detail.png"]),
+                           ("_steps", ["sheet_build.png"])):
+            p = run_isolated(scratch, REPO, mod, [scratch, project, vdir.name], TIMEOUT)
+            if p.returncode != 0:
+                raise SpatialVibeError(f"drawing {mod} failed: {clean_text(p.stderr[-1500:], 1500, multiline=True)}")
+            for name in names:
+                if mod == "_steps" and not (scratch / name).exists():
+                    (vdir / name).unlink(missing_ok=True)
+                    continue
+                data = safe_bytes(scratch / name, FILE_LIMIT)
+                if not data.startswith(b"\x89PNG\r\n\x1a\n"):
+                    raise SpatialVibeError("Invalid preview image")
+                _atomic_bytes(vdir / name, data)
+                images.append(Image(path=str(vdir / name)))
+    text = f"{project} {vdir.name}: views {vdir / 'preview.png'} / summary {vdir / 'sheet.png'} / detailed {vdir / 'sheet_detail.png'}"
+    if len(images) == 4:
+        text += f" / print and assembly {vdir / 'sheet_build.png'}"
+    return [*images, text]
 
 
 @mcp.tool()
@@ -455,7 +390,7 @@ def publish_ar(project: str, version: int | None = None, include_context: bool =
     elif PUBLISH != "icloud" and not PUBLISH.startswith("dir:"):
         raise SpatialVibeError(f"unknown SPATIALVIBE_PUBLISH={PUBLISH!r}")
     try:
-        snapshot = export_snapshot(vdir, include_context, floor_z,
+        snapshot = export_snapshot(vdir, include_context, floor_z, timeout=TIMEOUT,
                                    **({"max_bytes": config.max_bytes} if config else {}))
     except ValueError as exc:
         if str(exc).startswith("ar_floor "):
@@ -568,13 +503,25 @@ def get_print_job(project: str, version: int | None = None) -> dict:
     assembly steps. Never start a print without the user's go-ahead."""
     vdir = _built_version_dir(project, version)
     f = vdir / "print_job.json"
-    if not f.exists():
-        _write_print_job(project, vdir, _read_result(vdir))
+    # Reconstruct from validated build metadata, never trust paths in a legacy saved job.
+    result = _read_result(vdir)
+    if (result.get("plate") or {}).get("file"):
+        if result["plate"]["file"] != "print_plate.3mf":
+            raise SpatialVibeError("Invalid plate path")
+        result["plate"] = prepare_plate(vdir, result, REPO, TIMEOUT)
+    _write_print_job(project, vdir, result)
     job = json.loads(_safe_text(f))
     job["folder"] = str(vdir)
     if job.get("plate", {}).get("file"):
+        if job["plate"]["file"] != "print_plate.3mf":
+            raise SpatialVibeError("Invalid plate path")
+        printing._own_file(vdir, "print_plate.3mf")
         job["plate"]["path"] = str(vdir / job["plate"]["file"])
     for p_ in job["parts"]:
+        if not printing.NAME.fullmatch(p_["name"]):
+            raise SpatialVibeError("Invalid part name")
+        for name in (p_["stl"], p_["step"]):
+            printing._own_file(vdir, name)
         p_["stl_path"], p_["step_path"] = str(vdir / p_["stl"]), str(vdir / p_["step"])
     return job
 
@@ -586,7 +533,7 @@ def list_projects(project: str | None = None) -> dict:
         if not HOME.exists():
             return {"projects": []}
         return {"projects": [{"project": p.name, "versions": len(_versions(p))}
-                             for p in sorted(HOME.iterdir()) if p.is_dir()]}
+                             for p in sorted(HOME.iterdir()) if not p.is_symlink() and p.is_dir()]}
     out = []
     for v in _versions(_project_dir(project)):
         r = _read_result(v)

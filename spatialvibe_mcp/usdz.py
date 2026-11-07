@@ -104,3 +104,15 @@ def usdz_size_m(usdz: Path):
             rng.UnionWith(cache.ComputeWorldBound(prim).ComputeAlignedRange())
     s = rng.GetSize()
     return [round(s[0], 4), round(s[1], 4), round(s[2], 4)]
+
+
+if __name__ == "__main__":
+    import json
+    import sys
+
+    work = Path(sys.argv[1])
+    try:
+        package = build_usdz(work, bool(int(sys.argv[2])), json.loads(sys.argv[3]))
+    except ValueError as exc:
+        raise SystemExit(str(exc))
+    (work / "size.json").write_text(json.dumps(usdz_size_m(package)))

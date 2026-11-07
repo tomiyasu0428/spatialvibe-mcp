@@ -58,6 +58,8 @@ def _draw(ax, items, view, light):
 
 def main():
     vdir = Path(sys.argv[1])
+    # Drawn in a scratch copy, so the parent passes the real project and version for the title.
+    project, version = sys.argv[2:4] if len(sys.argv) >= 4 else (vdir.parent.name, vdir.name)
     res = json.loads((vdir / "result.json").read_text(encoding="utf-8"))
     steps, plate, ps = res.get("steps") or [], res.get("plate"), res.get("print_settings") or {}
     if not steps and not ps:   # page 3 only when the script describes printing or assembly
@@ -105,7 +107,7 @@ def main():
     def y(inch):
         return 1 - inch / H
 
-    fig.text(0.04, y(0.5), f"{vdir.parent.name}  {vdir.name}  印刷と取り付け（3 枚目）", fontsize=16, fontweight="bold")
+    fig.text(0.04, y(0.5), f"{project}  {version}  印刷と取り付け（3 枚目）", fontsize=16, fontweight="bold")
     for k, (ln, fs, c) in enumerate(wrapped):
         fig.text(0.05, y(0.95 + 0.32 * k), ln, fontsize=fs, color=c)
     if not steps:
