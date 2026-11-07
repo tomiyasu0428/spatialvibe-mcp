@@ -244,9 +244,10 @@ body.capture .ctl, body.capture .gate { display: none; }
         strike.style.left = "-4%"; strike.style.right = "-4%"; strike.style.top = "50%";
         wrap.append(from, strike); c.appendChild(wrap);
         const to = T(s.to, "30cqw", 900, "ac pulse"); to.style.position = "absolute";
-        const meta = h("div", "mono"); meta.style.position = "absolute"; meta.style.bottom = "13cqw";
-        L.append(to, meta);
+        const meta = h("div", "mono"); meta.style.position = "absolute"; meta.style.bottom = "6.5cqw";
+        meta.style.left = "0"; meta.style.right = "0"; meta.style.textAlign = "center";
         const cc = h("div", "center"); cc.appendChild(to); L.appendChild(cc);
+        L.appendChild(meta);  // after the big word so it is never hidden behind it
         return { from, strike, to, meta };
       },
       update(r, b, s) {

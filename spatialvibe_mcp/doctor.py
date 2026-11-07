@@ -6,14 +6,15 @@ import argparse
 import json
 import os
 import shlex
+import shutil
+import subprocess
 import sys
+import tempfile
 from importlib import metadata
 from pathlib import Path
 
-from . import _build as build
-from . import _files as files
-from . import _isolation as iso
 from . import printing
+from ._build import build_in_scratch
 
 REPO = Path(__file__).resolve().parent.parent
 PY = REPO / ".venv" / "bin" / "python"
@@ -59,7 +60,10 @@ def checks(smoke=True, printer=None):
             yield False, f"package {name}", "not installed — run scripts/setup.sh"
             continue
         yield got == want, f"package {name}", f"{got} (requirements.txt: {want})"
-    yield _sandbox()
+    if sys.platform == "darwin":
+        yield bool(shutil.which("sandbox-exec")), "sandbox-exec", "isolates model scripts (required)"
+    else:
+        yield False, "sandbox-exec", "not macOS: the server refuses to run model scripts without it"
 
     home = Path(os.environ.get("SPATIALVIBE_HOME", DEFAULT_HOME)).expanduser().absolute()
     yield _data_folder(home)
@@ -71,6 +75,8 @@ def checks(smoke=True, printer=None):
     if pub == "icloud":
         yield (True if icloud.exists() else None), "AR target", (
             "iCloud Drive/SpatialVibe" if icloud.exists() else "iCloud Drive not found; set SPATIALVIBE_PUBLISH=dir:/path")
+    elif pub == "cloudflare":
+        yield None, "AR target", "Cloudflare AR Worker (expiring link; see AR_PUBLICATION.md and tools/ar_mcp_launch.py)"
     else:
         yield None, "AR target", pub
 
@@ -86,16 +92,6 @@ def checks(smoke=True, printer=None):
 
     if smoke:
         yield _smoke()
-
-
-def _sandbox():
-    """The sandbox is required: without it the server refuses every build, preview and AR export."""
-    try:
-        path = iso.sandbox_exec()
-        iso.trusted_roots()
-    except files.BoundaryError as e:
-        return False, "sandbox-exec", f"{e} (there is no unsandboxed fallback)"
-    return True, "sandbox-exec", f"{path} isolates model scripts, previews and AR export"
 
 
 def _data_folder(home: Path):
@@ -116,19 +112,17 @@ def _data_folder(home: Path):
 
 
 def _smoke():
-    """Build a tiny block through the real runner, sandboxed exactly like the server does, in a
-    scratch folder that is deleted afterwards. Refused (NG) when the sandbox is unavailable."""
-    code = ("from build123d import *\nparts = {'block': Box(20, 10, 5)}\n"
+    """Check a minimal build through the same isolated path as the MCP tool."""
+    code = ("from build123d import Box\nparts = {'block': Box(20, 10, 5)}\n"
             "print_orientation = {'block': (0, 90, 0)}\n")
-    try:
-        with iso.Job(timeout=180) as job:
-            res = build.result_of(job, build.run_script(job, code), None)
-            if not res["ok"] or not job.output_is_plain("print_block.stl"):
-                return False, "test build", str(res.get("error", "no print file"))[:300]
-    except (files.BoundaryError, OSError, ValueError) as e:  # any failure is a failed check
-        return False, "test build", f"refused: {e}"[:300]
-    size = res.get("parts", {}).get("block", {}).get("print", {}).get("size_mm_exact")
-    return True, "test build", f"20x10x5 block, print size {size}"
+    with tempfile.TemporaryDirectory(prefix="svdoctor-") as d:
+        try:
+            r = build_in_scratch(Path(d), code, REPO, 180)
+        except (ValueError, OSError, RuntimeError, subprocess.TimeoutExpired) as exc:
+            return False, "test build", str(exc)[:300]
+        ok = r.get("ok") and (Path(d) / "print_block.stl").is_file()
+        size = r.get("parts", {}).get("block", {}).get("print", {}).get("size_mm_exact")
+        return bool(ok), "test build", f"20x10x5 block, print size {size}" if ok else str(r.get("error"))[:300]
 
 
 def main(argv=None):

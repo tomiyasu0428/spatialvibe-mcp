@@ -1,0 +1,8 @@
+node_modules/
+.wrangler/
+.dev.vars*
+.env*
+*.log
+# Real deployment config (account id, hostname, bucket) stays local.
+wrangler.jsonc
+wrangler.toml

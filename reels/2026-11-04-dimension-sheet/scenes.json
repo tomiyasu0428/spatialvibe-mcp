@@ -1,0 +1,17 @@
+{
+  "title": "寸法が、見える。",
+  "code": "PROGRESS 002",
+  "sig": "spatialvibe · 2026.11.04",
+  "bpm": 120,
+  "covers": {"from": "54f0943", "to": "5c2b286", "summary": "3役のエージェント試験で見えた弱点から、スマホ1画面の寸法シートへ"},
+  "scenes": [
+    {"type": "drop", "bars": 1, "line": "ハウスの横パイプに", "big": "箱を吊る", "meta": "ESP32 BOX · Ø22 PIPE · 1.70 M"},
+    {"type": "stamp", "bars": 1, "small": "3つの役で試す", "big": "ラウンド1", "chips": ["農家役", "設計役", "検証役"]},
+    {"type": "split", "bars": 1, "left": {"label": "設計は通った", "title": "5部品・M5"}, "right": {"label": "でも農家の点数", "title": "寸法 2/5"}},
+    {"type": "overflow", "bars": 1, "small": "スマホで見ると、", "label": "PREVIEW.PNG", "boxed": "小さな図に", "burst": "寸法がない"},
+    {"type": "stretch", "bars": 1, "small": "ほしいのは", "big": "寸法が見える", "meta": "ON SITE · SIMPLE · ONE SCREEN"},
+    {"type": "swap", "bars": 1, "from": "小さな図", "to": "シート", "meta": "DIMENSION SHEET"},
+    {"type": "flow", "bars": 2, "head": "スマホ1画面で、ぜんぶわかる", "steps": [["部品", "W×D×H mm"], ["穴", "Ø5.5 × 4"], ["ベッド", "256 mm に収まる？"], ["3行", "買うもの・印刷前に確認"]], "meta": "5 PARTS · 432 MM TALL · BED 256 MM"},
+    {"type": "final", "bars": 2, "line": "現場で、簡単に、", "big": "寸法が見える。"}
+  ]
+}
