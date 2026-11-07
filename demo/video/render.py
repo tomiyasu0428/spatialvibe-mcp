@@ -27,15 +27,20 @@ FPS, W, H = 30, 1920, 1080
 ORDER = [
     "tease",                                                  # the finished part, first
     ("footage", "assets/board.mov", 0, 4.5, 1.0),            # real: boarding the tractor
-    "open", "ba", ("process", 0, 26.5, 1.25), "how", "field",
-    # real: the phone recording (Remote Control -> Claude -> questions -> dims -> preview -> AR link -> AR)
-    ("footage", "assets/phone.mov", 1.0, 4.5, 1.0), ("footage", "assets/phone.mov", 10.5, 13.5, 1.0),
-    ("footage", "assets/phone.mov", 21.0, 23.5, 1.0), ("footage", "assets/phone.mov", 38.5, 42.0, 1.0),
-    ("footage", "assets/phone.mov", 108.0, 111.0, 1.0), ("footage", "assets/phone.mov", 148.0, 151.0, 1.0),
-    ("footage", "assets/phone.mov", 166.0, 169.0, 1.0), ("footage", "assets/phone.mov", 177.0, 180.5, 1.0),
-    ("footage", "assets/phone.mov", 183.0, 187.0, 1.0),
-    ("footage", "assets/phone.mov", 192.0, 194.5, 1.0), ("footage", "assets/phone.mov", 198.0, 205.0, 1.0),
-    "ar", "done", ("process", 31.05, None, 1.0), "export", "close",
+    "open", "ba", ("process", 0, 20.5, 1.35), "how", "field",
+    # real: the phone recording (Remote Control -> Claude -> questions -> dims -> preview -> AR link -> AR), captioned
+    ("footage", "assets/phone.mov", 1.0, 4.5, 1.0, "写真と一言を送る"),
+    ("footage", "assets/phone.mov", 10.5, 13.5, 1.0, "Claude が選択肢で聞く：どんな状態で付ける？"),
+    ("footage", "assets/phone.mov", 21.0, 23.5, 1.0, "どのくらい外す？"),
+    ("footage", "assets/phone.mov", 38.5, 42.0, 1.0, "何をつなぐ？"),
+    ("footage", "assets/phone.mov", 108.0, 111.0, 1.0, "測るのは 2 か所：穴のピッチと、床からの高さ"),
+    ("footage", "assets/phone.mov", 148.0, 151.0, 1.0, "プレビューが届く"),
+    ("footage", "assets/phone.mov", 166.0, 169.0, 1.0, "AR に公開"),
+    ("footage", "assets/phone.mov", 177.0, 180.5, 1.0, "推定した値は「推定」と明記"),
+    ("footage", "assets/phone.mov", 183.0, 187.0, 1.0, "届いたリンクをタップ"),
+    ("footage", "assets/phone.mov", 192.0, 194.5, 1.0, "AR ページ"),
+    ("footage", "assets/phone.mov", 198.0, 205.0, 1.0, "実寸で立つ（自宅の壁で試した版）"),
+    "ar", "done", ("process", 31.05, 38.5, 1.0), "export", "close",
 ]
 
 
@@ -62,6 +67,32 @@ def write_clip(pg, out: Path, t0: float, t1: float):
     w.close()
 
 
+CAPTION_HTML = """<!doctype html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@700;900&display=block">
+<style>html,body{margin:0;width:1920px;height:1080px;background:transparent;overflow:hidden}
+.c{position:absolute;left:50%;bottom:64px;transform:translateX(-50%);display:flex;align-items:center;gap:22px;
+background:rgba(13,14,16,.86);padding:18px 34px;border-radius:14px;white-space:nowrap}
+.c i{display:block;width:10px;height:44px;background:#ff5a1f;border-radius:3px}
+.c b{font:900 40px "Noto Sans JP",sans-serif;color:#f1f0ec;letter-spacing:-.02em}</style></head>
+<body><div class="c"><i></i><b>__TEXT__</b></div></body></html>"""
+
+
+def caption_png(text: str, out: Path):
+    """Render one caption (bottom centre, transparent background) to a 1920x1080 PNG for ffmpeg overlay."""
+    from playwright.sync_api import sync_playwright
+    html = out.with_suffix(".html")
+    html.write_text(CAPTION_HTML.replace("__TEXT__", text.replace("&", "&amp;").replace("<", "&lt;")), encoding="utf-8")
+    with sync_playwright() as p:
+        exe = os.environ.get("SPATIALVIBE_CHROMIUM")
+        browser = p.chromium.launch(executable_path=exe) if exe else p.chromium.launch()
+        pg = browser.new_page(viewport={"width": W, "height": H}, device_scale_factor=1)
+        pg.goto(html.as_uri())
+        pg.evaluate("document.fonts.ready")
+        pg.wait_for_timeout(300)
+        pg.screenshot(path=str(out), omit_background=True)
+        browser.close()
+
+
 def join(out: Path):
     import imageio_ffmpeg
     ff = imageio_ffmpeg.get_ffmpeg_exe()
@@ -79,7 +110,8 @@ def join(out: Path):
         elif isinstance(item, tuple) and item[0] == "footage":
             # ("footage", path, start_s, end_s, speed): real footage (phone video, screen recording),
             # scaled to fit 1920x1080 with black bars, audio dropped, same codec as the chapters.
-            _, src, a, b, speed = item
+            _, src, a, b, speed = item[:5]
+            caption = item[5] if len(item) > 5 else None
             src = Path(src) if Path(src).is_absolute() else HERE / src
             if not src.exists():
                 sys.exit(f"missing footage {src}")
@@ -87,15 +119,24 @@ def join(out: Path):
             fit = (f"setpts=PTS/{speed},scale={W}:{H}:force_original_aspect_ratio=decrease,"
                    f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:color=0x0d0e10,fps={FPS}")
             blur = BLUR.get(item[1])
+            chain = "[0:v]"
+            parts = []
             if blur:
                 x, y, w, h = blur
-                fc = (f"[0:v]split[base][tmp];[tmp]crop={w}:{h}:{x}:{y},boxblur=12:2,boxblur=12:2[blr];"
-                      f"[base][blr]overlay={x}:{y}[v];[v]{fit}[out]")
-                vargs = ["-filter_complex", fc, "-map", "[out]"]
+                parts.append(f"{chain}split[base][tmp];[tmp]crop={w}:{h}:{x}:{y},boxblur=12:2,boxblur=12:2[blr];[base][blr]overlay={x}:{y}[v]")
+                chain = "[v]"
+            parts.append(f"{chain}{fit}[fitted]")
+            extra_in = []
+            if caption:
+                png = clips / f"caption_{k}.png"
+                caption_png(caption, png)
+                extra_in = ["-i", str(png)]
+                parts.append("[fitted][1:v]overlay=0:0[out]")
             else:
-                vargs = ["-vf", fit]
+                parts.append("[fitted]null[out]")
             cmd = [ff, "-v", "error", "-y", "-ss", str(a)] + (["-to", str(b)] if b else []) + \
-                  ["-i", str(src), "-an", *vargs, "-c:v", "libx264", "-crf", "17", "-preset", "medium", "-pix_fmt", "yuv420p", str(seg)]
+                  ["-i", str(src), *extra_in, "-an", "-filter_complex", ";".join(parts), "-map", "[out]",
+                   "-c:v", "libx264", "-crf", "17", "-preset", "medium", "-pix_fmt", "yuv420p", str(seg)]
             subprocess.run(cmd, check=True)
             inputs.append(seg)
         else:

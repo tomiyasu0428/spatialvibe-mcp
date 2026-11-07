@@ -53,6 +53,7 @@ body.capture .stage { width: 100vw; height: 100vh; aspect-ratio: auto; }
 .so { font-size: 2cqw; font-weight: 500; opacity: 0.8; margin-top: 2.4cqw; }
 .brand { font-size: 8cqw; font-weight: 900; letter-spacing: -0.045em; line-height: 1; } .brand b { color: var(--orange); font-family: var(--lat); letter-spacing: -0.02em; font-weight: 900; }
 .problems .sub { font-size: 2cqw; font-weight: 700; }
+.problems .def { font: 500 1.25cqw var(--jp); opacity: 0.7; }
 .steps { display: flex; align-items: center; gap: 0.7cqw; font-size: 1.35cqw; font-weight: 700; margin-top: 0.4cqw; }
 .steps span { border: 1px solid var(--orange); color: var(--orange); padding: 0.35cqw 1cqw; border-radius: 99px; }
 .steps em { font-style: normal; opacity: 0.6; }
@@ -110,7 +111,7 @@ body.capture .stage { width: 100vw; height: 100vh; aspect-ratio: auto; }
 .note { position: absolute; left: 6cqw; bottom: 2.6cqw; font: 500 1cqw var(--mono); letter-spacing: 0.06em; opacity: 0.55; text-transform: none; }
 /* AR scene */
 .ar { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 5cqw; }
-.phone { width: 22cqw; aspect-ratio: 9 / 19.5; border-radius: 3cqw; background: #000; border: 0.5cqw solid #222; box-shadow: 0 2cqw 5cqw rgba(0,0,0,.6); overflow: hidden; position: relative; }
+.phone { width: 26cqw; aspect-ratio: 9 / 19.5; border-radius: 3cqw; background: #000; border: 0.5cqw solid #222; box-shadow: 0 2cqw 5cqw rgba(0,0,0,.6); overflow: hidden; position: relative; }
 .phone .scr { position: absolute; inset: 0; background: #fff; background-size: cover; background-position: center; }
 .phone .scr.sim { background-size: 150% auto; background-position: center 45%; background-repeat: no-repeat; }
 .phone .tag { position: absolute; left: 50%; bottom: 3cqw; transform: translateX(-50%); font: 600 0.9cqw var(--mono); letter-spacing: 0.1em; color: #fff; background: rgba(0,0,0,.6); padding: 0.3cqw 0.8cqw; border-radius: 99px; white-space: nowrap; }
@@ -166,7 +167,7 @@ body.capture .ctl { display: none; }
   <!-- Chapter 1: opening photos -->
   <div class="scene" id="s-open1"><div class="photo" style="background-image:url(assets/IMG_4623.jpg)"></div><div class="shade"></div><div class="cap">トラクターに、乗る。</div></div>
   <div class="scene" id="s-tease"><div class="photo" style="background-image:url(assets/pi_mounted.jpg)"></div><div class="shade"></div>
-    <div class="cap"><small>トラクターのピラーに、ラズパイ。</small>写真と、数か所の寸法で。<b>こんな部品</b>が作れたら？</div></div>
+    <div class="cap"><small>トラクターの柱に、ラズパイ。</small>この穴に合う部品、<b>写真と 2 か所の寸法</b>で？</div></div>
   <div class="scene" id="s-open2"><div class="photo" style="background-image:url(assets/IMG_4625.jpg)"></div><div class="shade"></div>
     <div class="wish"><div>ここに、<b>ラズパイ</b>のマウントを。</div><div><b>スマホホルダー</b>も。</div></div></div>
   <div class="scene" id="s-open3"><div class="photo" style="background-image:url(assets/IMG_4592.jpg)"></div><div class="shade"></div>
@@ -177,12 +178,13 @@ body.capture .ctl { display: none; }
     <div class="cap">でも、<b>何を作ればいいか</b>分からない。</div></div>
   <div class="scene" id="s-open5"><div class="problems">
     <div class="pr" data-at="0"><i>1</i>何を作ればいいか、分からない。</div>
-    <div class="pr" data-at="1500"><i>2</i>ぴったりの寸法に合わせるのが、難しい。</div>
-    <div class="pr" data-at="3000"><i>3</i>AI とのやりとりが、面倒。</div>
-    <div class="so" data-at="4800">そんな問題を解決する、</div>
-    <div class="brand" data-at="5400"><b>Pittari</b> MCP</div>
-    <div class="sub" data-at="6600">現場の写真と、数か所の寸法から。ぴったり取り付けられる部品を、3D プリントへ。</div>
-    <div class="steps" data-at="7600"><span>写真を送る</span><em>→</em><span>質問に答える</span><em>→</em><span>数か所だけ測る</span><em>→</em><span>プレビューを見る</span><em>→</em><span>印刷する</span></div>
+    <div class="pr" data-at="1100"><i>2</i>ぴったりの寸法に合わせるのが、難しい。</div>
+    <div class="pr" data-at="2200"><i>3</i>AI とのやりとりが、面倒。</div>
+    <div class="so" data-at="3600">そんな問題を解決する、</div>
+    <div class="brand" data-at="4200"><b>Pittari</b> MCP</div>
+    <div class="sub" data-at="5200">現場の写真と、数か所の寸法から。ぴったり取り付けられる部品を、3D プリントへ。</div>
+    <div class="def" data-at="5800">MCP ＝ Claude に道具と進め方を足す仕組み。必要なのは Mac の Claude Code と、iPhone と、3D プリンター。</div>
+    <div class="steps" data-at="6400"><span>写真を送る</span><em>→</em><span>質問に答える</span><em>→</em><span>数か所だけ測る</span><em>→</em><span>プレビューを見る</span><em>→</em><span>印刷する</span></div>
   </div></div>
 
   <!-- Chapter 1a: before / after -->
@@ -259,7 +261,7 @@ body.capture .ctl { display: none; }
       <div class="p" data-at="600">そのリンクを、トラクターの中で開く。ピラーの「？」の場所に、青い実寸モデル。黄色い板は床、柱の先が取付け点。</div>
       
       <div class="p" data-at="1800">実物に重ねて、ずれを一言。それが次の版になる。</div>
-      <div class="p lim" data-at="2600">AR は形と置き場所の目安。強度や公差は保証しない。1 個試し刷りして、実物で確かめる。</div>
+      <div class="p lim" data-at="2600">AR は形と置き場所の目安。強度や公差は保証しない。この AR は途中の版で、最終の版は 1 個試し刷りして実物で合わせた。</div>
       <div class="st" data-at="3200"><span>iPhone 実機で実寸表示 確認済み</span></div>
     </div></div></div>
 
@@ -287,6 +289,7 @@ body.capture .ctl { display: none; }
     <div class="l1" data-at="5000">現場の写真と、数か所の寸法から。ぴったりの部品を 3D プリントへ。</div>
     <div class="big" data-at="5600"><b>Pittari</b>（ぴったり）</div>
     <div class="url" data-at="6400">github.com/tomiyasu0428/spatialvibe-mcp</div>
+    <div class="meta" data-at="6400">必要なもの: MAC の CLAUDE CODE · IPHONE · 3D プリンター</div>
     <div class="meta" data-at="6400">PITTARI — CLAUDE + MCP — BUILT 2026.11.04–11.08</div>
   </div></div>
 
@@ -312,7 +315,7 @@ body.capture .ctl { display: none; }
 
   // Chapters: [id, duration ms]. render.py renders each as its own clip and splices the process clip in between.
   const CHAPTERS = [
-    ["tease", 3500], ["open", 25300], ["ba", 8000], ["how", 8000], ["chat", 12500], ["build", 13000], ["field", 5000], ["ar", 9000], ["done", 10500], ["export", 9000], ["close", 11000],
+    ["tease", 3500], ["open", 22800], ["ba", 8000], ["how", 8000], ["chat", 12500], ["build", 13000], ["field", 5000], ["ar", 9000], ["done", 10500], ["export", 9000], ["close", 11000],
   ];
   const starts = {}; let acc = 0;
   for (const [id, d] of CHAPTERS) { starts[id] = acc; acc += d; }
@@ -327,9 +330,9 @@ body.capture .ctl { display: none; }
   function render(t) {
     // --- open: 4 photos, hard cuts, slow zoom
     const o = starts.open;
-    const cuts = [[0, 4800], [4800, 4000], [8800, 4000], [12800, 12500]];
+    const cuts = [[0, 4800], [4800, 4000], [8800, 4000], [12800, 10000]];
     ["s-open2", "s-open3", "s-open4", "s-open5"].forEach((id, i) => {
-      const [a, d] = cuts[i]; const on = t >= o + a && t < o + a + d && t < o + 25300;
+      const [a, d] = cuts[i]; const on = t >= o + a && t < o + a + d && t < o + 22800;
       const e = $(id); e.style.opacity = on ? (i === 3 ? inFade(t, o + a, d, 400, 500) : 1) : 0; e.style.zIndex = on ? 2 : 0;
       if (on && i === 3) { staged(e, o + a, t); return; }
       if (on) {
