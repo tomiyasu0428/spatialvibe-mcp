@@ -315,7 +315,7 @@ body.capture .ctl { display: none; }
 
   // Chapters: [id, duration ms]. render.py renders each as its own clip and splices the process clip in between.
   const CHAPTERS = [
-    ["tease", 3500], ["open", 22800], ["ba", 8000], ["how", 8000], ["chat", 12500], ["build", 13000], ["field", 5000], ["ar", 9000], ["done", 10500], ["export", 9000], ["close", 11000],
+    ["tease", 3500], ["open", 25800], ["ba", 8000], ["how", 8000], ["chat", 12500], ["build", 13000], ["field", 5000], ["ar", 9000], ["done", 10500], ["export", 9000], ["close", 11000],
   ];
   const starts = {}; let acc = 0;
   for (const [id, d] of CHAPTERS) { starts[id] = acc; acc += d; }
@@ -330,9 +330,9 @@ body.capture .ctl { display: none; }
   function render(t) {
     // --- open: 4 photos, hard cuts, slow zoom
     const o = starts.open;
-    const cuts = [[0, 4800], [4800, 4000], [8800, 4000], [12800, 10000]];
+    const cuts = [[0, 4800], [4800, 4000], [8800, 4000], [12800, 13000]];
     ["s-open2", "s-open3", "s-open4", "s-open5"].forEach((id, i) => {
-      const [a, d] = cuts[i]; const on = t >= o + a && t < o + a + d && t < o + 22800;
+      const [a, d] = cuts[i]; const on = t >= o + a && t < o + a + d && t < o + 25800;
       const e = $(id); e.style.opacity = on ? (i === 3 ? inFade(t, o + a, d, 400, 500) : 1) : 0; e.style.zIndex = on ? 2 : 0;
       if (on && i === 3) { staged(e, o + a, t); return; }
       if (on) {
