@@ -167,10 +167,9 @@ body.capture .ctl { display: none; }
   <!-- Chapter 1: opening photos -->
   <div class="scene" id="s-open1"><div class="photo" style="background-image:url(assets/IMG_4623.jpg)"></div><div class="shade"></div><div class="cap">トラクターに、乗る。</div></div>
   <div class="scene" id="s-tease"><div class="photo" style="background-image:url(assets/pi_mounted.jpg)"></div><div class="shade"></div>
-    <div class="cap"><small>トラクターの柱に、ラズパイ。</small>この穴に合う部品、<b>写真と 2 か所の寸法</b>で？</div></div>
-  <div class="scene" id="s-open2"><div class="photo" style="background-image:url(assets/IMG_4625.jpg)"></div><div class="shade"></div>
-    <div class="wish"><div>ここに、<b>ラズパイ</b>のマウントを。</div><div><b>スマホホルダー</b>も。</div></div></div>
+    <div class="cap"><small id="tease-small">トラクターの柱に、ラズパイ。</small><span id="tease-q">この穴に合う部品、<b>写真と 2 か所の寸法</b>で？</span></div></div>
   <div class="scene" id="s-open3"><div class="photo" style="background-image:url(assets/IMG_4592.jpg)"></div><div class="shade"></div>
+    <div class="wish"><div>ここに、<b>ラズパイ</b>のマウントを。</div><div><b>スマホホルダー</b>も。</div></div>
     <div class="q" style="left:19%;top:33%">?<span>ピラーのネジ穴</span></div><div class="q" style="left:70%;top:60%">?<span>ダッシュのトレイ</span></div>
     <div class="cap small">現場のオーダーメイドを支える、3D プリンター。</div></div>
   <div class="scene" id="s-open4"><div class="photo" style="background-image:url(assets/IMG_4621.jpg)"></div><div class="shade"></div>
@@ -315,7 +314,7 @@ body.capture .ctl { display: none; }
 
   // Chapters: [id, duration ms]. render.py renders each as its own clip and splices the process clip in between.
   const CHAPTERS = [
-    ["tease", 3500], ["open", 25800], ["ba", 8000], ["how", 8000], ["chat", 12500], ["build", 13000], ["field", 5000], ["ar", 9000], ["done", 10500], ["export", 9000], ["close", 11000],
+    ["tease", 8800], ["open", 26000], ["ba", 8000], ["how", 8000], ["chat", 12500], ["build", 13000], ["field", 5000], ["ar", 9000], ["done", 10500], ["export", 9000], ["close", 11000],
   ];
   const starts = {}; let acc = 0;
   for (const [id, d] of CHAPTERS) { starts[id] = acc; acc += d; }
@@ -330,17 +329,17 @@ body.capture .ctl { display: none; }
   function render(t) {
     // --- open: 4 photos, hard cuts, slow zoom
     const o = starts.open;
-    const cuts = [[0, 4800], [4800, 4000], [8800, 4000], [12800, 13000]];
-    ["s-open2", "s-open3", "s-open4", "s-open5"].forEach((id, i) => {
-      const [a, d] = cuts[i]; const on = t >= o + a && t < o + a + d && t < o + 25800;
-      const e = $(id); e.style.opacity = on ? (i === 3 ? inFade(t, o + a, d, 400, 500) : 1) : 0; e.style.zIndex = on ? 2 : 0;
-      if (on && i === 3) { staged(e, o + a, t); return; }
+    const cuts = [[0, 9000], [9000, 4000], [13000, 13000]];
+    ["s-open3", "s-open4", "s-open5"].forEach((id, i) => {
+      const [a, d] = cuts[i]; const on = t >= o + a && t < o + a + d && t < o + 26000;
+      const e = $(id); e.style.opacity = on ? (i === 2 ? inFade(t, o + a, d, 400, 500) : 1) : 0; e.style.zIndex = on ? 2 : 0;
+      if (on && i === 2) { staged(e, o + a, t); return; }
       if (on) {
         const p = seg(t, o + a, d);
         e.querySelector(".photo").style.transform = `scale(${1.04 + p * 0.06})`;
-        const cap = e.querySelector(".cap"); if (cap) rise(cap, ease(seg(t, o + a + 350, 500)));
-        e.querySelectorAll(".wish div").forEach((w, k) => rise(w, ease(seg(t, o + a + 400 + k * 900, 450))));
-        e.querySelectorAll(".q").forEach((q, k) => { const s = ease(seg(t, o + a + 500 + k * 700, 400)); q.style.transform = `translate(-50%, -50%) scale(${s})`; q.style.opacity = s; });
+        const cap = e.querySelector(".cap"); if (cap) rise(cap, ease(seg(t, o + a + (id === "s-open3" ? 4600 : 350), 500)));
+        e.querySelectorAll(".wish div").forEach((w, k) => rise(w, ease(seg(t, o + a + 400 + k * 2600, 450))));
+        e.querySelectorAll(".q").forEach((q, k) => { const s = ease(seg(t, o + a + 700 + k * 1800, 400)); q.style.transform = `translate(-50%, -50%) scale(${s})`; q.style.opacity = s; });
       }
     });
     // --- before / after
@@ -352,9 +351,10 @@ body.capture .ctl { display: none; }
     show("s-how", howOn, inFade(t, hw, 8000));
     if (howOn) staged($("s-how"), hw, t);
     // --- tease
-    const te = starts.tease; const teOn = t >= te && t < te + 3500;
-    { const e = $("s-tease"); e.style.opacity = teOn ? 1 - ease(seg(t, te + 3100, 400)) : 0; e.style.zIndex = teOn ? 2 : 0;
-      if (teOn) { e.querySelector(".photo").style.transform = `scale(${1.08 - seg(t, te, 3500) * 0.05})`; rise(e.querySelector(".cap"), ease(seg(t, te + 300, 450))); } }
+    const te = starts.tease; const teOn = t >= te && t < te + 8800;
+    { const e = $("s-tease"); e.style.opacity = teOn ? 1 - ease(seg(t, te + 8400, 400)) : 0; e.style.zIndex = teOn ? 2 : 0;
+      if (teOn) { e.querySelector(".photo").style.transform = `scale(${1.08 - seg(t, te, 8800) * 0.06})`; e.querySelector(".cap").style.opacity = 1;
+        rise($("tease-small"), ease(seg(t, te + 300, 450))); const q = $("tease-q"); const qp = ease(seg(t, te + 3300, 500)); q.style.display = "block"; q.style.opacity = qp; q.style.transform = `translateY(${(1 - qp) * 1.2}cqw)`; } }
     // --- chat
     const c = starts.chat; const chatOn = t >= c && t < c + 12500;
     show("s-chat", chatOn, inFade(t, c, 12500));
