@@ -161,7 +161,7 @@ body.capture .ctl { display: none; }
   const FAST = new URLSearchParams(location.search).has("fast");   // whole diagram at once (for the demo video)
   const T_TITLE = FAST ? 1600 : 2200, T_LANES = FAST ? 700 : 1100, STEP = FAST ? 120 : 2050, T_STEP0 = T_TITLE + T_LANES;
   const T_SUM = T_STEP0 + STEPS.length * STEP + (FAST ? 900 : 400);
-  const T_TOOLS = T_SUM + 4800, CARD = 850;
+  const T_TOOLS = T_SUM + (FAST ? 6500 : 4800), CARD = 850;
   const DUR = T_TOOLS + 1300 + TOOLS.length * CARD + 3200;
 
   // ---- geometry (stage units: cqw / cqh; svg viewBox 1000 x 562.5) ------------------------------
