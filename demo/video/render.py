@@ -26,6 +26,7 @@ FPS, W, H = 30, 1920, 1080
 # or ("footage", path, start_s, end_s, speed) for real footage under demo/video/assets/ (local only).
 ORDER = [
     "tease",                                                  # the finished part, then the bare holes + the question
+    ("footage", "assets/board.mov", 0.5, 3.0, 1.0),          # real: the tractor, 2.5 s
     "open", ("process", 0, 12.2, 1.35), "how", "field",
     # real: the phone recording (Remote Control -> Claude -> questions -> dims -> preview -> AR link -> AR), captioned
     ("footage", "assets/phone.mov", 1.0, 4.5, 1.0, "写真と一言を送る"),
