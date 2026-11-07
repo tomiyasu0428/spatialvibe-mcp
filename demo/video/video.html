@@ -52,6 +52,19 @@ body.capture .stage { width: 100vw; height: 100vh; aspect-ratio: auto; }
 .so { font-size: 2cqw; font-weight: 500; opacity: 0.8; margin-top: 2.4cqw; }
 .brand { font-size: 8cqw; font-weight: 900; letter-spacing: -0.045em; line-height: 1; } .brand b { color: var(--orange); font-family: var(--lat); letter-spacing: -0.02em; font-weight: 900; }
 .problems .sub { font-size: 1.7cqw; font-weight: 500; opacity: 0.8; }
+/* before / after */
+.ba { position: absolute; left: 6cqw; right: 6cqw; top: 7cqw; bottom: 6cqw; display: grid; grid-template-columns: 1fr 1fr; gap: 2.4cqw; }
+.col { display: flex; flex-direction: column; gap: 1.1cqw; padding: 1.8cqw 2cqw; border: 1px solid #2a2c33; }
+.col.was { background: #121316; color: #b9bbc2; }
+.col.now { background: color-mix(in srgb, var(--orange) 9%, transparent); border-color: color-mix(in srgb, var(--orange) 55%, transparent); }
+.ch { font-size: 2.8cqw; font-weight: 900; letter-spacing: -0.04em; line-height: 1.1; margin-bottom: 0.8cqw; display: flex; align-items: baseline; gap: 1cqw; }
+.ch small { font: 500 1.1cqw var(--jp); opacity: 0.7; letter-spacing: 0; }
+.now .ch { color: var(--orange); }
+.it { display: flex; gap: 1cqw; align-items: flex-start; font-size: 1.5cqw; font-weight: 600; line-height: 1.45; }
+.it i { font-style: normal; font: 800 1.3cqw var(--lat); flex: none; width: 2.2cqw; height: 2.2cqw; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-top: 0.1cqw; }
+.was .it i { border: 1px solid #5a5d66; color: #8a8c92; }
+.now .it i { background: var(--orange); color: var(--ink); }
+.it b { color: var(--paper); font-weight: 800; } .now .it b { color: var(--orange); }
 /* how scene (instructions + tools) */
 .how { position: absolute; left: 6cqw; right: 6cqw; top: 7cqw; bottom: 6cqw; display: flex; flex-direction: column; gap: 1.6cqw; }
 .how .h { font-size: 3.2cqw; font-weight: 900; letter-spacing: -0.045em; line-height: 1.1; } .how .h b { color: var(--orange); font-weight: 900; }
@@ -160,6 +173,24 @@ body.capture .ctl { display: none; }
     <div class="so" data-at="5200">そんな問題を解決する、</div>
     <div class="brand" data-at="6000"><b>Pittari</b> MCP</div>
     <div class="sub" data-at="6600">ぴったり — 写真から、3D プリントまで。</div>
+  </div></div>
+
+  <!-- Chapter 1a: before / after -->
+  <div class="scene" id="s-ba"><div class="ba">
+    <div class="col was"><div class="ch" data-at="0">これまで<small>AI に CAD を頼むと</small></div>
+      <div class="it" data-at="900"><i>✕</i>コードは書けても、実行は自分。形が壊れていても気づけない。</div>
+      <div class="it" data-at="2300"><i>✕</i>「測ってください」の往復。どれが推定か、分からなくなる。</div>
+      <div class="it" data-at="3700"><i>✕</i>STL を自分で開き、違いを言葉で説明し直す。</div>
+      <div class="it" data-at="5100"><i>✕</i>実寸で確かめる手段がない。印刷してから「合わない」。</div>
+      <div class="it" data-at="6500"><i>✕</i>印刷条件は口頭。版は会話に埋もれる。</div>
+    </div>
+    <div class="col now"><div class="ch" data-at="400">Pittari なら<small>Claude + MCP</small></div>
+      <div class="it" data-at="1500"><i>✓</i>隔離して実行し、干渉と造形範囲を<b>数値で返す</b>。</div>
+      <div class="it" data-at="2900"><i>✓</i>聞くのは<b>選択肢で 2〜4 問</b>。寸法は資料から、推定は推定と書く。</div>
+      <div class="it" data-at="4300"><i>✓</i>Claude が<b>プレビューを自分で見て</b>、直してから答える。</div>
+      <div class="it" data-at="5700"><i>✓</i><b>実寸 AR を現場で</b>。印刷する前に、合うかが見える。</div>
+      <div class="it" data-at="7100"><i>✓</i>印刷条件を<b>1 フォルダに</b>。版は v001, v002… と残る。</div>
+    </div>
   </div></div>
 
   <!-- Chapter 1b: how (instructions + tools) -->
@@ -284,7 +315,7 @@ body.capture .ctl { display: none; }
 
   // Chapters: [id, duration ms]. render.py renders each as its own clip and splices the process clip in between.
   const CHAPTERS = [
-    ["open", 27000], ["how", 10000], ["chat", 12500], ["build", 13000], ["field", 11000], ["ar", 9000], ["export", 9000], ["close", 11000],
+    ["open", 27000], ["ba", 12000], ["how", 10000], ["chat", 12500], ["build", 13000], ["field", 11000], ["ar", 9000], ["export", 9000], ["close", 11000],
   ];
   const starts = {}; let acc = 0;
   for (const [id, d] of CHAPTERS) { starts[id] = acc; acc += d; }
@@ -312,6 +343,10 @@ body.capture .ctl { display: none; }
         e.querySelectorAll(".q").forEach((q, k) => { const s = ease(seg(t, o + a + 500 + k * 700, 400)); q.style.transform = `translate(-50%, -50%) scale(${s})`; q.style.opacity = s; });
       }
     });
+    // --- before / after
+    const ba = starts.ba; const baOn = t >= ba && t < ba + 12000;
+    show("s-ba", baOn, inFade(t, ba, 12000));
+    if (baOn) staged($("s-ba"), ba, t);
     // --- how
     const hw = starts.how; const howOn = t >= hw && t < hw + 10000;
     show("s-how", howOn, inFade(t, hw, 10000));
