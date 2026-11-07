@@ -18,6 +18,9 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PROCESS = HERE.parent / "process" / "process.mp4"
+MUSIC = HERE / "assets" / "music.mp3"          # optional: muxed under the whole video with a fade-out
+# Region (x, y, w, h) in the phone recording's own pixels that is blurred (the Mac's name in the header).
+BLUR = {"assets/phone.mov": (240, 158, 300, 50)}
 FPS, W, H = 30, 1920, 1080
 # Final order: page chapters by id, ("process", start_s, end_s, speed) segments of the process clip,
 # or ("footage", path, start_s, end_s, speed) for real footage under demo/video/assets/ (local only).
@@ -79,17 +82,34 @@ def join(out: Path):
             if not src.exists():
                 sys.exit(f"missing footage {src}")
             seg = clips / f"footage_{k}.mp4"
-            vf = (f"setpts=PTS/{speed},scale={W}:{H}:force_original_aspect_ratio=decrease,"
-                  f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:color=0x0d0e10,fps={FPS}")
+            fit = (f"setpts=PTS/{speed},scale={W}:{H}:force_original_aspect_ratio=decrease,"
+                   f"pad={W}:{H}:(ow-iw)/2:(oh-ih)/2:color=0x0d0e10,fps={FPS}")
+            blur = BLUR.get(item[1])
+            if blur:
+                x, y, w, h = blur
+                fc = (f"[0:v]split[base][tmp];[tmp]crop={w}:{h}:{x}:{y},boxblur=12:2,boxblur=12:2[blr];"
+                      f"[base][blr]overlay={x}:{y}[v];[v]{fit}[out]")
+                vargs = ["-filter_complex", fc, "-map", "[out]"]
+            else:
+                vargs = ["-vf", fit]
             cmd = [ff, "-v", "error", "-y", "-ss", str(a)] + (["-to", str(b)] if b else []) + \
-                  ["-i", str(src), "-an", "-vf", vf, "-c:v", "libx264", "-crf", "17", "-preset", "medium", "-pix_fmt", "yuv420p", str(seg)]
+                  ["-i", str(src), "-an", *vargs, "-c:v", "libx264", "-crf", "17", "-preset", "medium", "-pix_fmt", "yuv420p", str(seg)]
             subprocess.run(cmd, check=True)
             inputs.append(seg)
         else:
             inputs.append(clips / f"{item}.mp4")
     lst = clips / "list.txt"
     lst.write_text("".join(f"file '{p.resolve()}'\n" for p in inputs))
-    subprocess.run([ff, "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy", "-movflags", "+faststart", str(out)], check=True)
+    silent = clips / "joined_silent.mp4"
+    subprocess.run([ff, "-v", "error", "-y", "-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy", str(silent)], check=True)
+    if not MUSIC.exists():
+        silent.replace(out); return
+    info = subprocess.run([ff, "-i", str(silent)], capture_output=True, text=True).stderr
+    h, m, sec = info.split("Duration: ")[1].split(",")[0].split(":")
+    dur = int(h) * 3600 + int(m) * 60 + float(sec)
+    af = f"atrim=0:{dur:.3f},afade=t=in:st=0:d=1,afade=t=out:st={dur - 4:.3f}:d=4,volume=0.9"
+    subprocess.run([ff, "-v", "error", "-y", "-i", str(silent), "-stream_loop", "-1", "-i", str(MUSIC), "-filter_complex", f"[1:a]{af}[a]",
+                    "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(out)], check=True)
 
 
 def main():
