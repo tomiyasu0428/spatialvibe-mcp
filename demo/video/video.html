@@ -126,7 +126,8 @@ body.capture .stage { width: 100vw; height: 100vh; aspect-ratio: auto; }
 
 /* close */
 .close { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2cqw; text-align: center; }
-.close .l1 { font-size: 3cqw; font-weight: 700; opacity: 0.85; }
+.close .l1 { font-size: 2.6cqw; font-weight: 700; opacity: 0.85; }
+.close .l2 { font-size: 3.4cqw; font-weight: 900; letter-spacing: -0.04em; margin-top: 1.2cqw; }
 .close .big { font-size: 7cqw; font-weight: 900; letter-spacing: -0.045em; line-height: 1; } .close .big b { color: var(--orange); font-weight: 900; }
 .close .url { font: 500 1.6cqw var(--mono); letter-spacing: 0.04em; text-transform: none; color: var(--blue); margin-top: 1cqw; }
 .close .meta { font: 400 1cqw var(--mono); letter-spacing: 0.14em; opacity: 0.6; }
@@ -253,11 +254,12 @@ body.capture .ctl { display: none; }
 
   <!-- Chapter 6: close -->
   <div class="scene" id="s-close"><div class="close">
-    <div class="l1" data-at="0">スマホも、箱も、同じやり方で。</div>
-    <div class="big" data-at="900"><b>Pittari</b>（ぴったり）</div>
-    <div class="l1" data-at="1300">写真から、3Dプリントまで。</div>
-    <div class="url" data-at="1800">github.com/tomiyasu0428/spatialvibe-mcp</div>
-    <div class="meta" data-at="1800">PITTARI — CLAUDE + MCP — BUILT 2026.11.04–11.08</div>
+    <div class="l1" data-at="0">この MCP サーバーを入れれば、普段の環境からそれができる。</div>
+    <div class="l1" data-at="1400">あとは、印刷するだけ。</div>
+    <div class="l2" data-at="3200">現場で必要なものを、最小限の手間で。</div>
+    <div class="big" data-at="4200"><b>Pittari</b>（ぴったり）</div>
+    <div class="url" data-at="5400">github.com/tomiyasu0428/spatialvibe-mcp</div>
+    <div class="meta" data-at="5400">PITTARI — CLAUDE + MCP — BUILT 2026.11.04–11.08</div>
   </div></div>
 
   <div class="hud" aria-hidden="true">
@@ -282,7 +284,7 @@ body.capture .ctl { display: none; }
 
   // Chapters: [id, duration ms]. render.py renders each as its own clip and splices the process clip in between.
   const CHAPTERS = [
-    ["open", 27000], ["how", 10000], ["chat", 12500], ["build", 13000], ["field", 11000], ["ar", 9000], ["export", 9000], ["close", 7000],
+    ["open", 27000], ["how", 10000], ["chat", 12500], ["build", 13000], ["field", 11000], ["ar", 9000], ["export", 9000], ["close", 11000],
   ];
   const starts = {}; let acc = 0;
   for (const [id, d] of CHAPTERS) { starts[id] = acc; acc += d; }
@@ -339,8 +341,8 @@ body.capture .ctl { display: none; }
     show("s-export", exOn, inFade(t, x, 9000));
     if (exOn) staged($("s-export"), x, t);
     // --- close
-    const z = starts.close; const zOn = t >= z && t < z + 7000;
-    show("s-close", zOn, inFade(t, z, 7000, 450, 900));
+    const z = starts.close; const zOn = t >= z && t < z + 11000;
+    show("s-close", zOn, inFade(t, z, 11000, 450, 900));
     if (zOn) staged($("s-close"), z, t);
     // hud
     const sec = Math.floor(t / 1000), fr = Math.floor((t % 1000) / 1000 * 30);
