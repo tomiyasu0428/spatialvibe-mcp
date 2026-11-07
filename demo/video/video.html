@@ -239,28 +239,18 @@ body.capture .ctl { display: none; }
   </div>
 
   <!-- Chapter 3b: from the field, phone only -->
-  <div class="scene" id="s-field"><div class="ar">
-    <div class="phone" id="fphone"><div class="scr dark">
-      <div class="pchat">
-        <div class="pm me" data-at="600"><i style="background-image:url(assets/IMG_4621.jpg)"></i>ハンドレールにラズパイを付けたい。A1 mini。</div>
-        <div class="pm ai" data-at="1600">4 つだけ聞かせてください。<div class="pc"><span class="on">パイプを挟む</span><span>ネジ穴</span><span>トレイ</span></div><div class="pc"><span>毎回外す</span><span class="on">たまに</span></div></div>
-        <div class="pm ai" data-at="2800">build_model → preview → publish_ar<br><u>https://…workers.dev/ar/…</u></div>
-        <div class="pm me" data-at="3800">開いて重ねた。少し前に寄せたい。</div>
-        <div class="pm ai" data-at="4600">v004 を作りました。リンクを更新します。</div>
-      </div></div><div class="tag">Claude Code · Remote Control</div></div>
-    <div class="artext">
-      <div class="h" data-at="0">現場から、<b>スマホだけ</b>で。</div>
-      <div class="p" data-at="800">トラクターの中でも、ハウスの中でも。写真を撮って送り、選択肢に答える。Mac の Claude Code を、スマホから動かす。</div>
-      <div class="p" data-at="1800">届いたリンクをその場で開く。<b>印刷する前に、現場で合うかを見る。</b></div>
-      <div class="st" data-at="3000"><span>撮る → 聞かれる → 形 → AR → 直す</span><span>その場で完結</span></div>
-    </div></div></div>
+  <div class="scene" id="s-field"><div class="close">
+    <div class="big" data-at="0">現場から、<b>スマホだけ</b>で。</div>
+    <div class="l1" data-at="700">写真を撮って送り、選択肢に答える。Mac の Claude Code を、スマホから。</div>
+    <div class="l1" data-at="1400">ここからは、iPhone の画面そのまま。</div>
+  </div></div>
 
   <!-- Chapter 4: AR -->
   <div class="scene" id="s-ar"><div class="ar">
     <div class="phone" id="phone"><div class="scr" style="background-image:url(assets/ar_real.jpg)"></div><div class="tag" id="phonetag">iPhone 実機 · AR Quick Look</div></div>
     <div class="artext">
       <div class="h" data-at="0">現場で、<b>実寸</b>で重ねる。</div>
-      <div class="p" data-at="600">ピラーの「？」の場所に、青い実寸モデル。黄色い板は床、柱の先が取付け点。</div>
+      <div class="p" data-at="600">そのリンクを、トラクターの中で開く。ピラーの「？」の場所に、青い実寸モデル。黄色い板は床、柱の先が取付け点。</div>
       
       <div class="p" data-at="1800">実物に重ねて、ずれを一言。それが次の版になる。</div>
       <div class="p lim" data-at="2600">AR は形と置き場所の目安。強度や公差は保証しない。1 個試し刷りして、実物で確かめる。</div>
@@ -315,7 +305,7 @@ body.capture .ctl { display: none; }
 
   // Chapters: [id, duration ms]. render.py renders each as its own clip and splices the process clip in between.
   const CHAPTERS = [
-    ["open", 27000], ["ba", 8000], ["how", 8000], ["chat", 12500], ["build", 13000], ["field", 11000], ["ar", 9000], ["done", 8000], ["export", 9000], ["close", 11000],
+    ["open", 23800], ["ba", 8000], ["how", 8000], ["chat", 12500], ["build", 13000], ["field", 5000], ["ar", 9000], ["done", 8000], ["export", 9000], ["close", 11000],
   ];
   const starts = {}; let acc = 0;
   for (const [id, d] of CHAPTERS) { starts[id] = acc; acc += d; }
@@ -330,11 +320,11 @@ body.capture .ctl { display: none; }
   function render(t) {
     // --- open: 4 photos, hard cuts, slow zoom
     const o = starts.open;
-    const cuts = [[0, 3200], [3200, 4800], [8000, 4000], [12000, 4000], [16000, 11000]];
-    ["s-open1", "s-open2", "s-open3", "s-open4", "s-open5"].forEach((id, i) => {
-      const [a, d] = cuts[i]; const on = t >= o + a && t < o + a + d && t < o + 27000;
-      const e = $(id); e.style.opacity = on ? (i === 4 ? inFade(t, o + a, d, 400, 500) : 1) : 0; e.style.zIndex = on ? 2 : 0;
-      if (on && i === 4) { staged(e, o + a, t); return; }
+    const cuts = [[0, 4800], [4800, 4000], [8800, 4000], [12800, 11000]];
+    ["s-open2", "s-open3", "s-open4", "s-open5"].forEach((id, i) => {
+      const [a, d] = cuts[i]; const on = t >= o + a && t < o + a + d && t < o + 23800;
+      const e = $(id); e.style.opacity = on ? (i === 3 ? inFade(t, o + a, d, 400, 500) : 1) : 0; e.style.zIndex = on ? 2 : 0;
+      if (on && i === 3) { staged(e, o + a, t); return; }
       if (on) {
         const p = seg(t, o + a, d);
         e.querySelector(".photo").style.transform = `scale(${1.04 + p * 0.06})`;
@@ -364,9 +354,9 @@ body.capture .ctl { display: none; }
       const v2 = t >= b + 7600; pv.style.backgroundImage = `url(assets/${v2 ? "preview_v003" : "preview_v001"}.png)`; $("pvlbl").textContent = v2 ? "PREVIEW v003" : "PREVIEW v001";
     }
     // --- field
-    const fd = starts.field; const fdOn = t >= fd && t < fd + 11000;
-    show("s-field", fdOn, inFade(t, fd, 11000));
-    if (fdOn) { staged($("s-field"), fd, t); const ph = ease(seg(t, fd, 700)); $("fphone").style.transform = `translateY(${(1 - ph) * 3}cqw)`; $("fphone").style.opacity = ph; }
+    const fd = starts.field; const fdOn = t >= fd && t < fd + 5000;
+    show("s-field", fdOn, inFade(t, fd, 5000));
+    if (fdOn) staged($("s-field"), fd, t);
     // --- ar
     const a = starts.ar; const arOn = t >= a && t < a + 9000;
     show("s-ar", arOn, inFade(t, a, 9000));
