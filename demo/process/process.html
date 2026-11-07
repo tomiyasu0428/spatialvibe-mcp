@@ -106,7 +106,7 @@ body.capture .ctl { display: none; }
   <div class="lanes" id="lanes"></div>
   <svg class="wires" id="wires" viewBox="0 0 1000 562.5" preserveAspectRatio="none"></svg>
   <div id="nodes"></div>
-  <div class="title" id="title"><div class="sub">Pittari（ぴったり）</div><div class="big">写真から、<b>3Dプリント</b>まで。</div><div class="sub">誰が、何をするか</div></div>
+  <div class="title" id="title"><div class="sub">Pittari（ぴったり）</div><div class="big">写真と寸法から、<b>3Dプリント</b>まで。</div><div class="sub">誰が、何をするか</div></div>
   <div class="now" id="now"><span class="tag" id="nowtag"></span><span class="what" id="nowwhat"></span></div>
   <div class="close" id="close"><b class="o">Claude</b> が考え、<b class="b">MCP</b> が動かし、人は確かめる。</div>
   </div>
@@ -139,7 +139,7 @@ body.capture .ctl { display: none; }
   const STEPS = [
     { x: 0, who: "user",   ttl: "写真と目的",   sub: "ここに、これを付けたい" },
     { x: 1, who: "claude", ttl: "聞く",         sub: "選択肢で 4 問、一度に" },
-    { x: 2, who: "claude", ttl: "寸法を探す",   sub: "手順書・規格 / 推定は推定と書く" },
+    { x: 2, who: "claude", ttl: "寸法を探す",   sub: "手順書・規格から。足りない分だけ測ってもらう" },
     { x: 3, who: "claude", ttl: "形を考える",   sub: "ずれを吸収する設計 → build123d" },
     { x: 4, who: "mcp",    ttl: "作って検査",   sub: "build_model: 隔離実行・干渉・造形範囲" },
     { x: 5, who: "mcp",    ttl: "プレビュー",   sub: "preview: 4 方向の画像" },

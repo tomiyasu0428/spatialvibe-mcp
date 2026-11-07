@@ -53,7 +53,7 @@ body.capture .stage { width: 100vw; height: 100vh; aspect-ratio: auto; }
 .so { font-size: 2cqw; font-weight: 500; opacity: 0.8; margin-top: 2.4cqw; }
 .brand { font-size: 8cqw; font-weight: 900; letter-spacing: -0.045em; line-height: 1; } .brand b { color: var(--orange); font-family: var(--lat); letter-spacing: -0.02em; font-weight: 900; }
 .problems .sub { font-size: 2cqw; font-weight: 700; }
-.steps { display: flex; align-items: center; gap: 0.9cqw; font-size: 1.5cqw; font-weight: 700; margin-top: 0.4cqw; }
+.steps { display: flex; align-items: center; gap: 0.7cqw; font-size: 1.35cqw; font-weight: 700; margin-top: 0.4cqw; }
 .steps span { border: 1px solid var(--orange); color: var(--orange); padding: 0.35cqw 1cqw; border-radius: 99px; }
 .steps em { font-style: normal; opacity: 0.6; }
 /* before / after */
@@ -166,7 +166,7 @@ body.capture .ctl { display: none; }
   <!-- Chapter 1: opening photos -->
   <div class="scene" id="s-open1"><div class="photo" style="background-image:url(assets/IMG_4623.jpg)"></div><div class="shade"></div><div class="cap">トラクターに、乗る。</div></div>
   <div class="scene" id="s-tease"><div class="photo" style="background-image:url(assets/pi_mounted.jpg)"></div><div class="shade"></div>
-    <div class="cap"><small>トラクターのピラーに、ラズパイ。</small>写真だけで、<b>こんな部品</b>が作れたら？</div></div>
+    <div class="cap"><small>トラクターのピラーに、ラズパイ。</small>写真と、数か所の寸法で。<b>こんな部品</b>が作れたら？</div></div>
   <div class="scene" id="s-open2"><div class="photo" style="background-image:url(assets/IMG_4625.jpg)"></div><div class="shade"></div>
     <div class="wish"><div>ここに、<b>ラズパイ</b>のマウントを。</div><div><b>スマホホルダー</b>も。</div></div></div>
   <div class="scene" id="s-open3"><div class="photo" style="background-image:url(assets/IMG_4592.jpg)"></div><div class="shade"></div>
@@ -181,8 +181,8 @@ body.capture .ctl { display: none; }
     <div class="pr" data-at="3000"><i>3</i>AI とのやりとりが、面倒。</div>
     <div class="so" data-at="4800">そんな問題を解決する、</div>
     <div class="brand" data-at="5400"><b>Pittari</b> MCP</div>
-    <div class="sub" data-at="6600">現場の写真から、ぴったり取り付けられる部品を、3D プリントへ。</div>
-    <div class="steps" data-at="7600"><span>写真を送る</span><em>→</em><span>質問に答える</span><em>→</em><span>プレビューを見る</span><em>→</em><span>印刷する</span></div>
+    <div class="sub" data-at="6600">現場の写真と、数か所の寸法から。ぴったり取り付けられる部品を、3D プリントへ。</div>
+    <div class="steps" data-at="7600"><span>写真を送る</span><em>→</em><span>質問に答える</span><em>→</em><span>数か所だけ測る</span><em>→</em><span>プレビューを見る</span><em>→</em><span>印刷する</span></div>
   </div></div>
 
   <!-- Chapter 1a: before / after -->
@@ -193,7 +193,7 @@ body.capture .ctl { display: none; }
       <div class="it" data-at="3600"><i>✕</i><span>実行は自分。壊れていても気づけない。</span></div>
     </div>
     <div class="col now"><div class="ch" data-at="400">Pittari なら<small>Claude + MCP</small></div>
-      <div class="it" data-at="1400"><i>✓</i><span>聞かれるのは、<b>選択肢だけ</b>。</span></div>
+      <div class="it" data-at="1400"><i>✓</i><span>聞かれるのは、<b>選択肢と、数か所の寸法だけ</b>。</span></div>
       <div class="it" data-at="2800"><i>✓</i><span>推定は、<b>推定と書く</b>。</span></div>
       <div class="it" data-at="4200"><i>✓</i><span>実行して検査し、<b>実寸で重ねてから</b>印刷。</span></div>
     </div>
@@ -206,7 +206,7 @@ body.capture .ctl { display: none; }
     <div class="rules">
       <div class="rule" data-at="1300"><div class="n">RULE 01</div><div class="t">まず、プリンターを聞く</div><div class="d">勝手に仮定しない。</div></div>
       <div class="rule" data-at="2000"><div class="n">RULE 02</div><div class="t">選択肢で、2〜4 問だけ</div><div class="d">細部は Claude が決める。</div></div>
-      <div class="rule" data-at="2700"><div class="n">RULE 03</div><div class="t">寸法は、資料から</div><div class="d">推定は推定と書く。</div></div>
+      <div class="rule" data-at="2700"><div class="n">RULE 03</div><div class="t">寸法は資料から。足りない分だけ測る</div><div class="d">推定は推定と書く。</div></div>
       <div class="rule" data-at="3400"><div class="n">RULE 04</div><div class="t">自分で見て、直す</div><div class="d">人に見せる前に。</div></div>
     </div>
     <div class="eq" data-at="4400"><span class="b">道具 6 つ</span><em>+</em><span class="o">進め方</span><em>=</em><span>Pittari MCP</span></div>
@@ -247,7 +247,7 @@ body.capture .ctl { display: none; }
   <!-- Chapter 3b: from the field, phone only -->
   <div class="scene" id="s-field"><div class="close">
     <div class="big" data-at="0">現場から、<b>スマホだけ</b>で。</div>
-    <div class="l1" data-at="700">写真を撮って送り、選択肢に答える。Mac の Claude Code を、スマホから。</div>
+    <div class="l1" data-at="700">写真を撮って送り、選択肢に答え、言われた所だけ測る。Mac の Claude Code を、スマホから。</div>
     <div class="l1" data-at="1400">ここからは、iPhone の画面そのまま。</div>
   </div></div>
 
@@ -284,7 +284,7 @@ body.capture .ctl { display: none; }
     <div class="l1" data-at="0">この MCP サーバーを入れれば、普段の環境からそれができる。</div>
     <div class="l1" data-at="1400">あとは、印刷するだけ。</div>
     <div class="l2" data-at="3200">現場で必要なものを、最小限の手間で。</div>
-    <div class="l1" data-at="5000">現場の写真から、ぴったりの部品を 3D プリントへ。</div>
+    <div class="l1" data-at="5000">現場の写真と、数か所の寸法から。ぴったりの部品を 3D プリントへ。</div>
     <div class="big" data-at="5600"><b>Pittari</b>（ぴったり）</div>
     <div class="url" data-at="6400">github.com/tomiyasu0428/spatialvibe-mcp</div>
     <div class="meta" data-at="6400">PITTARI — CLAUDE + MCP — BUILT 2026.11.04–11.08</div>
