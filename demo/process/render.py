@@ -18,11 +18,11 @@ HERE = Path(__file__).resolve().parent
 FPS, W, H = 30, 1920, 1080
 
 
-def open_page(p):
+def open_page(p, fast=False):
     exe = os.environ.get("SPATIALVIBE_CHROMIUM")  # e.g. /opt/pw-browsers/chromium when playwright's own download is absent
     browser = p.chromium.launch(executable_path=exe) if exe else p.chromium.launch()
     pg = browser.new_page(viewport={"width": W, "height": H}, device_scale_factor=1)
-    pg.goto((HERE / "process.html").as_uri() + "?capture=1")
+    pg.goto((HERE / "process.html").as_uri() + "?capture=1" + ("&fast=1" if fast else ""))
     pg.wait_for_function("window.reelReady !== undefined")
     pg.evaluate("window.reelReady")
     return browser, pg
@@ -31,14 +31,15 @@ def open_page(p):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--frame", type=int, help="ms: write a single PNG instead of the MP4")
+    ap.add_argument("--fast", action="store_true", help="whole diagram at once -> process_fast.mp4")
     a = ap.parse_args()
     from playwright.sync_api import sync_playwright
 
     with sync_playwright() as p:
-        browser, pg = open_page(p)
+        browser, pg = open_page(p, a.fast)
         if a.frame is not None:
             pg.evaluate(f"window.reelSeek({a.frame})")
-            out = HERE / f"process_{a.frame}.png"
+            out = HERE / f"process{'_fast' if a.fast else ''}_{a.frame}.png"
             out.write_bytes(pg.screenshot(type="png"))
             print(out)
             browser.close()
@@ -46,7 +47,7 @@ def main():
         import imageio_ffmpeg
         from PIL import Image
         n = int(pg.evaluate("window.reelDuration") / 1000 * FPS)
-        out = HERE / "process.mp4"
+        out = HERE / ("process_fast.mp4" if a.fast else "process.mp4")
         w = imageio_ffmpeg.write_frames(str(out), (W, H), fps=FPS, codec="libx264", pix_fmt_out="yuv420p",
                                         quality=None, output_params=["-crf", "17", "-preset", "medium", "-movflags", "+faststart"],
                                         macro_block_size=8)

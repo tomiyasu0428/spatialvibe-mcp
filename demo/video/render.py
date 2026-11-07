@@ -18,6 +18,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 PROCESS = HERE.parent / "process" / "process.mp4"
+PROCESS_FAST = HERE.parent / "process" / "process_fast.mp4"   # whole diagram at once (demo/process/render.py --fast)
 MUSIC = HERE / "assets" / "music.mp3"          # optional: muxed under the whole video with a fade-out
 # Region (x, y, w, h) in the phone recording's own pixels that is blurred (the Mac's name in the header).
 BLUR = {"assets/phone.mov": (240, 158, 300, 50)}
@@ -27,7 +28,7 @@ FPS, W, H = 30, 1920, 1080
 ORDER = [
     ("footage", "assets/board.mov", 0.5, 3.0, 1.0),          # real: the tractor, 2.5 s
     "tease",                                                  # the finished part, then the bare holes + the question
-    "open", ("process", 0, 12.2, 1.35), "how", "field",
+    "open", ("process_fast", 0, 9.6, 1.0), "how", "field",
     # real: the phone recording (Remote Control -> Claude -> questions -> dims -> preview -> AR link -> AR), captioned
     ("footage", "assets/phone.mov", 1.0, 4.5, 1.0, "写真と一言を送る"),
     ("footage", "assets/phone.mov", 10.5, 13.5, 1.0, "Claude が選択肢で聞く：どんな状態で付ける？"),
@@ -99,11 +100,12 @@ def join(out: Path):
     clips = HERE / "clips"
     inputs, n = [], 0
     for k, item in enumerate(ORDER):
-        if isinstance(item, tuple) and item[0] == "process":
+        if isinstance(item, tuple) and item[0] in ("process", "process_fast"):
             _, a, b, speed = item
-            seg = clips / f"process_{int(a * 1000)}.mp4"
+            srcp = PROCESS_FAST if item[0] == "process_fast" else PROCESS
+            seg = clips / f"{item[0]}_{int(a * 1000)}.mp4"
             cmd = [ff, "-v", "error", "-y", "-ss", str(a)] + (["-to", str(b)] if b else []) + \
-                  ["-i", str(PROCESS), "-an", "-filter:v", f"setpts=PTS/{speed}", "-c:v", "libx264", "-crf", "17", "-preset", "medium",
+                  ["-i", str(srcp), "-an", "-filter:v", f"setpts=PTS/{speed}", "-c:v", "libx264", "-crf", "17", "-preset", "medium",
                    "-pix_fmt", "yuv420p", "-r", str(FPS), str(seg)]
             subprocess.run(cmd, check=True)
             inputs.append(seg)
