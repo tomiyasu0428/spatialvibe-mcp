@@ -103,6 +103,18 @@ body.capture .stage { width: 100vw; height: 100vh; aspect-ratio: auto; }
 .artext .st { display: flex; gap: 0.8cqw; margin-top: 0.4cqw; }
 .artext .st span { border: 1px solid var(--green); color: var(--green); font: 600 0.95cqw var(--mono); letter-spacing: 0.1em; padding: 0.35cqw 0.8cqw; }
 
+/* field scene: phone chat mock */
+.phone .scr.dark { background: #0f1013; }
+.pchat { position: absolute; left: 0.9cqw; right: 0.9cqw; top: 2.6cqw; display: flex; flex-direction: column; gap: 0.6cqw; }
+.pm { max-width: 88%; padding: 0.6cqw 0.8cqw; border-radius: 0.7cqw; font-size: 0.82cqw; line-height: 1.45; font-weight: 500; }
+.pm.me { align-self: flex-end; background: var(--orange); color: var(--ink); }
+.pm.ai { align-self: flex-start; background: #23252b; }
+.pm i { display: block; width: 7cqw; height: 4.6cqw; border-radius: 0.4cqw; background-size: cover; background-position: center; margin-bottom: 0.4cqw; }
+.pm u { color: var(--blue); text-decoration: none; font-family: var(--mono); font-size: 0.72cqw; letter-spacing: 0; }
+.pc { display: flex; flex-wrap: wrap; gap: 0.3cqw; margin-top: 0.4cqw; }
+.pc span { border: 1px solid #3a3d46; border-radius: 99px; padding: 0.08cqw 0.5cqw; font-size: 0.72cqw; }
+.pc span.on { background: var(--paper); color: var(--ink); border-color: var(--paper); font-weight: 700; }
+.artext .p b { color: var(--orange); font-weight: 800; }
 /* export scene */
 .ex { position: absolute; left: 6cqw; right: 6cqw; top: 8cqw; display: flex; gap: 4cqw; }
 .ex .left { flex: 1; }
@@ -192,6 +204,23 @@ body.capture .ctl { display: none; }
     <div class="pv" id="pv" style="background-image:url(assets/preview_v001.png)"><div class="lbl" id="pvlbl">PREVIEW v001</div></div>
   </div>
 
+  <!-- Chapter 3b: from the field, phone only -->
+  <div class="scene" id="s-field"><div class="ar">
+    <div class="phone" id="fphone"><div class="scr dark">
+      <div class="pchat">
+        <div class="pm me" data-at="600"><i style="background-image:url(assets/IMG_4621.jpg)"></i>ハンドレールにラズパイを付けたい。A1 mini。</div>
+        <div class="pm ai" data-at="1600">4 つだけ聞かせてください。<div class="pc"><span class="on">パイプを挟む</span><span>ネジ穴</span><span>トレイ</span></div><div class="pc"><span>毎回外す</span><span class="on">たまに</span></div></div>
+        <div class="pm ai" data-at="2800">build_model → preview → publish_ar<br><u>https://…workers.dev/ar/…</u></div>
+        <div class="pm me" data-at="3800">開いて重ねた。少し前に寄せたい。</div>
+        <div class="pm ai" data-at="4600">v004 を作りました。リンクを更新します。</div>
+      </div></div><div class="tag">Claude Code · Remote Control</div></div>
+    <div class="artext">
+      <div class="h" data-at="0">現場から、<b>スマホだけ</b>で。</div>
+      <div class="p" data-at="800">トラクターの中でも、ハウスの中でも。写真を撮って送り、選択肢に答える。Claude Code は Mac で動き、スマホの Remote Control から操作する。</div>
+      <div class="p" data-at="1800">返ってきたリンクをその場で開く。<b>印刷する前に、現場に合うかを見る。</b>ずれを一言返せば、次の版が届く。</div>
+      <div class="st" data-at="3000"><span>撮る → 聞かれる → 形 → AR → 直す</span><span>その場で完結</span></div>
+    </div></div></div>
+
   <!-- Chapter 4: AR -->
   <div class="scene" id="s-ar"><div class="ar">
     <div class="phone" id="phone"><div class="scr sim" style="background-image:url(assets/ar_sim.png)"></div><div class="tag" id="phonetag">AR 見え方の模擬（実機スクショに差し替え）</div></div>
@@ -253,7 +282,7 @@ body.capture .ctl { display: none; }
 
   // Chapters: [id, duration ms]. render.py renders each as its own clip and splices the process clip in between.
   const CHAPTERS = [
-    ["open", 27000], ["how", 10000], ["chat", 12500], ["build", 13000], ["ar", 9000], ["export", 9000], ["close", 7000],
+    ["open", 27000], ["how", 10000], ["chat", 12500], ["build", 13000], ["field", 11000], ["ar", 9000], ["export", 9000], ["close", 7000],
   ];
   const starts = {}; let acc = 0;
   for (const [id, d] of CHAPTERS) { starts[id] = acc; acc += d; }
@@ -297,6 +326,10 @@ body.capture .ctl { display: none; }
       const pv = $("pv"); const p1 = ease(seg(t, b + 3600, 500)); pv.style.opacity = p1; pv.style.transform = `translateY(${(1 - p1) * 1.5}cqw)`;
       const v2 = t >= b + 7600; pv.style.backgroundImage = `url(assets/${v2 ? "preview_v003" : "preview_v001"}.png)`; $("pvlbl").textContent = v2 ? "PREVIEW v003" : "PREVIEW v001";
     }
+    // --- field
+    const fd = starts.field; const fdOn = t >= fd && t < fd + 11000;
+    show("s-field", fdOn, inFade(t, fd, 11000));
+    if (fdOn) { staged($("s-field"), fd, t); const ph = ease(seg(t, fd, 700)); $("fphone").style.transform = `translateY(${(1 - ph) * 3}cqw)`; $("fphone").style.opacity = ph; }
     // --- ar
     const a = starts.ar; const arOn = t >= a && t < a + 9000;
     show("s-ar", arOn, inFade(t, a, 9000));
