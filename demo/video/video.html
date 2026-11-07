@@ -54,13 +54,13 @@ body.capture .stage { width: 100vw; height: 100vh; aspect-ratio: auto; }
 .problems .sub { font-size: 1.7cqw; font-weight: 500; opacity: 0.8; }
 /* before / after */
 .ba { position: absolute; left: 6cqw; right: 6cqw; top: 7cqw; bottom: 6cqw; display: grid; grid-template-columns: 1fr 1fr; gap: 2.4cqw; }
-.col { display: flex; flex-direction: column; gap: 1.1cqw; padding: 1.8cqw 2cqw; border: 1px solid #2a2c33; }
+.col { display: flex; flex-direction: column; gap: 1.8cqw; justify-content: center; padding: 1.8cqw 2cqw; border: 1px solid #2a2c33; }
 .col.was { background: #121316; color: #b9bbc2; }
 .col.now { background: color-mix(in srgb, var(--orange) 9%, transparent); border-color: color-mix(in srgb, var(--orange) 55%, transparent); }
 .ch { font-size: 2.8cqw; font-weight: 900; letter-spacing: -0.04em; line-height: 1.1; margin-bottom: 0.8cqw; display: flex; align-items: baseline; gap: 1cqw; }
 .ch small { font: 500 1.1cqw var(--jp); opacity: 0.7; letter-spacing: 0; }
 .now .ch { color: var(--orange); }
-.it { display: flex; gap: 1cqw; align-items: flex-start; font-size: 1.5cqw; font-weight: 600; line-height: 1.45; }
+.it { display: flex; gap: 1cqw; align-items: flex-start; font-size: 2.1cqw; font-weight: 600; line-height: 1.45; }
 .it i { font-style: normal; font: 800 1.3cqw var(--lat); flex: none; width: 2.2cqw; height: 2.2cqw; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-top: 0.1cqw; }
 .was .it i { border: 1px solid #5a5d66; color: #8a8c92; }
 .now .it i { background: var(--orange); color: var(--ink); }
@@ -71,10 +71,10 @@ body.capture .stage { width: 100vw; height: 100vh; aspect-ratio: auto; }
 .how .h { font-size: 3.2cqw; font-weight: 900; letter-spacing: -0.045em; line-height: 1.1; } .how .h b { color: var(--orange); font-weight: 900; }
 .how .s { font-size: 1.45cqw; font-weight: 500; opacity: 0.8; }
 .rules { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.2cqw; margin-top: 0.6cqw; }
-.rule { border: 1px solid color-mix(in srgb, var(--orange) 55%, transparent); background: color-mix(in srgb, var(--orange) 8%, transparent); padding: 1.3cqw 1.4cqw; display: flex; flex-direction: column; gap: 0.6cqw; min-height: 11cqw; }
+.rule { border: 1px solid color-mix(in srgb, var(--orange) 55%, transparent); background: color-mix(in srgb, var(--orange) 8%, transparent); padding: 1.6cqw 1.6cqw; display: flex; flex-direction: column; gap: 0.8cqw; min-height: 12cqw; justify-content: center; }
 .rule .n { font: 800 1.1cqw var(--mono); color: var(--orange); letter-spacing: 0.1em; }
-.rule .t { font-size: 1.55cqw; font-weight: 800; letter-spacing: -0.03em; line-height: 1.3; }
-.rule .d { font-size: 1.1cqw; font-weight: 500; opacity: 0.8; line-height: 1.5; }
+.rule .t { font-size: 1.9cqw; font-weight: 800; letter-spacing: -0.03em; line-height: 1.3; }
+.rule .d { font-size: 1.35cqw; font-weight: 500; opacity: 0.8; line-height: 1.5; }
 .eq { margin-top: auto; display: flex; align-items: center; justify-content: center; gap: 1.6cqw; font-size: 2.2cqw; font-weight: 800; letter-spacing: -0.03em; }
 .eq span { padding: 0.6cqw 1.4cqw; border: 0.2cqw solid; } .eq .o { border-color: var(--orange); color: var(--orange); } .eq .b { border-color: var(--blue); color: var(--blue); }
 .eq em { font-style: normal; opacity: 0.6; }
@@ -103,11 +103,12 @@ body.capture .stage { width: 100vw; height: 100vh; aspect-ratio: auto; }
 .pv .lbl { position: absolute; left: 0; top: -2.4cqw; font: 600 1cqw var(--mono); letter-spacing: 0.1em; color: var(--grey); }
 .chat.narrow { right: 46cqw; }
 
+.note { position: absolute; left: 6cqw; bottom: 2.6cqw; font: 500 1cqw var(--mono); letter-spacing: 0.06em; opacity: 0.55; text-transform: none; }
 /* AR scene */
 .ar { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 5cqw; }
 .phone { width: 22cqw; aspect-ratio: 9 / 19.5; border-radius: 3cqw; background: #000; border: 0.5cqw solid #222; box-shadow: 0 2cqw 5cqw rgba(0,0,0,.6); overflow: hidden; position: relative; }
 .phone .scr { position: absolute; inset: 0; background: #fff; background-size: cover; background-position: center; }
-.phone .scr.sim { background-size: 150% auto; background-position: center 45%; }
+.phone .scr.sim { background-size: 150% auto; background-position: center 45%; background-repeat: no-repeat; }
 .phone .tag { position: absolute; left: 50%; bottom: 3cqw; transform: translateX(-50%); font: 600 0.9cqw var(--mono); letter-spacing: 0.1em; color: #fff; background: rgba(0,0,0,.6); padding: 0.3cqw 0.8cqw; border-radius: 99px; white-space: nowrap; }
 .artext { max-width: 44cqw; display: flex; flex-direction: column; gap: 1.4cqw; }
 .artext .h { font-size: 3.6cqw; font-weight: 900; letter-spacing: -0.045em; line-height: 1.1; } .artext .h b { color: var(--orange); font-weight: 900; }
@@ -129,11 +130,12 @@ body.capture .stage { width: 100vw; height: 100vh; aspect-ratio: auto; }
 .pc span { border: 1px solid #3a3d46; border-radius: 99px; padding: 0.08cqw 0.5cqw; font-size: 0.72cqw; }
 .pc span.on { background: var(--paper); color: var(--ink); border-color: var(--paper); font-weight: 700; }
 .artext .p b { color: var(--orange); font-weight: 800; }
+.artext .p.lim { font-size: 1.25cqw; opacity: 0.7; border-left: 0.2cqw solid var(--grey); padding-left: 1cqw; }
 /* export scene */
 .ex { position: absolute; left: 6cqw; right: 6cqw; top: 8cqw; display: flex; gap: 4cqw; }
 .ex .left { flex: 1; }
 .ex .h { font-size: 3.6cqw; font-weight: 900; letter-spacing: -0.045em; line-height: 1.1; margin-bottom: 1.6cqw; } .ex .h b { color: var(--blue); font-weight: 900; }
-.ex .doc { font-family: var(--mono); font-size: 1.15cqw; line-height: 1.7; background: #121622; border-left: 0.3cqw solid var(--blue); padding: 1.2cqw 1.6cqw; white-space: pre; letter-spacing: 0; text-transform: none; }
+.ex .doc { font-family: var(--mono); font-size: 1.5cqw; line-height: 1.7; background: #121622; border-left: 0.3cqw solid var(--blue); padding: 1.2cqw 1.6cqw; white-space: pre; letter-spacing: 0; text-transform: none; }
 .ex .doc b { color: var(--blue); font-weight: 600; } .ex .doc i { color: var(--green); font-style: normal; } .ex .doc s { color: var(--orange); text-decoration: none; }
 .ex .tree { font-family: var(--mono); font-size: 1.15cqw; line-height: 1.8; white-space: pre; width: 30cqw; opacity: 0.85; letter-spacing: 0; text-transform: none; }
 .ex .tree b { color: var(--blue); font-weight: 600; }
@@ -173,42 +175,39 @@ body.capture .ctl { display: none; }
     <div class="pr" data-at="3000"><i>3</i>AI とのやりとりが、面倒。</div>
     <div class="so" data-at="5200">そんな問題を解決する、</div>
     <div class="brand" data-at="6000"><b>Pittari</b> MCP</div>
-    <div class="sub" data-at="6600">ぴったり — 写真から、3D プリントまで。</div>
+    <div class="sub" data-at="6600">MCP ＝ Claude に、道具と進め方を足す仕組み。写真から、3D プリントまで。</div>
   </div></div>
 
   <!-- Chapter 1a: before / after -->
   <div class="scene" id="s-ba"><div class="ba">
     <div class="col was"><div class="ch" data-at="0">これまで<small>AI に CAD を頼むと</small></div>
-      <div class="it" data-at="900"><i>✕</i><span>コードは書けても、実行は自分。形が壊れていても気づけない。</span></div>
-      <div class="it" data-at="2300"><i>✕</i><span>「測ってください」の往復。どれが推定か、分からなくなる。</span></div>
-      <div class="it" data-at="3700"><i>✕</i><span>STL を自分で開き、違いを言葉で説明し直す。</span></div>
-      <div class="it" data-at="5100"><i>✕</i><span>実寸で確かめる手段がない。印刷してから「合わない」。</span></div>
-      <div class="it" data-at="6500"><i>✕</i><span>印刷条件は口頭。版は会話に埋もれる。</span></div>
+      <div class="it" data-at="800"><i>✕</i><span>測って、伝えて、印刷して、合わない。</span></div>
+      <div class="it" data-at="2200"><i>✕</i><span>どれが推定か、分からなくなる。</span></div>
+      <div class="it" data-at="3600"><i>✕</i><span>実行は自分。壊れていても気づけない。</span></div>
     </div>
     <div class="col now"><div class="ch" data-at="400">Pittari なら<small>Claude + MCP</small></div>
-      <div class="it" data-at="1500"><i>✓</i><span>隔離して実行し、干渉と造形範囲を<b>数値で返す</b>。</span></div>
-      <div class="it" data-at="2900"><i>✓</i><span>聞くのは<b>選択肢で 2〜4 問</b>。寸法は資料から、推定は推定と書く。</span></div>
-      <div class="it" data-at="4300"><i>✓</i><span>Claude が<b>プレビューを自分で見て</b>、直してから答える。</span></div>
-      <div class="it" data-at="5700"><i>✓</i><span><b>実寸 AR を現場で</b>。印刷する前に、合うかが見える。</span></div>
-      <div class="it" data-at="7100"><i>✓</i><span>印刷条件を<b>1 フォルダに</b>。版は v001, v002… と残る。</span></div>
+      <div class="it" data-at="1400"><i>✓</i><span>聞かれるのは、<b>選択肢だけ</b>。</span></div>
+      <div class="it" data-at="2800"><i>✓</i><span>推定は、<b>推定と書く</b>。</span></div>
+      <div class="it" data-at="4200"><i>✓</i><span>実行して検査し、<b>実寸で重ねてから</b>印刷。</span></div>
     </div>
   </div></div>
 
   <!-- Chapter 1b: how (instructions + tools) -->
   <div class="scene" id="s-how"><div class="how">
-    <div class="h" data-at="0">ツールだけじゃない。<b>進め方の指示書</b>ごと、Claude に渡す。</div>
-    <div class="s" data-at="500">WORKFLOW.md が MCP の instructions として届く。だから、どの Claude でも同じ聞き方・同じ確かめ方になる。</div>
+    <div class="h" data-at="0">道具だけじゃない。<b>進め方</b>も、Claude に渡す。</div>
+    <div class="s" data-at="500">同じ聞き方、同じ確かめ方になる。</div>
     <div class="rules">
-      <div class="rule" data-at="1300"><div class="n">RULE 01</div><div class="t">まず、プリンターを聞く</div><div class="d">機種か造形サイズ。勝手に仮定しない。分からなければ「未確認」と返す。</div></div>
-      <div class="rule" data-at="2000"><div class="n">RULE 02</div><div class="t">選択肢で、2〜4 問を一度に</div><div class="d">現場で判断できることだけ聞く。構造の細部は Claude が決める。自由記入もできる。</div></div>
-      <div class="rule" data-at="2700"><div class="n">RULE 03</div><div class="t">寸法は測らせる前に、資料から</div><div class="d">公式図面・手順書・規格。推定した値は推定と書き、出典を残す。</div></div>
-      <div class="rule" data-at="3400"><div class="n">RULE 04</div><div class="t">自分でプレビューを見て、直す</div><div class="d">人に見せる前に 4 方向を確認。干渉・造形範囲・寸法の判定を読んでから答える。</div></div>
+      <div class="rule" data-at="1300"><div class="n">RULE 01</div><div class="t">まず、プリンターを聞く</div><div class="d">勝手に仮定しない。</div></div>
+      <div class="rule" data-at="2000"><div class="n">RULE 02</div><div class="t">選択肢で、2〜4 問だけ</div><div class="d">細部は Claude が決める。</div></div>
+      <div class="rule" data-at="2700"><div class="n">RULE 03</div><div class="t">寸法は、資料から</div><div class="d">推定は推定と書く。</div></div>
+      <div class="rule" data-at="3400"><div class="n">RULE 04</div><div class="t">自分で見て、直す</div><div class="d">人に見せる前に。</div></div>
     </div>
-    <div class="eq" data-at="4600"><span class="b">ツール 6 つ</span><em>+</em><span class="o">指示書</span><em>=</em><span>Pittari MCP</span></div>
+    <div class="eq" data-at="4400"><span class="b">道具 6 つ</span><em>+</em><span class="o">進め方</span><em>=</em><span>Pittari MCP</span></div>
   </div></div>
 
   <!-- Chapter 2: conversation -->
   <div class="scene" id="s-chat">
+    <div class="note">画面は再現。判定・寸法・画像は、実際にビルドした結果。</div>
     <div class="chat" id="chat">
       <div class="msg me" data-at="0"><div class="av">YOU</div><div class="bub"><span class="ph"><i style="background-image:url(assets/IMG_4621.jpg)"></i><i style="background-image:url(assets/IMG_4625.jpg)"></i></span>トラクターのハンドレールに Raspberry Pi 4 を付けたい。キャブの中だから雨は当たらない。振動はある。プリンターは A1 mini。</div></div>
       <div class="msg ai" data-at="2200"><div class="av">C</div><div class="bub">写真を見ました。形を決める前に 4 つだけ聞かせてください。
@@ -224,6 +223,7 @@ body.capture .ctl { display: none; }
 
   <!-- Chapter 3: build + preview -->
   <div class="scene" id="s-build">
+    <div class="note">画面は再現。判定・寸法・画像は、実際にビルドした結果。</div>
     <div class="chat narrow" id="chat2">
       <div class="tool" data-at="0"><span class="nm">build_model</span>(project="pi-mount", code=…, printer="a1mini")<br>
         <span data-at="1200">→ parts 3/3 <span class="ok">valid</span>　干渉 <span class="ok">0</span>　造形範囲 <span class="ok">fits ×3</span></span><br>
@@ -232,7 +232,7 @@ body.capture .ctl { display: none; }
       <div class="tool" data-at="3200"><span class="nm">preview</span>(project="pi-mount")　→ 4 方向の画像</div>
       <div class="msg ai" data-at="5200"><div class="av">C</div><div class="bub">プレビューを見ました。形は問題なし。警告だけ直して作り直します。</div></div>
       <div class="tool" data-at="7000"><span class="nm">build_model</span>(…)　→ v003　warnings <span class="ok">0</span>　dims 5/5 <span class="ok">OK</span></div>
-      <div class="msg ai" data-at="8600"><div class="av">C</div><div class="bub">パイプを上下 2 分割のクランプで挟み、トレイの 4 本の柱に Pi をねじ止め。ゴムシート 1 mm で振動を逃がします。買うもの: M2.5×8 ×4、M5×30 ×4。</div></div>
+      <div class="msg ai" data-at="8600"><div class="av">C</div><div class="bub">パイプを上下 2 分割のクランプで挟み、4 本の柱に Pi をねじ止め。ゴムシートで滑りと振動をやわらげます。強度は試し刷りで確かめてください。</div></div>
     </div>
     <div class="pv" id="pv" style="background-image:url(assets/preview_v001.png)"><div class="lbl" id="pvlbl">PREVIEW v001</div></div>
   </div>
@@ -249,8 +249,8 @@ body.capture .ctl { display: none; }
       </div></div><div class="tag">Claude Code · Remote Control</div></div>
     <div class="artext">
       <div class="h" data-at="0">現場から、<b>スマホだけ</b>で。</div>
-      <div class="p" data-at="800">トラクターの中でも、ハウスの中でも。写真を撮って送り、選択肢に答える。Claude Code は Mac で動き、スマホの Remote Control から操作する。</div>
-      <div class="p" data-at="1800">返ってきたリンクをその場で開く。<b>印刷する前に、現場に合うかを見る。</b>ずれを一言返せば、次の版が届く。</div>
+      <div class="p" data-at="800">トラクターの中でも、ハウスの中でも。写真を撮って送り、選択肢に答える。Mac の Claude Code を、スマホから動かす。</div>
+      <div class="p" data-at="1800">届いたリンクをその場で開く。<b>印刷する前に、現場で合うかを見る。</b></div>
       <div class="st" data-at="3000"><span>撮る → 聞かれる → 形 → AR → 直す</span><span>その場で完結</span></div>
     </div></div></div>
 
@@ -260,28 +260,21 @@ body.capture .ctl { display: none; }
     <div class="artext">
       <div class="h" data-at="0">現場で、<b>実寸</b>で重ねる。</div>
       <div class="p" data-at="900"><span class="mono">publish_ar</span> が実寸の USDZ を作り、iPhone に届ける。iCloud Drive か、期限付きのリンク。</div>
-      <div class="p" data-at="1800">Safari で開いて、画像をタップ。実物のハンドレールに重ねて、ずれを一言伝える。それが次の版になる。</div>
-      <div class="st" data-at="2700"><span>0.297 × 0.071 × 0.068 m</span><span>iPhone 実機: 実寸 確認済み</span></div>
+      <div class="p" data-at="1800">実物に重ねて、ずれを一言。それが次の版になる。</div>
+      <div class="p lim" data-at="2600">AR は形と置き場所の目安。強度や公差は保証しない。1 個試し刷りして、実物で確かめる。</div>
+      <div class="st" data-at="3200"><span>iPhone 実機: 実寸で表示 確認済み</span></div>
     </div></div></div>
 
   <!-- Chapter 5: export -->
   <div class="scene" id="s-export"><div class="ex">
-    <div class="left"><div class="h" data-at="0">決まったら、<b>印刷へ</b>引き継ぐ。</div>
-      <div class="doc" data-at="800"><b>export_print</b>(project="pi-mount", quantities={…}, material="PETG")
-プリンター: Bambu Lab A1 mini  180 × 180 × 180 mm
-材料:       PETG
-部品:       tray ×1  97 × 68 × 28.75 mm   <i>姿勢指定済</i>
-            clamp_cap_L ×1  clamp_cap_R ×1   <i>姿勢指定済</i>
-金具:       M2.5×8 ×4  M5×30 ×4  ゴムシート 1 mm
-未確認:     <i>なし</i>
-まだのこと: <s>スライス・サポート・見積り・印刷</s>  ← この MCP はしない</div></div>
-    <div class="tree" data-at="2200">pi-mount_v003_print/
-  <b>manifest.json</b>       条件の正本
-  PRINT_GUIDE_ja.txt  人向けの案内
-  AI_HANDOFF.txt      別の AI へ
-  stl/                印刷姿勢・z=0
-  step/               編集用
-  source/model.py     この版のスクリプト</div>
+    <div class="left"><div class="h" data-at="0">決まったら、<b>印刷用の 1 フォルダ</b>に。</div>
+      <div class="doc" data-at="800"><b>export_print</b>  → pi-mount_v003_print/
+プリンター  A1 mini 180 × 180 × 180 mm
+材料        PETG
+部品        3 個  印刷姿勢 <i>指定済</i>
+金具        M2.5×8 ×4   M5×30 ×4
+未確認      <i>なし</i>
+まだのこと  <s>スライス・印刷</s>  ← この MCP はしない。あとは、いつものスライサーで</div></div>
   </div></div>
 
   <!-- Chapter 6: close -->
@@ -316,7 +309,7 @@ body.capture .ctl { display: none; }
 
   // Chapters: [id, duration ms]. render.py renders each as its own clip and splices the process clip in between.
   const CHAPTERS = [
-    ["open", 27000], ["ba", 12000], ["how", 10000], ["chat", 12500], ["build", 13000], ["field", 11000], ["ar", 9000], ["export", 9000], ["close", 11000],
+    ["open", 27000], ["ba", 8000], ["how", 8000], ["chat", 12500], ["build", 13000], ["field", 11000], ["ar", 9000], ["export", 9000], ["close", 11000],
   ];
   const starts = {}; let acc = 0;
   for (const [id, d] of CHAPTERS) { starts[id] = acc; acc += d; }
@@ -345,12 +338,12 @@ body.capture .ctl { display: none; }
       }
     });
     // --- before / after
-    const ba = starts.ba; const baOn = t >= ba && t < ba + 12000;
-    show("s-ba", baOn, inFade(t, ba, 12000));
+    const ba = starts.ba; const baOn = t >= ba && t < ba + 8000;
+    show("s-ba", baOn, inFade(t, ba, 8000));
     if (baOn) staged($("s-ba"), ba, t);
     // --- how
-    const hw = starts.how; const howOn = t >= hw && t < hw + 10000;
-    show("s-how", howOn, inFade(t, hw, 10000));
+    const hw = starts.how; const howOn = t >= hw && t < hw + 8000;
+    show("s-how", howOn, inFade(t, hw, 8000));
     if (howOn) staged($("s-how"), hw, t);
     // --- chat
     const c = starts.chat; const chatOn = t >= c && t < c + 12500;

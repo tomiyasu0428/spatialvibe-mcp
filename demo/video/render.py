@@ -19,8 +19,8 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 PROCESS = HERE.parent / "process" / "process.mp4"
 FPS, W, H = 30, 1920, 1080
-# Final order: page chapters by id, or ("process", start_s, end_s) segments of the process clip.
-ORDER = ["open", "ba", ("process", 0, 31.05), "how", "chat", "build", "field", "ar", ("process", 31.05, None), "export", "close"]
+# Final order: page chapters by id, or ("process", start_s, end_s, speed) segments of the process clip.
+ORDER = ["open", "ba", ("process", 0, 26.5, 1.25), "how", "chat", "build", "field", "ar", ("process", 31.05, None, 1.0), "export", "close"]
 
 
 def open_page(p):
@@ -53,10 +53,11 @@ def join(out: Path):
     inputs, n = [], 0
     for item in ORDER:
         if isinstance(item, tuple):
-            _, a, b = item
+            _, a, b, speed = item
             seg = clips / f"process_{int(a * 1000)}.mp4"
             cmd = [ff, "-v", "error", "-y", "-ss", str(a)] + (["-to", str(b)] if b else []) + \
-                  ["-i", str(PROCESS), "-an", "-c:v", "libx264", "-crf", "17", "-preset", "medium", "-pix_fmt", "yuv420p", "-r", str(FPS), str(seg)]
+                  ["-i", str(PROCESS), "-an", "-filter:v", f"setpts=PTS/{speed}", "-c:v", "libx264", "-crf", "17", "-preset", "medium",
+                   "-pix_fmt", "yuv420p", "-r", str(FPS), str(seg)]
             subprocess.run(cmd, check=True)
             inputs.append(seg)
         else:
