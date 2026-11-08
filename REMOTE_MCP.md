@@ -53,6 +53,24 @@ cp mac/cloudflared-config.example.yml ~/.cloudflared/config.yml            # UUI
 
 `config.yml` は `/mcp` だけを `http://127.0.0.1:8765` に通し、それ以外は 404 です。
 
+### 2′. 既存の Tunnel を使い回す場合
+
+すでに `cloudflared` の Tunnel と `~/.cloudflared/config.yml`（`/mcp` → `http://127.0.0.1:8765`）がある Mac では、
+作り直さずに次を確認するだけです。値は書き換えず、読むだけの確認から始めます。
+
+```bash
+cloudflared --version
+cloudflared tunnel list                      # 名前・UUID・CONNECTIONS 列（空なら未接続）
+cloudflared tunnel info <Tunnel 名>           # 接続中のコネクタ
+sed -n 1,40p ~/.cloudflared/config.yml        # tunnel / credentials-file / ingress の hostname と path
+ls -l ~/.cloudflared/*.json                   # credentials-file が実在するか（中身は表示しない）
+launchctl print gui/$(id -u)/com.spatialvibe.cloudflared | head -20    # 常駐の状態
+dig +short CNAME <ホスト名>                    # <UUID>.cfargotunnel.com が返るのが正常。空なら DNS ルートが無い
+```
+
+DNS ルートが無ければ `cloudflared tunnel route dns <Tunnel 名> <ホスト名>` で 1 本足します（ゾーンに CNAME を 1 件作る
+操作なので、実行前に内容を確認してから）。Worker 側の `UPSTREAM_ORIGIN` はこのホスト名に合わせます。
+
 ### 3. ゲートウェイ Worker
 
 ```bash
