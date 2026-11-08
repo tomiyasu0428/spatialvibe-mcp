@@ -1,4 +1,4 @@
-"""Read only the explicitly configured macOS AR upload credential; never print it."""
+"""Read only explicitly configured macOS Keychain credentials (43 base64url chars); never print them."""
 import ctypes
 import re
 import sys
@@ -8,8 +8,9 @@ class KeychainError(RuntimeError):
     pass
 
 
-def read_upload_token(service: str) -> str:
-    if sys.platform != "darwin" or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,160}", service):
+def read_upload_token(service: str, account: str = "upload") -> str:
+    if (sys.platform != "darwin" or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,160}", service)
+            or not re.fullmatch(r"[A-Za-z0-9_.:-]{1,40}", account)):
         raise KeychainError("AR keychain credential is unavailable")
     security = ctypes.CDLL("/System/Library/Frameworks/Security.framework/Security")
     interaction = security.SecKeychainSetUserInteractionAllowed
@@ -27,7 +28,7 @@ def read_upload_token(service: str) -> str:
     if interaction(False) != 0:
         raise KeychainError("AR keychain credential is unavailable")
     encoded = service.encode("ascii")
-    account = b"upload"
+    account = account.encode("ascii")
     length, data = ctypes.c_uint32(), ctypes.c_void_p()
     status = find(None, len(encoded), encoded, len(account), account,
                   ctypes.byref(length), ctypes.byref(data), None)

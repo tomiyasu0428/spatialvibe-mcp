@@ -1,0 +1,14 @@
+# ~/.cloudflared/config.yml for the SpatialVibe tunnel (created with `cloudflared tunnel create spatialvibe-mcp`).
+# Only the gateway Worker should talk to this hostname; the Mac still verifies the Host header and the
+# upstream credential, so leaving the hostname public is not by itself an exposure.
+tunnel: REPLACE-TUNNEL-UUID
+credentials-file: /Users/REPLACE-USER/.cloudflared/REPLACE-TUNNEL-UUID.json
+ingress:
+  - hostname: REPLACE-TUNNEL-HOSTNAME      # e.g. spatialvibe-mcp.example.com (a DNS CNAME to the tunnel)
+    path: ^/mcp$
+    service: http://127.0.0.1:8765
+    originRequest:
+      noHappyEyeballs: true
+      connectTimeout: 10s
+      keepAliveTimeout: 300s
+  - service: http_status:404

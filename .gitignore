@@ -37,3 +37,6 @@ demo/*/*.mp4
 demo/*/*.png
 demo/video/assets/
 demo/video/clips/
+
+# Bundled gateway output (tests bundle in memory; wrangler bundles on deploy)
+cloudflare/mcp-gateway/dist/

@@ -100,6 +100,7 @@ Cloudflare 公開を使うときは `tools/ar_mcp_launch.py` 経由で起動し�
 | `SPATIALVIBE_TIMEOUT` | `180` | 1 回の実行の制限秒数 |
 | `SPATIALVIBE_BED` | `256,256,256` | プリンタの造形範囲 mm（`fits_bed` の判定） |
 | `SPATIALVIBE_PRINTER` | 未設定 | `build_model` / `export_print` の `printer` を省略したときのプリンター（`a1mini` または `WxDxH`）。未設定なら造形範囲の判定は `printer_not_set` |
+| `SPATIALVIBE_TRANSPORT` | `stdio` | `http` にすると Streamable HTTP を 127.0.0.1 で待ち受け、Cloudflare Tunnel 越しのゲートウェイ専用になる。設定とデプロイ手順は [REMOTE_MCP.md](REMOTE_MCP.md)。`SPATIALVIBE_HTTP_PUBLIC_HOST`（Tunnel ホスト名）、`SPATIALVIBE_HTTP_PORT`（既定 8765）、`SPATIALVIBE_MCP_UPSTREAM_KEYCHAIN_SERVICE`（上流クレデンシャルの Keychain 項目、アカウント `mcp-upstream`）を併用 |
 
 ## 作例
 
