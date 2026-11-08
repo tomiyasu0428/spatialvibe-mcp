@@ -55,21 +55,31 @@ cp mac/cloudflared-config.example.yml ~/.cloudflared/config.yml            # UUI
 
 ### 2′. 既存の Tunnel を使い回す場合
 
-すでに `cloudflared` の Tunnel と `~/.cloudflared/config.yml`（`/mcp` → `http://127.0.0.1:8765`）がある Mac では、
-作り直さずに次を確認するだけです。値は書き換えず、読むだけの確認から始めます。
+すでに Tunnel と cloudflared の常駐がある Mac では、作り直さずに次を確認するだけです。値は書き換えず、読むだけの
+確認から始めます。Tunnel には 2 方式あり、確認場所が違います。
+
+- **ローカル設定方式**（`~/.cloudflared/config.yml` + credentials JSON）: ingress は config.yml にあります。
+- **トークン方式**（LaunchAgent が `cloudflared tunnel run --token-file …`）: ingress（公開ホスト名 → サービス）は
+  Cloudflare ダッシュボード側に保存され、Mac には token file しかありません。credentials JSON が無いのは正常で、
+  Tunnel 再作成の理由にはなりません。`cloudflared tunnel list/info` は `cert.pem`（`tunnel login`）が無いと動かないことがあります。
 
 ```bash
 cloudflared --version
-cloudflared tunnel list                      # 名前・UUID・CONNECTIONS 列（空なら未接続）
-cloudflared tunnel info <Tunnel 名>           # 接続中のコネクタ
-sed -n 1,40p ~/.cloudflared/config.yml        # tunnel / credentials-file / ingress の hostname と path
-ls -l ~/.cloudflared/*.json                   # credentials-file が実在するか（中身は表示しない）
-launchctl print gui/$(id -u)/com.spatialvibe.cloudflared | head -20    # 常駐の状態
-dig +short CNAME <ホスト名>                    # <UUID>.cfargotunnel.com が返るのが正常。空なら DNS ルートが無い
+launchctl print gui/$(id -u)/com.spatialvibe.cloudflared | head -20     # state: running か、最終終了コード
+plutil -p ~/Library/LaunchAgents/com.spatialvibe.cloudflared.plist | grep -v -i token   # 引数の方式。token の値は表示しない
 ```
 
-DNS ルートが無ければ `cloudflared tunnel route dns <Tunnel 名> <ホスト名>` で 1 本足します（ゾーンに CNAME を 1 件作る
-操作なので、実行前に内容を確認してから）。Worker 側の `UPSTREAM_ORIGIN` はこのホスト名に合わせます。
+ダッシュボードでの読み取り確認（変更しない）:
+
+- Zero Trust → Networks → Tunnels: 対象 Tunnel の状態（HEALTHY / DOWN / INACTIVE）、コネクタの一覧、
+  Public Hostname タブに `<ホスト名>` → `http://127.0.0.1:8765` と、パスが `/mcp` に限られているか。
+  ほかの公開ホスト名が同じ Tunnel に残っていないか。
+- DNS → Records: そのホスト名の CNAME（`<UUID>.cfargotunnel.com`、プロキシ ON）があるか。
+  外から `dig` しても、プロキシ付きレコードは A/AAAA で返るので、CNAME 照会が空でも「レコード無し」とは言えません。
+  `dig +short <ホスト名>` に Cloudflare の IP が返れば存在します。
+
+DNS レコードが本当に無いときだけ、ダッシュボードの Public Hostname 追加か `cloudflared tunnel route dns` で足します
+（ゾーンに CNAME を 1 件作る変更なので、実行前に内容を確認してから）。Worker 側の `UPSTREAM_ORIGIN` はこのホスト名に合わせます。
 
 ### 3. ゲートウェイ Worker
 
