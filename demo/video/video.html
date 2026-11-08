@@ -283,13 +283,13 @@ body.capture .ctl { display: none; }
   <!-- Chapter 6: close -->
   <div class="scene" id="s-close"><div class="close">
     <div class="l1" data-at="0">この MCP サーバーを入れれば、いつもの Claude から、写真と寸法で部品が作れる。</div>
-    <div class="l1" data-at="1400">あとは、印刷するだけ。</div>
-    <div class="l2" data-at="3200">現場で必要なものを、最小限の手間で。</div>
-    <div class="l1" data-at="5000">現場の写真と、数か所の寸法から。ぴったりの部品を 3D プリントへ。</div>
-    <div class="big" data-at="5600"><b>Pittari</b>（ぴったり）</div>
-    <div class="url" data-at="6400">github.com/tomiyasu0428/spatialvibe-mcp</div>
-    <div class="meta" data-at="6400">必要なもの: MAC の CLAUDE CODE · IPHONE · 3D プリンター</div>
-    <div class="meta" data-at="6400">PITTARI — CLAUDE + MCP — BUILT 2026.11.04–11.08</div>
+    <div class="l1" data-at="7500">あとは、印刷するだけ。</div>
+    <div class="l2" data-at="8900">現場で必要なものを、最小限の手間で。</div>
+    <div class="l1" data-at="9700">現場の写真と、数か所の寸法から。ぴったりの部品を 3D プリントへ。</div>
+    <div class="big" data-at="10400"><b>Pittari</b>（ぴったり）</div>
+    <div class="url" data-at="11200">github.com/tomiyasu0428/spatialvibe-mcp</div>
+    <div class="meta" data-at="11200">必要なもの: MAC の CLAUDE CODE · IPHONE · 3D プリンター</div>
+    <div class="meta" data-at="11200">PITTARI — CLAUDE + MCP — BUILT 2026.11.04–11.08</div>
   </div></div>
 
   <div class="hud" aria-hidden="true">
@@ -314,7 +314,7 @@ body.capture .ctl { display: none; }
 
   // Chapters: [id, duration ms]. render.py renders each as its own clip and splices the process clip in between.
   const CHAPTERS = [
-    ["tease", 8800], ["open", 26000], ["ba", 12000], ["how", 6500], ["chat", 12500], ["build", 13000], ["field", 5000], ["ar", 9000], ["done", 10500], ["export", 9000], ["close", 11000],
+    ["tease", 8800], ["open", 26000], ["ba", 12000], ["how", 6500], ["chat", 12500], ["build", 13000], ["field", 5000], ["ar", 9000], ["done", 10500], ["export", 9000], ["close", 13000],
   ];
   const starts = {}; let acc = 0;
   for (const [id, d] of CHAPTERS) { starts[id] = acc; acc += d; }
@@ -389,8 +389,8 @@ body.capture .ctl { display: none; }
     show("s-export", exOn, inFade(t, x, 9000));
     if (exOn) staged($("s-export"), x, t);
     // --- close
-    const z = starts.close; const zOn = t >= z && t < z + 11000;
-    show("s-close", zOn, inFade(t, z, 11000, 450, 900));
+    const z = starts.close; const zOn = t >= z && t < z + 13000;
+    show("s-close", zOn, inFade(t, z, 13000, 450, 900));
     if (zOn) staged($("s-close"), z, t);
     // hud
     const sec = Math.floor(t / 1000), fr = Math.floor((t % 1000) / 1000 * 30);

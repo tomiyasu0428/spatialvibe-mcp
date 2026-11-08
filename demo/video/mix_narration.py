@@ -9,8 +9,9 @@ NARR = str(HERE / "assets" / "narration.wav")      # Google AI Studio (Achernar)
 VIDEO = str(HERE / "clips" / "joined_silent.mp4")
 MUSIC = str(HERE / "assets" / "music.mp3")
 FIX = str(HERE / "assets" / "narration_fix.wav")   # the three re-recorded lines, in order
+FIX2 = str(HERE / "assets" / "narration_fix2.wav")  # the re-recorded closing line
 OUT = str(HERE / "demo_narrated.mp4")
-VIDEO_DUR = 139.25
+VIDEO_DUR = 141.25
 # (video_start_s, src_start_s, src_end_s, label[, 'fix'])  — 'fix' = assets/narration_fix.wav, else assets/narration.wav
 # chapter starts: tractor 0, tease 2.5 (Pi 2.5, holes 5.5), open 11.3 (holes 11.3, handrail 20.3, problems 24.3), process 37.3, how 46.3,
 # field 52.8, phone 57.8..92.3, ar 92.3, done 101.3, tools 111.8, export 119.25, close 128.25
@@ -53,16 +54,16 @@ CUES = [
     (119.6, 129.29, 132.54, "決まったら…1つのフォルダに"),
     (123.0, 133.11, 134.90, "確認済みと推定は混ぜません"),
     (125.0, 135.52, 137.91, "スライスと印刷は、いつものスライサーで"),
-    (128.6, 138.59, 142.77, "このMCPサーバーを入れれば…それができる"),
-    (133.0, 143.27, 144.40, "あとは、印刷するだけ"),
-    (134.3, 145.17, 147.32, "現場で必要なものを、最小限の手間で"),
-    (137.3, 151.70, 152.42, "ぴったり"),
+    (128.6, 0.00, 7.05, "【録り直し4】このMCPサーバーを入れれば、いつものClaudeから、写真と寸法で部品が作れる", "fix2"),
+    (135.8, 143.27, 144.40, "あとは、印刷するだけ"),
+    (137.1, 145.17, 147.32, "現場で必要なものを、最小限の手間で"),
+    (140.0, 151.70, 152.42, "ぴったり"),
 ]
 PAD = 0.06
 parts, mixes = [], []
 for i, cue in enumerate(CUES):
     v, a, b = cue[0], cue[1], cue[2]
-    src = "3:a" if len(cue) > 4 and cue[4] == "fix" else "1:a"
+    src = {"fix": "3:a", "fix2": "4:a"}.get(cue[4] if len(cue) > 4 else "", "1:a")
     a0, b0 = max(0, a - PAD), b + PAD
     delay = int(round(v * 1000))
     parts.append(f"[{src}]atrim={a0:.3f}:{b0:.3f},asetpts=PTS-STARTPTS,afade=t=in:d=0.03,afade=t=out:st={b0 - a0 - 0.05:.3f}:d=0.05,"
@@ -70,13 +71,13 @@ for i, cue in enumerate(CUES):
     mixes.append(f"[n{i}]")
 n = len(CUES)
 # music: 0.28 under speech, 0.55 in the speech-free stretches (AR footage, tail), fade out at the end
-quiet = [(86.8, 92.3), (138.3, VIDEO_DUR)]
+quiet = [(86.8, 92.3), (140.8, VIDEO_DUR)]
 expr = "+".join([f"0.27*between(t,{a},{b})" for a, b in quiet])
 music = (f"[2:a]atrim=0:{VIDEO_DUR},asetpts=PTS-STARTPTS,afade=t=in:d=1,afade=t=out:st={VIDEO_DUR - 4}:d=4,"
          f"volume='0.28+{expr}':eval=frame[m]")
 fc = ";".join(parts) + ";" + music + ";" + "".join(mixes) + f"amix=inputs={n}:normalize=0,aresample=48000,volume=1.6[nar];" \
      "[m][nar]amix=inputs=2:normalize=0,alimiter=limit=0.95[a]"
-cmd = [FF, "-v", "error", "-y", "-i", VIDEO, "-i", NARR, "-stream_loop", "-1", "-i", MUSIC, "-i", FIX, "-filter_complex", fc,
+cmd = [FF, "-v", "error", "-y", "-i", VIDEO, "-i", NARR, "-stream_loop", "-1", "-i", MUSIC, "-i", FIX, "-i", FIX2, "-filter_complex", fc,
        "-map", "0:v", "-map", "[a]", "-c:v", "copy", "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", OUT]
 subprocess.run(cmd, check=True)
 print(OUT, n, "cues")
