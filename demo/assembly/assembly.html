@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pittari assembly reel</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;800;900&family=JetBrains+Mono:wght@400;600&family=Noto+Sans+JP:wght@400;500;700;900&display=block">
+<style>
+/* Vertical (9:16) assembly reel. Template only: demo/assembly/render.py inlines the meshes, the story
+   and three.js into out/<story>.html. Deterministic: everything is a function of t (render(t)). */
+:root {
+  --ink: #111214; --paper: #efeee9; --orange: #ff5a1f; --blue: #3b6cff; --line: #1a1a1a;
+  --jp: "Noto Sans JP", "Hiragino Sans", "Yu Gothic", "WenQuanYi Zen Hei", sans-serif;
+  --lat: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, monospace;
+}
+html, body { height: 100%; margin: 0; }
+body { background: #060607; font-family: var(--jp); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 12px; box-sizing: border-box; }
+body.capture { padding: 0; gap: 0; }
+.stage { container-type: inline-size; position: relative; overflow: hidden; height: min(100%, calc(100vh - 70px)); aspect-ratio: 9 / 16; background: radial-gradient(120% 80% at 50% 45%, #fbfaf7 0%, var(--paper) 55%, #dddbd3 100%); color: var(--ink); }
+body.capture .stage { width: 100vw; height: 100vh; aspect-ratio: auto; }
+canvas#gl { position: absolute; inset: 0; width: 100%; height: 100%; }
+.abs { position: absolute; }
+.mono { font-family: var(--mono); letter-spacing: 0.12em; text-transform: uppercase; }
+.hud .mono { position: absolute; font-size: 2.2cqw; opacity: 0.55; }
+.hud .tl { left: 5cqw; top: 4.5cqw; } .hud .tr { right: 5cqw; top: 4.5cqw; }
+.crop { position: absolute; width: 3cqw; height: 3cqw; border: 0 solid var(--ink); opacity: 0.5; }
+.crop.a { left: 2.5cqw; top: 2.5cqw; border-left-width: 2px; border-top-width: 2px; }
+.crop.b { right: 2.5cqw; top: 2.5cqw; border-right-width: 2px; border-top-width: 2px; }
+.crop.c { left: 2.5cqw; bottom: 2.5cqw; border-left-width: 2px; border-bottom-width: 2px; }
+.crop.d { right: 2.5cqw; bottom: 2.5cqw; border-right-width: 2px; border-bottom-width: 2px; }
+
+.head { position: absolute; left: 6cqw; right: 6cqw; top: 13cqw; font-size: 6.6cqw; white-space: nowrap; font-weight: 900; letter-spacing: -0.04em; line-height: 1.15; }
+.head small { display: block; font-size: 3.2cqw; font-weight: 700; letter-spacing: 0; color: var(--orange); margin-bottom: 1.8cqw; font-family: var(--mono); }
+
+/* input cards */
+.cards { position: absolute; left: 6cqw; right: 6cqw; top: 44cqw; display: flex; gap: 4cqw; }
+.card { flex: 1; background: #fff; padding: 2.4cqw 2.4cqw 3cqw; box-shadow: 0 2cqw 5cqw rgba(0,0,0,0.16); position: relative; }
+.card .img { position: relative; aspect-ratio: 3 / 4; overflow: hidden; background: #e6e4dd; display: flex; align-items: center; justify-content: center; }
+.card .img img { width: 100%; height: 100%; object-fit: cover; }
+.card .img svg { width: 70%; }
+.card .lbl { font-family: var(--mono); font-size: 2.3cqw; margin-top: 2.2cqw; opacity: 0.6; letter-spacing: 0.1em; }
+.card .ttl { font-size: 4.2cqw; font-weight: 800; margin-top: 0.6cqw; letter-spacing: -0.02em; }
+.scan { position: absolute; left: 0; right: 0; height: 0.8cqw; background: var(--orange); box-shadow: 0 0 4cqw 1cqw rgba(255,90,31,0.55); opacity: 0; }
+
+/* readings */
+.chips { position: absolute; left: 6cqw; right: 6cqw; top: 118cqw; display: flex; flex-direction: column; gap: 2.6cqw; }
+.chip { display: grid; grid-template-columns: 1fr auto; align-items: baseline; gap: 0 3cqw; background: var(--ink); color: var(--paper); padding: 2.6cqw 3.6cqw; }
+.chip .k { font-size: 3.6cqw; font-weight: 700; }
+.chip .v { font-family: var(--lat); font-size: 6.2cqw; font-weight: 800; color: var(--orange); letter-spacing: -0.02em; text-align: right; }
+.chip .src { grid-column: 1 / -1; font-family: var(--mono); font-size: 2.2cqw; opacity: 0.6; letter-spacing: 0.08em; margin-top: 0.4cqw; }
+
+/* 3D labels */
+.tag3d { position: absolute; transform: translate(-50%, -100%); font-size: 3.4cqw; font-weight: 800; background: var(--ink); color: var(--paper); padding: 0.8cqw 2cqw; white-space: nowrap; }
+.tag3d::after { content: ""; position: absolute; left: 50%; bottom: -1.6cqw; width: 2px; height: 1.6cqw; background: var(--ink); }
+
+/* step caption */
+.cap { position: absolute; left: 6cqw; right: 6cqw; bottom: 14cqw; }
+.cap .n { font-family: var(--lat); font-weight: 900; font-size: 15cqw; line-height: 0.85; color: var(--orange); letter-spacing: -0.05em; }
+.cap .n span { font-size: 5cqw; color: var(--ink); opacity: 0.35; margin-left: 1cqw; }
+.cap .t { font-size: 8cqw; font-weight: 900; letter-spacing: -0.04em; margin-top: 2cqw; }
+.cap .s { font-size: 3.8cqw; font-weight: 500; margin-top: 1.2cqw; opacity: 0.75; }
+.fitlines { position: absolute; left: 6cqw; right: 6cqw; bottom: 14cqw; display: flex; flex-direction: column; gap: 2cqw; }
+.fitlines div { font-family: var(--lat); font-weight: 800; font-size: 6.4cqw; letter-spacing: -0.02em; }
+.fitlines div::before { content: "✓ "; color: var(--orange); }
+
+/* AR */
+.ar { position: absolute; inset: 0; opacity: 0; }
+.ar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.ar .dim { position: absolute; inset: 0; }
+.ar .frame { position: absolute; left: 50%; top: 58%; width: 62cqw; height: 116cqw; transform: translate(-50%, -50%); border: 2.4cqw solid #0b0b0c; border-radius: 9cqw; box-shadow: 0 0 0 200cqw rgba(13,14,16,0.82); }
+.ar .frame::before { content: ""; position: absolute; left: 50%; top: 2cqw; width: 18cqw; height: 4.4cqw; transform: translateX(-50%); background: #0b0b0c; border-radius: 3cqw; }
+.ar .badge { position: absolute; left: 50%; bottom: 13cqw; transform: translateX(-50%); font-family: var(--mono); font-size: 2.6cqw; color: var(--paper); border: 1px solid var(--paper); padding: 1cqw 2.4cqw; white-space: nowrap; }
+.ar .head { color: var(--paper); }
+
+/* final */
+.final { position: absolute; inset: 0; background: var(--ink); color: var(--paper); display: flex; flex-direction: column; justify-content: center; padding: 0 7cqw; gap: 3cqw; opacity: 0; }
+.final .line { font-size: 5.4cqw; font-weight: 800; letter-spacing: -0.02em; }
+.final .line b { color: var(--orange); }
+.final .big { font-family: var(--lat); font-size: 17cqw; font-weight: 900; letter-spacing: -0.05em; line-height: 0.9; }
+.final .sub { font-size: 3.4cqw; opacity: 0.7; }
+
+.bar { position: absolute; left: 0; bottom: 0; height: 0.8cqw; background: var(--orange); }
+
+.ctl { display: flex; gap: 10px; align-items: center; color: #ccc; font: 13px var(--mono); }
+.ctl button { font: inherit; padding: 6px 14px; background: #222; color: #eee; border: 1px solid #444; cursor: pointer; }
+.ctl input { width: 320px; }
+body.capture .ctl { display: none; }
+</style>
+</head>
+<body>
+<div class="stage" id="stage">
+  <canvas id="gl"></canvas>
+  <div class="hud"><div class="mono tl" id="sig"></div><div class="mono tr" id="clock"></div>
+    <div class="crop a"></div><div class="crop b"></div><div class="crop c"></div><div class="crop d"></div></div>
+  <div class="head" id="head"></div>
+  <div class="cards" id="cards"></div>
+  <div class="chips" id="chips"></div>
+  <div id="tags"></div>
+  <div class="cap" id="cap"><div class="n" id="capn"></div><div class="t" id="capt"></div><div class="s" id="caps"></div></div>
+  <div class="fitlines" id="fitlines"></div>
+  <div class="ar" id="ar"><div class="frame"></div><div class="head" id="arhead"></div><div class="badge">AR QUICK LOOK · 実寸 1:1</div></div>
+  <div class="final" id="final"></div>
+  <div class="bar" id="bar"></div>
+</div>
+<div class="ctl"><button id="play">▶</button><input id="scrub" type="range" min="0" max="1000" value="0"><span id="tc"></span></div>
+<script type="module">
+const D = /*__DATA__*/null;
+const raw = atob(D.three);
+const bytes = new Uint8Array(raw.length);
+for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+const THREE = await import(URL.createObjectURL(new Blob([bytes], { type: "text/javascript" })));
+const $ = (id) => document.getElementById(id);
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const ease = (x) => { x = clamp(x); return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2; };
+const out = (x) => 1 - Math.pow(1 - clamp(x), 3);
+const span = (t, a, b) => clamp((t - a) / (b - a));
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+// ---- timeline (ms) ----------------------------------------------------------------------------
+const T = { in: 0, read: 4200, ctx: 9000, steps: 11200, step: 2400 };
+T.fit = T.steps + D.steps.length * T.step;     // 20800
+T.ar = T.fit + 3600;                            // 24400
+T.final = T.ar + 3400;                          // 27800
+const DUR = T.final + 3200;                     // 31000
+
+// ---- DOM content ------------------------------------------------------------------------------
+$("sig").textContent = D.sig || "";
+const ICON = {
+  pipe: '<svg viewBox="0 0 100 100"><rect x="0" y="40" width="100" height="20" rx="10" fill="#9aa0a6"/><rect x="0" y="44" width="100" height="4" fill="#c9cdd1"/><text x="50" y="80" font-size="9" text-anchor="middle" font-family="monospace" fill="#555">PHOTO</text></svg>',
+  phone: '<svg viewBox="0 0 100 100"><rect x="28" y="6" width="44" height="88" rx="7" fill="#222"/><rect x="31" y="12" width="38" height="76" rx="3" fill="#3a4a6a"/><text x="50" y="99" font-size="7" text-anchor="middle" font-family="monospace" fill="#555">PHOTO</text></svg>',
+};
+const photoOf = [D.photos.place, D.photos.thing];
+$("cards").innerHTML = D.inputs.cards.map((c, i) => `<div class="card"><div class="img">${
+  photoOf[i] ? `<img src="${photoOf[i]}">` : ICON[c.icon] || ""}<div class="scan"></div></div>
+  <div class="lbl">${esc(c.label)}</div><div class="ttl">${esc(c.title)}</div></div>`).join("");
+$("chips").innerHTML = D.readings.chips.map((c) => `<div class="chip"><div class="k">${esc(c.k)}</div><div class="v">${esc(c.v)}</div><div class="src">${esc(c.src)}</div></div>`).join("");
+$("tags").innerHTML = Object.entries(D.context.labels).map(([k, v]) => `<div class="tag3d" data-k="${k}">${esc(v)}</div>`).join("");
+$("fitlines").innerHTML = D.fit.lines.map((l) => `<div>${esc(l)}</div>`).join("");
+$("arhead").innerHTML = `<small>AR</small>${esc(D.ar.head)}`;
+if (D.photos.ar) $("ar").insertAdjacentHTML("afterbegin", `<img src="${D.photos.ar}">`);
+$("final").innerHTML = `<div class="line">${esc(D.final.line).replace(/→/g, "<b>→</b>")}</div><div class="big">${esc(D.final.big)}</div><div class="sub">${esc(D.final.sub)}</div>`;
+const cards = [...document.querySelectorAll(".card")], chips = [...document.querySelectorAll(".chip")];
+const tags = [...document.querySelectorAll(".tag3d")];
+
+// ---- 3D -----------------------------------------------------------------------------------------
+const canvas = $("gl");
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(1);
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(26, 9 / 16, 200, 4000);
+scene.add(new THREE.HemisphereLight(0xffffff, 0xb8b4aa, 1.6));
+const sun = new THREE.DirectionalLight(0xffffff, 2.2); sun.position.set(-300, 600, 500); scene.add(sun);
+const rim = new THREE.DirectionalLight(0xffe2cc, 0.8); rim.position.set(400, 200, -400); scene.add(rim);
+
+function decode(b64) {
+  const s = atob(b64), u = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
+  return new Float32Array(u.buffer);
+}
+const WHITE = new THREE.Color(0xf6f5f1), ORANGE = new THREE.Color(0xff5a1f);
+const obj = {};
+let center = new THREE.Vector3(), box = new THREE.Box3();
+for (const [name, m] of Object.entries(D.meshes)) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.BufferAttribute(decode(m.pos), 3));
+  g.computeVertexNormals();
+  let mat;
+  if (m.kind === "parts") mat = new THREE.MeshStandardMaterial({ color: WHITE.clone(), roughness: 0.75, transparent: true, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+  else if (m.kind === "screen") mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
+  else if (name === D.fit.screen_of) mat = new THREE.MeshStandardMaterial({ color: 0x1c1d20, roughness: 0.4, transparent: true });
+  else mat = new THREE.MeshStandardMaterial({ color: 0xa3a8ad, roughness: 0.35, metalness: 0.45, transparent: true });
+  const mesh = new THREE.Mesh(g, mat);
+  const grp = new THREE.Group(); grp.add(mesh);
+  if (m.kind !== "screen") {
+    const e = new THREE.LineSegments(new THREE.EdgesGeometry(g, 25), new THREE.LineBasicMaterial({ color: 0x1a1a1a, transparent: true }));
+    grp.add(e); grp.userData.edges = e;
+  }
+  grp.userData.mesh = mesh; grp.userData.kind = m.kind;
+  scene.add(grp); obj[name] = grp;
+  if (m.kind === "parts") { g.computeBoundingBox(); box.union(g.boundingBox); }
+}
+box.getCenter(center);
+const pipeName = Object.keys(D.meshes).find((k) => D.meshes[k].kind === "context" && k !== D.fit.screen_of);
+
+// phone screen: a little field-guidance UI drawn once
+if (obj._screen) {
+  const c = document.createElement("canvas"); c.width = 256; c.height = 512;
+  const x = c.getContext("2d");
+  x.fillStyle = "#0e1a2b"; x.fillRect(0, 0, 256, 512);
+  x.strokeStyle = "#2f8f4e"; x.lineWidth = 6;
+  for (let i = -6; i <= 6; i++) { x.beginPath(); x.moveTo(128 + i * 14, 120); x.lineTo(128 + i * 70, 512); x.stroke(); }
+  x.strokeStyle = "#ff5a1f"; x.lineWidth = 8; x.beginPath(); x.moveTo(128, 120); x.lineTo(128, 512); x.stroke();
+  x.fillStyle = "#fff"; x.beginPath(); x.moveTo(128, 380); x.lineTo(108, 430); x.lineTo(148, 430); x.fill();
+  x.fillStyle = "#0b0f16"; x.fillRect(0, 0, 256, 70);
+  x.fillStyle = "#cfe3ff"; x.font = "bold 30px monospace"; x.fillText("AB  +0.02 m", 20, 46);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace;
+  // planar UVs on the screen quad
+  const g = obj._screen.userData.mesh.geometry; g.computeBoundingBox();
+  const p = g.attributes.position, bb = g.boundingBox, uv = [];
+  for (let i = 0; i < p.count; i++) uv.push((p.getX(i) - bb.min.x) / (bb.max.x - bb.min.x), (p.getY(i) - bb.min.y) / (bb.max.y - bb.min.y));
+  g.setAttribute("uv", new THREE.Float32BufferAttribute(uv, 2));
+  obj._screen.userData.mesh.material.map = tex;
+}
+
+function setOpacity(grp, a, edgeA = a) {
+  grp.visible = a > 0.001;
+  grp.userData.mesh.material.opacity = a;
+  grp.userData.mesh.material.depthWrite = a > 0.99;
+  if (grp.userData.edges) grp.userData.edges.material.opacity = edgeA;
+}
+
+function resize() {
+  const r = $("stage").getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / r.height; camera.updateProjectionMatrix();
+}
+
+// slide the phone in along the cradle axis (model axes -> three axes)
+const sl = D.fit.slide || [0, 0, 1];
+const slide = new THREE.Vector3(sl[0], sl[2], -sl[1]).normalize();
+
+function render3d(t) {
+  const on = t >= T.ctx - 200 && t < T.final + 300;
+  canvas.style.opacity = on ? 1 : 0;
+  // camera: slow orbit around the parts
+  const k = span(t, T.ctx, T.ar + 2000);
+  const az = THREE.MathUtils.degToRad(-42 + 70 * ease(k));
+  const el = THREE.MathUtils.degToRad(16 + 6 * Math.sin(k * Math.PI));
+  const dist = 1080 - 160 * ease(span(t, T.ctx, T.steps + 2 * T.step)) + 60 * ease(span(t, T.ar, T.ar + 1500));
+  const tgt = center.clone().add(new THREE.Vector3(0, 30, 0));
+  camera.position.set(tgt.x + dist * Math.cos(el) * Math.sin(az), tgt.y + dist * Math.sin(el), tgt.z + dist * Math.cos(el) * Math.cos(az));
+  camera.lookAt(tgt);
+
+  // context: pipe grows along X, phone hovers as a ghost, then drops in at fit
+  for (const [name, grp] of Object.entries(obj)) {
+    const kind = grp.userData.kind;
+    if (kind === "context" && name !== D.fit.screen_of) {
+      const p = out(span(t, T.ctx, T.ctx + 1100));
+      grp.scale.set(Math.max(p, 0.001), 1, 1);
+      setOpacity(grp, p);
+    } else if (name === D.fit.screen_of || kind === "screen") {
+      const ghost = span(t, T.ctx + 600, T.ctx + 1400);
+      const drop = ease(span(t, T.fit, T.fit + 1300));
+      grp.position.copy(slide).multiplyScalar(80 * (1 - drop));
+      if (kind === "screen") {
+        const glow = span(t, T.fit + 1300, T.fit + 1900);
+        setOpacity(grp, glow);
+        grp.userData.mesh.material.color.setScalar(0.4 + 0.6 * glow);
+      } else {
+        const a = 0.14 * ghost + 0.86 * span(t, T.fit, T.fit + 500);
+        setOpacity(grp, a, Math.max(ghost * 0.5, a));
+      }
+    } else if (kind === "parts") {
+      const i = D.steps.findIndex((s) => s.part === name);
+      const s0 = T.steps + Math.max(i, 0) * T.step;
+      const p = span(t, s0, s0 + 1000);
+      const dir = (D.steps[i] || {}).from === "below" ? -1 : 1;
+      grp.position.set(0, dir * 160 * (1 - out(p)), 0);
+      setOpacity(grp, Math.min(1, p * 1.6));
+      const hot = 1 - span(t, s0 + T.step - 500, s0 + T.step);
+      grp.userData.mesh.material.color.copy(WHITE).lerp(ORANGE, t >= s0 ? hot : 0);
+    }
+  }
+  if (on) renderer.render(scene, camera);
+
+  // labels on the context
+  const tagA = span(t, T.ctx + 900, T.ctx + 1300) * (1 - span(t, T.steps + 600, T.steps + 1000));
+  const r = $("stage").getBoundingClientRect();
+  for (const el of tags) {
+    const grp = obj[el.dataset.k];
+    el.style.opacity = grp ? tagA : 0;
+    if (!grp) continue;
+    const bb = new THREE.Box3().setFromObject(grp.userData.mesh);
+    const p = el.dataset.k === pipeName ? new THREE.Vector3(bb.max.x * 0.62, bb.max.y, 0) : new THREE.Vector3((bb.min.x + bb.max.x) / 2, bb.max.y, (bb.min.z + bb.max.z) / 2);
+    p.project(camera);
+    el.style.left = ((p.x + 1) / 2 * r.width) + "px";
+    el.style.top = ((1 - p.y) / 2 * r.height - r.width * 0.02) + "px";
+  }
+}
+
+// ---- 2D overlays ------------------------------------------------------------------------------
+function show(el, a, dy = 0) { el.style.opacity = a; el.style.transform = `translateY(${dy}cqw)`; }
+function render(t) {
+  t = clamp(t, 0, DUR);
+  resize();
+  // headline per section
+  const heads = [[T.in, T.read, "INPUT", D.inputs.head], [T.read, T.ctx, "CLAUDE", D.readings.head],
+    [T.ctx, T.steps, "BUILD123D", D.context.head], [T.steps, T.fit, "PARTS", "部品が、立ち上がる"], [T.fit, T.ar, "CHECK", D.fit.head]];
+  const h = heads.find(([a, b]) => t >= a && t < b);
+  if (h) {
+    $("head").innerHTML = `<small>${h[2]}</small>${esc(h[3])}`;
+    show($("head"), out(span(t, h[0], h[0] + 400)) * (1 - span(t, h[1] - 250, h[1])), 4 * (1 - out(span(t, h[0], h[0] + 400))));
+  } else show($("head"), 0);
+
+  // input cards + scan
+  const cardsA = (1 - span(t, T.ctx - 700, T.ctx - 200));
+  cards.forEach((c, i) => {
+    const p = out(span(t, 300 + i * 450, 1100 + i * 450));
+    c.style.opacity = p * cardsA;
+    c.style.transform = `translateY(${(1 - p) * 30 - 20 * span(t, T.ctx - 700, T.ctx - 200)}cqw) rotate(${(i ? 2.5 : -2.5) * (1 - 0.6 * p)}deg)`;
+    const s = span(t, T.read + 200 + i * 900, T.read + 1300 + i * 900);
+    const sc = c.querySelector(".scan");
+    sc.style.top = (s * 100) + "%";
+    sc.style.opacity = s > 0 && s < 1 ? 1 : 0;
+  });
+  chips.forEach((c, i) => {
+    const p = out(span(t, T.read + 1400 + i * 700, T.read + 1900 + i * 700));
+    c.style.opacity = p * cardsA;
+    c.style.transform = `translateX(${(1 - p) * -12}cqw)`;
+  });
+
+  // step caption
+  const si = Math.floor((t - T.steps) / T.step);
+  if (t >= T.steps && t < T.fit && D.steps[si]) {
+    const s = D.steps[si], s0 = T.steps + si * T.step;
+    $("capn").innerHTML = `${String(si + 1).padStart(2, "0")}<span>/ ${String(D.steps.length).padStart(2, "0")}</span>`;
+    $("capt").textContent = s.title; $("caps").textContent = s.sub;
+    show($("cap"), out(span(t, s0 + 150, s0 + 550)) * (1 - span(t, s0 + T.step - 250, s0 + T.step)), 3 * (1 - out(span(t, s0 + 150, s0 + 550))));
+  } else show($("cap"), 0);
+  [...$("fitlines").children].forEach((el, i) => {
+    show(el, out(span(t, T.fit + 1500 + i * 500, T.fit + 1900 + i * 500)) * (1 - span(t, T.ar - 300, T.ar)));
+  });
+
+  // AR + final
+  $("ar").style.opacity = span(t, T.ar, T.ar + 500) * (1 - span(t, T.final - 200, T.final + 200));
+  const im = $("ar").querySelector("img");
+  if (im) im.style.transform = `scale(${1.04 + 0.06 * span(t, T.ar, T.final)})`;
+  $("final").style.opacity = span(t, T.final, T.final + 400);
+  const fl = $("final").children;
+  [...fl].forEach((el, i) => show(el, out(span(t, T.final + 200 + i * 350, T.final + 700 + i * 350)), 3 * (1 - out(span(t, T.final + 200 + i * 350, T.final + 700 + i * 350)))));
+
+  render3d(t);
+  $("bar").style.width = (t / DUR * 100) + "%";
+  $("clock").textContent = (t / 1000).toFixed(1).padStart(4, "0") + " S";
+  $("scrub").value = Math.round(t / DUR * 1000);
+  $("tc").textContent = (t / 1000).toFixed(2) + " / " + (DUR / 1000).toFixed(1) + " s";
+}
+
+// ---- player / capture -------------------------------------------------------------------------
+const capture = new URLSearchParams(location.search).has("capture");
+if (capture) document.body.classList.add("capture");
+window.reelDuration = DUR;
+window.reelSeek = render;
+let playing = false, t0 = 0, cur = 0;
+function tick(now) { if (!playing) return; cur = now - t0; if (cur >= DUR) { cur = DUR; playing = false; $("play").textContent = "▶"; } render(cur); if (playing) requestAnimationFrame(tick); }
+$("play").onclick = () => { playing = !playing; $("play").textContent = playing ? "❚❚" : "▶"; if (playing) { if (cur >= DUR) cur = 0; t0 = performance.now() - cur; requestAnimationFrame(tick); } };
+$("scrub").oninput = (e) => { playing = false; $("play").textContent = "▶"; cur = e.target.value / 1000 * DUR; render(cur); };
+window.addEventListener("resize", () => render(cur));
+window.reelReady = document.fonts.ready.then(() => new Promise((r) => { render(0); requestAnimationFrame(() => r(true)); }));
+if (!capture) window.reelReady.then(() => $("play").click());
+</script>
+</body>
+</html>

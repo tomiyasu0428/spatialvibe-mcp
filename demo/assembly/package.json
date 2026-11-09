@@ -1,0 +1,5 @@
+{
+  "private": true,
+  "description": "three.js for the assembly reel (inlined into the generated HTML by render.py)",
+  "dependencies": { "three": "0.169.0" }
+}

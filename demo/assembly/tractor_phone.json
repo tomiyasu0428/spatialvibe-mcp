@@ -1,0 +1,44 @@
+{
+  "model": "examples/tractor_phone/model.py",
+  "sig": "PITTARI MCP · 2026.11",
+  "inputs": {
+    "head": "渡したのは、写真2枚だけ。",
+    "cards": [
+      {"label": "写真 1", "title": "トラクターの手すり", "icon": "pipe"},
+      {"label": "写真 2", "title": "使っているスマホ", "icon": "phone"}
+    ]
+  },
+  "readings": {
+    "head": "Claude が読み取る",
+    "chips": [
+      {"k": "手すりパイプ", "v": "Ø25.6 mm", "src": "手順書より"},
+      {"k": "スマホ（ケース込み）", "v": "160×78×12", "src": "要実測"},
+      {"k": "座って見る角度", "v": "15° 手前へ", "src": "質問で決定"}
+    ]
+  },
+  "context": {
+    "head": "まず、周りのものを置く",
+    "labels": {"pipe": "手すり Ø25.6", "phone": "スマホ"}
+  },
+  "steps": [
+    {"part": "clamp_lower", "from": "below", "title": "下の締め具", "sub": "ゴム 1 mm を巻いて M5 × 2"},
+    {"part": "clamp_upper", "from": "above", "title": "上の締め具＋台座", "sub": "穴あけなし。手すりを挟むだけ"},
+    {"part": "arm", "from": "above", "title": "アーム", "sub": "台座に M5 × 2 で固定"},
+    {"part": "cradle", "from": "above", "title": "ホルダー", "sub": "M6 の蝶ナットで角度を変えられる"}
+  ],
+  "fit": {
+    "head": "スマホを入れてみる",
+    "lines": ["すき間 片側 1.0 mm", "干渉なし · 4部品"],
+    "screen_of": "phone",
+    "slide": [0, 0.259, 0.966]
+  },
+  "ar": {
+    "head": "実寸で、トラクターに重ねる",
+    "sub": "iPhone の AR で、刷る前に確かめる"
+  },
+  "final": {
+    "line": "写真2枚 → 部品4つ → 畑で付く",
+    "big": "Pittari MCP",
+    "sub": "Claude × build123d · 3D ソフトは触っていない"
+  }
+}
