@@ -91,6 +91,7 @@ body.capture .ctl { display: none; }
 <body>
 <div class="stage" id="stage">
   <canvas id="gl"></canvas>
+  <img id="bg" class="abs" alt="" style="inset:0;width:100%;height:100%;object-fit:cover;opacity:0">
   <div class="hud"><div class="mono tl" id="sig"></div><div class="mono tr" id="clock"></div>
     <div class="crop a"></div><div class="crop b"></div><div class="crop c"></div><div class="crop d"></div></div>
   <div class="head" id="head"></div>
@@ -262,7 +263,17 @@ function render3d(t) {
       grp.userData.mesh.material.color.copy(WHITE).lerp(ORANGE, t >= s0 ? hot : 0);
     }
   }
-  if (on) renderer.render(scene, camera);
+  if (D.frames) {                        // Blender backdrop: one PNG per 30 fps frame
+    const st = D.frames.step || 1, r = Math.round(t * 30 / 1000), bg = $("bg");
+    const f = D.frames.first + Math.floor((r - D.frames.first) / st) * st;   // hold frames on a quick pass
+    const has = f >= D.frames.first && f <= D.frames.last;
+    canvas.style.opacity = 0;
+    bg.style.opacity = on && has ? 1 : 0;
+    if (has) {
+      const src = `${D.frames.dir}/${String(f).padStart(4, "0")}.png`;
+      if (bg.getAttribute("src") !== src) { bg.src = src; pending = bg.decode().catch(() => {}); }
+    }
+  } else if (on) renderer.render(scene, camera);
 
   // labels on the context
   const tagA = span(t, T.ctx + 900, T.ctx + 1300) * (1 - span(t, T.steps + 600, T.steps + 1000));
@@ -331,11 +342,14 @@ function render(t) {
   [...fl].forEach((el, i) => show(el, out(span(t, T.final + 200 + i * 350, T.final + 700 + i * 350)), 3 * (1 - out(span(t, T.final + 200 + i * 350, T.final + 700 + i * 350)))));
 
   render3d(t);
+  const wait = pending; pending = null;
   $("bar").style.width = (t / DUR * 100) + "%";
   $("clock").textContent = (t / 1000).toFixed(1).padStart(4, "0") + " S";
   $("scrub").value = Math.round(t / DUR * 1000);
   $("tc").textContent = (t / 1000).toFixed(2) + " / " + (DUR / 1000).toFixed(1) + " s";
+  return wait || undefined;
 }
+let pending = null;
 
 // ---- player / capture -------------------------------------------------------------------------
 const capture = new URLSearchParams(location.search).has("capture");

@@ -67,7 +67,43 @@ def _photo(path):
     return f"data:{mime};base64," + base64.b64encode(p.read_bytes()).decode()
 
 
-def build_html(story_path: Path, photos: dict) -> Path:
+def _screen_png(path: Path):
+    """The same little field-guidance UI that assembly.html draws on the phone screen."""
+    from PIL import Image, ImageDraw, ImageFont
+    im = Image.new("RGB", (512, 1024), "#0e1a2b")
+    d = ImageDraw.Draw(im)
+    for i in range(-6, 7):
+        d.line([(256 + i * 28, 240), (256 + i * 140, 1024)], fill="#2f8f4e", width=12)
+    d.line([(256, 240), (256, 1024)], fill="#ff5a1f", width=16)
+    d.polygon([(256, 760), (216, 860), (296, 860)], fill="#ffffff")
+    d.rectangle([0, 0, 512, 140], fill="#0b0f16")
+    try:
+        font = ImageFont.truetype("DejaVuSansMono-Bold.ttf", 56)
+    except OSError:
+        font = ImageFont.load_default()
+    d.text((40, 40), "AB  +0.02 m", fill="#cfe3ff", font=font)
+    im.save(path)
+
+
+def export_scene(story: dict, meshes: dict, stem: str) -> Path:
+    """Triangles in model axes (mm, Z up) + metadata for blender_render.py."""
+    import numpy as np
+    out = HERE / "out"
+    out.mkdir(exist_ok=True)
+    arrs = {n: np.stack([m["pos"][:, 0], -m["pos"][:, 2], m["pos"][:, 1]], axis=1).reshape(-1, 3, 3)
+            for n, m in meshes.items()}
+    npz = out / f"{stem}_scene.npz"
+    np.savez(npz, **arrs)
+    png = out / f"{stem}_screen.png"
+    _screen_png(png)
+    meta = {"kinds": {n: m["kind"] for n, m in meshes.items() if not n.startswith("_")},
+            "steps": story["steps"], "screen_of": story["fit"].get("screen_of"),
+            "slide": story["fit"].get("slide", [0, 0, 1]), "screen_png": str(png)}
+    npz.with_suffix(".json").write_text(json.dumps(meta, ensure_ascii=False, indent=1), encoding="utf-8")
+    return npz
+
+
+def build_html(story_path: Path, photos: dict, frames: Path = None, export: bool = False):
     story = json.loads(story_path.read_text(encoding="utf-8"))
     ns = runpy.run_path(str(ROOT / story["model"]))
     meshes = {}
@@ -77,19 +113,22 @@ def build_html(story_path: Path, photos: dict) -> Path:
     scr = story.get("fit", {}).get("screen_of")
     if scr in meshes:
         meshes["_screen"] = {"kind": "screen", "pos": _screen(meshes[scr]["pos"])}
+    scene = export_scene(story, meshes, story_path.stem) if export else None
     for m in meshes.values():
         m["pos"] = _b64(m["pos"])
     if not THREE.exists():
         sys.exit(f"three.js missing: run (cd {HERE.relative_to(ROOT)} && npm install)")
     data = dict(story, meshes=meshes, photos={k: _photo(v) for k, v in photos.items()},
                 three=base64.b64encode(THREE.read_bytes()).decode())
+    if frames and (frames / "frames.json").exists():   # Blender backdrop instead of three.js
+        data["frames"] = dict(json.loads((frames / "frames.json").read_text()), dir=frames.name)
     tpl = (HERE / "assembly.html").read_text(encoding="utf-8")
     html = tpl.replace("/*__DATA__*/null", json.dumps(data, ensure_ascii=False))
     out = HERE / "out"
     out.mkdir(exist_ok=True)
-    dst = out / f"{story_path.stem}.html"
+    dst = out / f"{story_path.stem}{'_blender' if frames else ''}.html"
     dst.write_text(html, encoding="utf-8")
-    return dst
+    return dst, scene
 
 
 def open_page(p, page: Path):
@@ -111,9 +150,32 @@ def main():
     ap.add_argument("--ar", help="screenshot of the AR view on site")
     ap.add_argument("--html-only", action="store_true")
     ap.add_argument("--frame", type=int, help="ms: write a single PNG instead of the MP4")
+    ap.add_argument("--blender", action="store_true",
+                    help="render the 3D with Blender (.venv-blender, bpy) and lay the captions over it")
+    ap.add_argument("--engine", default="cycles", choices=["eevee", "cycles"])
+    ap.add_argument("--samples", type=int, default=0)
+    ap.add_argument("--step", type=int, default=1, help="Blender: render every Nth frame (2 = quick pass)")
+    ap.add_argument("--scale", type=int, default=67, help="Blender: resolution %% (upscaled to 1080x1920)")
     a = ap.parse_args()
     story = Path(a.story)
-    page = build_html(story, {"place": a.place, "thing": a.thing, "ar": a.ar})
+    photos = {"place": a.place, "thing": a.thing, "ar": a.ar}
+    frames = HERE / "out" / f"{story.stem}_blender" if a.blender else None
+    page, scene = build_html(story, photos, frames, export=a.blender)
+    if a.blender:
+        import subprocess
+        bl = ROOT / ".venv-blender" / "bin" / "python"
+        if not bl.exists():
+            sys.exit("Blender venv missing: uv venv --python 3.13 .venv-blender && "
+                     "uv pip install --python .venv-blender/bin/python bpy numpy")
+        cmd = [str(bl), str(HERE / "blender_render.py"), str(scene), str(frames), "--engine", a.engine]
+        cmd += ["--step", str(a.step), "--scale", str(a.scale)]
+        if a.samples:
+            cmd += ["--samples", str(a.samples)]
+        if a.frame is not None:
+            f = round(a.frame * FPS / 1000)
+            cmd += ["--frames", f"{f}-{f}"]
+        subprocess.run(cmd, check=True)
+        page, _ = build_html(story, photos, frames)
     print(page)
     if a.html_only:
         return

@@ -37,3 +37,4 @@ demo/*/*.mp4
 demo/*/*.png
 # assembly reel: generated page/mp4/png (may embed photos) — never commit
 demo/*/out/
+.venv-blender/

@@ -21,3 +21,25 @@
 投稿用には `--place` `--thing` に実際の 2 枚を、`--ar` に AR Quick Look のスクリーンショットを入れる。
 
 スマホの寸法（ケース込み 160×78×12）は推定。印刷する前に実物を測ってモデルの `P` を直す。
+
+## Blender でレンダリングする（`--blender`）
+
+3D の部分だけを Blender（Cycles）で描き、字幕やカードは同じ HTML を上に重ねる。柔らかい影、金属のパイプ、光るスマホ画面、
+CAD 風の輪郭線（Freestyle）が付く。タイミングとカメラの動きは three.js 版と同じ（`blender_render.py` の `timeline` と
+`assembly.html` の `T` は手でそろえる）。
+
+```bash
+# 初回だけ: Blender 本体（bpy）は Python 3.13 の別 venv に入れる
+uv venv --python 3.13 .venv-blender
+uv pip install --python .venv-blender/bin/python bpy==5.2.3 numpy
+
+.venv/bin/python demo/assembly/render.py --blender --step 2   # 速い下見（15 fps、コマを 2 回ずつ使う）
+.venv/bin/python demo/assembly/render.py --blender            # 残りのコマを埋めて 30 fps に
+.venv/bin/python demo/assembly/render.py --blender --frame 23500   # 1 コマだけ
+```
+
+- 出力は `out/tractor_phone_blender/NNNN.png`（背景は透明、床は影だけ）と `out/tractor_phone_blender.mp4`。
+  描いたコマは再利用するので、モデルや照明を変えたら `out/tractor_phone_blender/` を消してから描き直す。
+- 既定は 67% 解像度・16 サンプル・デノイズあり（CPU 4 コアで 1 コマ約 11 秒、全 570 コマで約 1 時間 45 分）。
+  `--scale 100 --samples 48` で高画質、Mac なら GPU が使える分もっと速い。
+- `--engine eevee` も選べるが、GPU のないサーバーではソフトウェア描画になり Cycles より遅い。
