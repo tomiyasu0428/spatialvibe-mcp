@@ -1,0 +1,184 @@
+<title>晩秋の長ネギ畑 3D</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@500;700&display=swap">
+<style>
+  /* Layout: the scene fills the screen; a soil-coloured label sits top-left, view buttons along the bottom. */
+  :root {
+    --soil: #2a2019;
+    --paper: #f3efe4;
+    --leaf: #2f6b34;
+    --straw: #d9c184;
+    --panel: rgba(243, 239, 228, 0.88);
+    --panel-ink: #2a2019;
+    --panel-line: rgba(42, 32, 25, 0.22);
+    --font: "Zen Kaku Gothic New", "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --panel: rgba(42, 32, 25, 0.84); --panel-ink: #f3efe4; --panel-line: rgba(243, 239, 228, 0.25);
+      --leaf: #8fc36a; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --panel: rgba(42, 32, 25, 0.84); --panel-ink: #f3efe4; --panel-line: rgba(243, 239, 228, 0.25);
+    --leaf: #8fc36a; color-scheme: dark;
+  }
+  html, body { height: 100%; }
+  body { background: var(--soil); color: var(--panel-ink); font-family: var(--font); overflow: hidden; }
+  #stage { position: relative; height: 100%; min-height: 320px; }
+  #stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  .label, .views {
+    position: absolute; z-index: 2;
+    left: max(16px, env(safe-area-inset-left, 0px)); right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  .label { top: 14px; right: auto; max-width: min(21rem, calc(100% - 32px)); padding: 10px 14px;
+    background: var(--panel); border-left: 4px solid var(--leaf); backdrop-filter: blur(6px); }
+  .label h1 { margin: 0; font-size: 1.15rem; font-weight: 700; letter-spacing: 0.04em; }
+  .label p { margin: 4px 0 0; font-size: 0.78rem; line-height: 1.55; }
+  .views { bottom: 14px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .views button {
+    font: 700 0.85rem var(--font); color: var(--panel-ink); background: var(--panel);
+    border: 1px solid var(--panel-line); padding: 9px 14px; border-radius: 2px; cursor: pointer;
+    backdrop-filter: blur(6px);
+  }
+  .views button[aria-pressed="true"] { background: var(--leaf); color: var(--paper); border-color: var(--leaf); }
+  :root[data-theme="dark"] .views button[aria-pressed="true"] { color: var(--soil); }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .views button[aria-pressed="true"] { color: var(--soil); } }
+  .views button:focus-visible { outline: 3px solid var(--straw); outline-offset: 2px; }
+  .hint { font-size: 0.72rem; padding: 4px 8px; background: var(--panel); }
+  #fail[hidden] { display: none; }
+  #fail { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; text-align: center;
+    color: var(--paper); }
+</style>
+
+<div id="stage">
+  <div class="label">
+    <h1>晩秋の長ネギ畑</h1>
+    <p>うね間 1.1 m・うね高 35 cm・葉丈 65 cm・奥行き 45 m。写真2枚から読んだ推定値です。</p>
+  </div>
+  <div class="views" role="group" aria-label="視点">
+    <button type="button" id="view-furrow" data-view="furrow" aria-pressed="true">溝に立つ</button>
+    <button type="button" id="view-diagonal" data-view="diagonal" aria-pressed="false">斜めに見渡す</button>
+    <button type="button" id="view-above" data-view="above" aria-pressed="false">上から</button>
+    <span class="hint">ドラッグで回す・ピンチで寄る</span>
+  </div>
+  <div id="fail" hidden>3D を表示できませんでした。ページを開き直してください。</div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+const SCENE = /*SCENE*/null;
+
+(function () {
+  const stage = document.getElementById('stage');
+  if (!window.THREE || !SCENE) { document.getElementById('fail').hidden = false; return; }
+  let renderer;
+  try { renderer = new THREE.WebGLRenderer({ antialias: true }); }
+  catch (e) { document.getElementById('fail').hidden = false; return; }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  stage.insertBefore(renderer.domElement, stage.firstChild);
+
+  const scene = new THREE.Scene();
+  // sky: deep blue overhead fading to a pale horizon
+  const sky = document.createElement('canvas'); sky.width = 4; sky.height = 256;
+  const g = sky.getContext('2d'), grad = g.createLinearGradient(0, 0, 0, 256);
+  grad.addColorStop(0, '#3f7fc4'); grad.addColorStop(0.55, '#8fb9e3'); grad.addColorStop(1, '#dfe9f0');
+  g.fillStyle = grad; g.fillRect(0, 0, 4, 256);
+  scene.background = new THREE.CanvasTexture(sky);
+  scene.fog = new THREE.Fog(0xcfdce6, 60, 300);
+
+  const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 900);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true; controls.dampingFactor = 0.08;
+  controls.maxPolarAngle = Math.PI / 2 - 0.02; controls.minDistance = 0.5; controls.maxDistance = 140;
+
+  // low sun from the right and ahead, as in the photos (long shadows, back-lit leaves)
+  scene.add(new THREE.HemisphereLight(0xbcd6f2, 0x4a3a2a, 0.75));
+  const sun = new THREE.DirectionalLight(0xfff0d6, 1.25);
+  sun.position.set(60, 42, -55); sun.target.position.set(8, 0, -22);
+  sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048);
+  const sc = sun.shadow.camera; sc.left = -50; sc.right = 50; sc.top = 45; sc.bottom = -45; sc.near = 5; sc.far = 220;
+  sun.shadow.bias = -0.0006; sun.shadow.normalBias = 0.03;
+  scene.add(sun, sun.target);
+
+  // model: mm, Z up  ->  three: m, Y up
+  const names = Object.keys(SCENE.palette);
+  const colours = names.map(n => new THREE.Color().setRGB(...SCENE.palette[n]).convertSRGBToLinear());
+  const backdrop = { hills: 1, mountains: 1, snowcap: 1 };
+  const m4 = new THREE.Matrix4(), pos = new THREE.Vector3(), quat = new THREE.Quaternion(), scl = new THREE.Vector3();
+  const up = new THREE.Vector3(0, 1, 0);
+  for (const name of Object.keys(SCENE.groups)) {
+    const src = SCENE.meshes[name], v = src.v, p = new Float32Array(v.length);
+    for (let i = 0; i < v.length; i += 3) { p[i] = v[i] / 1000; p[i + 1] = v[i + 2] / 1000; p[i + 2] = -v[i + 1] / 1000; }
+    let geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(p, 3));
+    geo.setIndex(src.i);
+    geo = geo.toNonIndexed(); geo.computeVertexNormals();          // flat facets
+    const xf = SCENE.groups[name], n = xf.length / 6;
+    const mat = backdrop[name]
+      ? new THREE.MeshBasicMaterial({ color: 0xffffff })
+      : new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.9, metalness: 0, side: THREE.DoubleSide });
+    const mesh = new THREE.InstancedMesh(geo, mat, n);
+    for (let k = 0; k < n; k++) {
+      const o = k * 6;
+      pos.set(xf[o + 1] / 1000, xf[o + 3] / 1000, -xf[o + 2] / 1000);
+      quat.setFromAxisAngle(up, xf[o + 4] * Math.PI / 180);
+      scl.setScalar(xf[o + 5]);
+      mesh.setMatrixAt(k, m4.compose(pos, quat, scl));
+      mesh.setColorAt(k, colours[xf[o]]);
+    }
+    mesh.castShadow = !backdrop[name] && name !== 'meadow';
+    mesh.receiveShadow = !backdrop[name];
+    mesh.frustumCulled = false;
+    scene.add(mesh);
+  }
+
+  // clouds: flat-bottomed heaps, drawn only here (not part of the model)
+  let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const puff = new THREE.SphereGeometry(1, 10, 8);
+  const cloudMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0x8a93a0, fog: false });
+  const clouds = new THREE.InstancedMesh(puff, cloudMat, 26 * 7);
+  let ci = 0;
+  for (let c = 0; c < 26; c++) {
+    const cx = -380 + rnd() * 760, cz = -170 - rnd() * 420, cy = 85 + rnd() * 60, w = 14 + rnd() * 22;
+    for (let k = 0; k < 7; k++) {
+      pos.set(cx + (rnd() - 0.5) * w * 2.2, cy + rnd() * w * 0.25, cz + (rnd() - 0.5) * w);
+      const r = w * (0.45 + rnd() * 0.5);
+      scl.set(r * 1.5, r * 0.55, r);
+      clouds.setMatrixAt(ci++, m4.compose(pos, quat.identity(), scl));
+    }
+  }
+  clouds.frustumCulled = false; scene.add(clouds);
+
+  // viewpoints in model metres: [x, y(away), z(up)] for the eye, and where it looks
+  const views = {
+    furrow:   { eye: [0, -1.4, 1.35],  look: [0.6, 14, 1.0] },
+    diagonal: { eye: [1.0, -0.4, 1.25], look: [6.5, 12, 0.9] },
+    above:    { eye: [8, -26, 26],     look: [8, 20, 0] },
+  };
+  function setView(key) {
+    const v = views[key];
+    camera.position.set(v.eye[0], v.eye[2], -v.eye[1]);
+    controls.target.set(v.look[0], v.look[2], -v.look[1]);
+    controls.update();
+    document.querySelectorAll('.views button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.view === key)));
+  }
+  document.querySelectorAll('.views button').forEach(b => b.addEventListener('click', () => setView(b.dataset.view)));
+
+  function resize() {
+    const w = stage.clientWidth, h = stage.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.fov = w < h ? 68 : 55;       // portrait phones need a wider lens to hold the rows
+    camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(resize).observe(stage);
+  resize(); setView(location.hash === '#above' ? 'above' : location.hash === '#diagonal' ? 'diagonal' : 'furrow');
+  renderer.setAnimationLoop(() => { controls.update(); renderer.render(scene, camera); });
+})();
+</script>
